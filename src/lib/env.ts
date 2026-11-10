@@ -22,4 +22,10 @@ export const serverEnv = {
   bootstrapAdminEmail: () => (process.env.BOOTSTRAP_ADMIN_EMAIL || '').trim().toLowerCase(),
 };
 
+// Các module tích hợp bật/tắt bằng biến môi trường, mặc định tắt.
+const flag = (v: string | undefined) => (v || '').trim().toLowerCase() === 'true';
+export const features = {
+  googleCalendar: () => flag(process.env.FEATURE_GOOGLE_CALENDAR),
+};
+
 export const TIMEZONE = 'Asia/Ho_Chi_Minh';

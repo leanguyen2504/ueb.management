@@ -41,7 +41,9 @@ Hướng dẫn cho người dựng hệ thống lần đầu hoặc người ti�
 | `ALLOWED_EMAIL_DOMAINS` | Không | Có | `vnu.edu.vn` (nhiều tên miền cách nhau bằng dấu phẩy) |
 | `BOOTSTRAP_ADMIN_EMAIL` | Không | Lần đầu | `ntkling@vnu.edu.vn`. Chỉ có tác dụng khi hệ thống chưa có quản trị |
 
-Các biến cho email, Google và Jira (xem `.env.example`) dùng ở các giai đoạn sau và để trống cho tới khi được cấp quyền.
+Module lịch Google dùng chung cần thêm `FEATURE_GOOGLE_CALENDAR`, `GOOGLE_SERVICE_ACCOUNT_JSON` (hoặc `GOOGLE_CALENDAR_API_KEY`) và `CRON_SECRET`: xem [google-calendar.md](google-calendar.md).
+
+Các biến cho email, Google Drive và Jira (xem `.env.example`) dùng ở các giai đoạn sau và để trống cho tới khi được cấp quyền.
 
 Tên miền cho phép cũng được lưu trong bảng `system_settings.allowed_email_domains`; cơ sở dữ liệu dùng giá trị này để chặn tài khoản ngoài tên miền. Nếu đổi `ALLOWED_EMAIL_DOMAINS`, đổi cả bảng này bằng SQL Editor.
 
