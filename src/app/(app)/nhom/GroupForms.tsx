@@ -17,17 +17,24 @@ function KindSelect({ value }: { value?: string }) {
 export function CreateGroupForm() {
   const [state, action] = useActionState(createGroup, null);
   return (
-    <form action={action} className="card space-y-3">
-      <h2 className="font-semibold">Tạo đơn vị, dự án hoặc sự kiện</h2>
-      <div className="grid gap-3 md:grid-cols-[2fr_1fr]">
-        <div><label className="label" htmlFor="g-name">Tên nhóm</label><input id="g-name" name="name" required maxLength={200} className="input" placeholder="Ví dụ: Phòng Hành chính, Hội nghị khoa học 2026" /></div>
-        <div><label className="label" htmlFor="g-kind">Loại</label><KindSelect /></div>
-      </div>
-      <div><label className="label" htmlFor="g-desc">Mô tả</label><textarea id="g-desc" name="description" rows={2} className="input" /></div>
-      <FormMessage state={state} />
-      <SubmitButton pendingText="Đang tạo…">Tạo nhóm</SubmitButton>
-      <p className="text-xs muted">Bạn sẽ là Trưởng nhóm của nhóm mới.</p>
-    </form>
+    <details className="card group py-3" open={Boolean(state?.error)}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold">
+        <span>+ Tạo đơn vị, dự án hoặc sự kiện</span>
+        <span className="text-xs font-normal muted group-open:hidden">Bấm để mở</span>
+      </summary>
+      <form action={action} className="mt-3 space-y-3">
+        <div className="grid gap-3 md:grid-cols-[2fr_1fr_3fr]">
+          <div><label className="label" htmlFor="g-name">Tên nhóm</label><input id="g-name" name="name" required maxLength={200} className="input" placeholder="Ví dụ: Phòng Hành chính" /></div>
+          <div><label className="label" htmlFor="g-kind">Loại</label><KindSelect /></div>
+          <div><label className="label" htmlFor="g-desc">Mô tả</label><input id="g-desc" name="description" maxLength={2000} className="input" /></div>
+        </div>
+        <FormMessage state={state} />
+        <div className="flex flex-wrap items-center gap-3">
+          <SubmitButton pendingText="Đang tạo…">Tạo nhóm</SubmitButton>
+          <p className="text-xs muted">Bạn sẽ là Trưởng nhóm của nhóm mới.</p>
+        </div>
+      </form>
+    </details>
   );
 }
 
