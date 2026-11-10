@@ -18,6 +18,14 @@ select t.ok(t.count($$select * from public.activity_log where entity_type = 'cal
 -- Người dùng không tự ghi trạng thái đồng bộ.
 select t.denied($$update public.calendar_sources set event_count = 99 where true$$, 'sửa cột trạng thái đồng bộ');
 
+-- Quản trị chọn người coi lịch này là giờ bận; thư ký không đổi được.
+update public.calendar_sources set busy_user_ids = array[:hieutruong]::uuid[] where calendar_id = 'bgh@group.calendar.google.com';
+select t.ok((select busy_user_ids from public.calendar_sources where calendar_id = 'bgh@group.calendar.google.com') = array[:hieutruong]::uuid[], 'quản trị đặt người dùng lịch');
+select t.ok(t.count($$select * from public.activity_log where entity_type = 'calendar_sources' and action = 'update'$$) = 1, 'đổi người dùng lịch được ghi nhật ký');
+select set_config('request.jwt.claim.sub', :thuky, false);
+select t.denied($$update public.calendar_sources set busy_user_ids = '{}' where true$$, 'thư ký đổi người dùng lịch');
+select set_config('request.jwt.claim.sub', :admin, false);
+
 -- 2. Buổi họp chỉ máy chủ ghi (giả lập bằng vai trò hệ thống).
 reset role;
 insert into public.calendar_events (source_id, google_event_id, title, starts_at, ends_at)
