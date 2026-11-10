@@ -77,7 +77,8 @@ export default async function GoogleCalendarAdminPage() {
                   ? <>Đã tải {s.event_count} buổi họp lúc {fmtDateTime(s.last_synced_at)}.</>
                   : <span className="muted">Chưa tải lần nào.</span>}
             </p>
-            <form action={updateSource} className="flex flex-wrap items-end gap-2">
+            {/* key: dựng lại form khi giá trị đã lưu đổi, để React không trả ô chọn về giá trị cũ sau khi gửi. */}
+            <form key={`${s.label}|${s.visibility}`} action={updateSource} className="flex flex-wrap items-end gap-2">
               <input type="hidden" name="id" value={s.id} />
               <div><label className="label" htmlFor={`l-${s.id}`}>Tên hiển thị</label><input id={`l-${s.id}`} name="label" defaultValue={s.label} maxLength={80} className="input" /></div>
               <div>
@@ -93,7 +94,7 @@ export default async function GoogleCalendarAdminPage() {
               <summary className="cursor-pointer select-none">
                 Tính là giờ bận của: {s.busy_user_ids.length ? `${s.busy_user_ids.length} người` : <span className="muted">chưa ai</span>}
               </summary>
-              <form action={updateSource} className="mt-2 space-y-2">
+              <form key={s.busy_user_ids.join(',')} action={updateSource} className="mt-2 space-y-2">
                 <input type="hidden" name="id" value={s.id} />
                 <input type="hidden" name="busy_form" value="1" />
                 <p className="text-xs muted">Trang đặt lịch của những người được chọn sẽ ẩn các giờ trùng với buổi họp trong lịch này.</p>
