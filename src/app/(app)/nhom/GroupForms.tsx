@@ -18,7 +18,7 @@ export function CreateGroupForm() {
   const [state, action] = useActionState(createGroup, null);
   return (
     <form action={action} className="card space-y-3">
-      <h2 className="font-semibold">Tạo nhóm mới</h2>
+      <h2 className="font-semibold">Tạo đơn vị, dự án hoặc sự kiện</h2>
       <div className="grid gap-3 md:grid-cols-[2fr_1fr]">
         <div><label className="label" htmlFor="g-name">Tên nhóm</label><input id="g-name" name="name" required maxLength={200} className="input" placeholder="Ví dụ: Phòng Hành chính, Hội nghị khoa học 2026" /></div>
         <div><label className="label" htmlFor="g-kind">Loại</label><KindSelect /></div>

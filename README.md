@@ -11,8 +11,8 @@ Web app tiếng Việt để Hiệu trưởng và tổ thư ký theo dõi nhóm,
 | Giai đoạn | Nội dung | Trạng thái |
 | --- | --- | --- |
 | 1. Nền tảng | Đăng nhập bằng mã gửi qua email trường, người dùng, lời mời, nhóm, quyền theo nhóm, RLS, nhật ký hoạt động, giao diện sáng/tối, dùng được trên điện thoại | Đang làm |
-| 2. Nghiệp vụ | Dự án/sự kiện, mốc, đầu việc, trạng thái tùy chỉnh, cuộc họp, tài liệu Drive dạng liên kết, Jira dạng liên kết, tìm kiếm | Chưa làm |
-| 3. Cá nhân và nhắc việc | Dashboard của tôi, Việc của tôi, Lịch, Trang đặt lịch, Trợ lý công việc theo quy tắc, tổng quan, xuất Excel, nhắc việc | Chưa làm |
+| 2. Nghiệp vụ | Khám phá dự án, đầu việc, lịch nhóm (đã có); mốc, trạng thái tùy chỉnh, hồ sơ cuộc họp, tài liệu Drive dạng liên kết, Jira dạng liên kết, tìm kiếm (chưa làm) | Đang làm |
+| 3. Cá nhân và nhắc việc | Dashboard của tôi, Việc của tôi, Lịch của tôi, Trang đặt lịch, Thông báo (đã có); Trợ lý công việc theo quy tắc, xuất Excel, nhắc việc qua email (chưa làm) | Đang làm |
 | 4. Bàn giao | Phiên bàn giao quản trị, xuất dữ liệu bàn giao | Chưa làm |
 | 5. Tích hợp | Google Calendar (chỉ đọc), Google Drive, Jira (chỉ đọc), khi được cấp quyền | Chưa làm |
 

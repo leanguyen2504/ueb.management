@@ -25,6 +25,18 @@ Nằm trong schema `private` (không mở qua API):
 
 Đổi vai trò và phạm vi thư ký chỉ qua hàm `admin_set_user` và `admin_set_secretary_scope`, cả hai kiểm tra quyền quản trị. Người dùng chỉ tự sửa được họ tên, đơn vị, chức vụ của mình.
 
+## Đầu việc, lịch, đặt lịch, thông báo
+
+| Bảng | Xem | Tạo | Sửa / xóa |
+| --- | --- | --- | --- |
+| `tasks` | quyền xem nhóm, hoặc là người được giao | quyền tạo trong nhóm | quyền sửa trong nhóm; người được giao (không có quyền sửa) chỉ đổi được trạng thái |
+| `events` | quyền xem nhóm | quyền tạo trong nhóm | quyền sửa trong nhóm |
+| `booking_pages` | mọi người dùng đang hoạt động | chính chủ | chính chủ |
+| `bookings` | người đặt, người nhận, quản trị | người đặt (luôn ở trạng thái chờ) | người nhận đồng ý/từ chối; người đặt chỉ hủy; không sửa nội dung đã gửi; không đồng ý hai lịch trùng giờ |
+| `notifications` | chỉ người nhận | chỉ trigger | người nhận đánh dấu đã đọc hoặc xóa |
+
+Người được giao việc phải là thành viên nhóm (hoặc Hiệu trưởng, quản trị, thư ký toàn trường). Người khác chỉ thấy giờ bận của người nhận lịch qua hàm `booking_busy`, không thấy nội dung.
+
 ## Lịch sử và nhật ký
 
 - Mọi bảng có `created_by`, `created_at`, `updated_by`, `updated_at`, do trigger điền; người dùng không sửa được.
