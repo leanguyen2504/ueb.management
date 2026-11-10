@@ -18,7 +18,8 @@ Hướng dẫn cho người dựng hệ thống lần đầu hoặc người ti�
    <p>Hoặc bấm: <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email">Đăng nhập</a></p>
    ```
    Làm tương tự cho mẫu **Confirm signup** (lần đăng nhập đầu tiên của một người dùng dùng mẫu này).
-5. **Authentication → URL Configuration**: Site URL = địa chỉ web trên Vercel; thêm địa chỉ đó vào Redirect URLs.
+   Supabase chỉ cho sửa mẫu thư khi đã khai báo SMTP riêng (bước 6). Nếu chưa sửa được, ứng dụng vẫn chạy với mẫu mặc định: thư chỉ có liên kết, người dùng phải mở liên kết trên chính trình duyệt đã bấm "Gửi mã đăng nhập".
+5. **Authentication → URL Configuration**: Site URL = địa chỉ web trên Vercel; thêm `https://<địa-chỉ-web>/**` vào Redirect URLs (và `https://*-<tên-team>.vercel.app/**` nếu muốn thử trên bản Preview).
 6. **Authentication → SMTP Settings**: khai báo hộp thư gửi của trường. Máy gửi thư mặc định của Supabase chỉ cho vài email mỗi giờ, không đủ dùng thật.
 7. **Project Settings → API**: lấy Project URL, khóa `anon` (công khai) và khóa `service_role` (bí mật).
 

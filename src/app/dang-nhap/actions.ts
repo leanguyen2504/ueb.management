@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { serverEnv } from '@/lib/env';
@@ -42,12 +43,24 @@ export async function requestCode(_prev: LoginState, form: FormData): Promise<Lo
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: true, emailRedirectTo: `${await currentOrigin()}/auth/confirm` },
+  });
   if (error) {
     const wait = /rate limit|security purposes/i.test(error.message);
     return { step: 'email', email, error: wait ? 'Bạn vừa yêu cầu mã. Hãy đợi khoảng một phút rồi thử lại.' : 'Không gửi được mã đăng nhập. Hãy thử lại sau.' };
   }
-  return { step: 'code', email, info: `Đã gửi mã đăng nhập tới ${email}. Hãy kiểm tra cả thư mục Spam.` };
+  return { step: 'code', email, info: `Đã gửi thư đăng nhập tới ${email} (kiểm tra cả thư mục Spam). Bấm liên kết trong thư trên chính trình duyệt này, hoặc nhập mã nếu thư có mã.` };
+}
+
+// Địa chỉ web đang dùng (bản chính hoặc bản thử) để liên kết trong thư quay về đúng chỗ.
+async function currentOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get('x-forwarded-host') || h.get('host');
+  if (!host) return serverEnv.appUrl();
+  const proto = h.get('x-forwarded-proto') || (host.startsWith('localhost') ? 'http' : 'https');
+  return `${proto}://${host}`;
 }
 
 // Bước 2: xác minh mã 6 số.

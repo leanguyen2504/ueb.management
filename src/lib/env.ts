@@ -12,6 +12,7 @@ export const publicEnv = {
 };
 
 export const serverEnv = {
+  appUrl: () => process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
   serviceRoleKey: () => required('SUPABASE_SERVICE_ROLE_KEY', process.env.SUPABASE_SERVICE_ROLE_KEY),
   allowedDomains: () =>
     (process.env.ALLOWED_EMAIL_DOMAINS || 'vnu.edu.vn')
