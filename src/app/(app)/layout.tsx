@@ -11,6 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const items: NavItem[] = [
     { href: '/', label: 'Tổng quan', icon: 'home' },
     { href: '/nhom', label: 'Nhóm', icon: 'groups' },
+    { href: '/moi', label: 'Mời đồng nghiệp', icon: 'invite' },
   ];
   if (ctx.is_admin) items.push({ href: '/quan-tri/nguoi-dung', label: 'Người dùng', icon: 'users' });
   if (ctx.is_admin || ctx.role === 'principal') items.push({ href: '/quan-tri/nhat-ky', label: 'Nhật ký', icon: 'log' });

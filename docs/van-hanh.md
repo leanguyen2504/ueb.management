@@ -4,7 +4,7 @@
 
 - Quản trị hệ thống: **Người dùng → Mời người dùng**, nhập một hoặc nhiều email, chọn vai trò.
 - Người quản lý nhóm: trong trang nhóm, **Thêm thành viên bằng email**. Nếu người đó chưa có tài khoản, hệ thống tạo lời mời; lần đầu đăng nhập họ tự vào nhóm.
-- Mọi email thuộc tên miền cho phép (mặc định @vnu.edu.vn) đều tự đăng nhập được bằng mã gửi về hộp thư; người mới là thành viên thường, chưa thuộc nhóm nào nên chưa thấy dữ liệu. Lời mời (hạn 30 ngày) dùng để gán sẵn vai trò và nhóm.
+- Chỉ người được mời mới đăng nhập được. Mọi người dùng đang hoạt động đều mời được đồng nghiệp @vnu.edu.vn trong mục **Mời đồng nghiệp**, kèm một nhóm đề xuất (trong số nhóm mình xem được); người được mời vào nhóm đó với quyền mặc định của nhóm. Quản trị hệ thống mời được mọi vai trò trong trang Người dùng. Lời mời có hạn 30 ngày.
 
 ## Khóa tài khoản
 

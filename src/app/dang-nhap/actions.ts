@@ -33,8 +33,13 @@ export async function requestCode(_prev: LoginState, form: FormData): Promise<Lo
         if (!existing) await admin.from('invitations').insert({ email, make_admin: true });
       }
     }
-    // Mọi email thuộc tên miền cho phép đều đăng nhập được: mở được hộp thư
-    // để nhận mã/liên kết là bằng chứng sở hữu email. Người mới là thành viên thường.
+    const { count } = await admin
+      .from('invitations')
+      .select('id', { count: 'exact', head: true })
+      .eq('email', email)
+      .is('accepted_at', null)
+      .gt('expires_at', new Date().toISOString());
+    if (!count) return { step: 'email', email, error: 'Email này chưa được mời. Hãy nhờ một người đang dùng hệ thống gửi lời mời cho bạn (mục "Mời đồng nghiệp").' };
   }
 
   const supabase = await createClient();
