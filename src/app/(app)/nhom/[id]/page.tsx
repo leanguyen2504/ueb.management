@@ -9,15 +9,18 @@ import { KIND_LABEL, PERMS, ROLE_LABEL, type Group, type GroupMember, type Profi
 import { fmtDateTime, fmtTime } from '@/lib/format';
 import { TaskList } from '@/components/TaskList';
 import { MemberStrip, rankMember } from '@/components/MemberStrip';
+import { ProgressBar, TaskProgress, progressOf } from '@/components/TaskProgress';
+import { SubgroupForm } from '../SubgroupForm';
+import type { TaskLink } from '@/lib/types';
 import { EventForm, TaskForm } from '@/components/WorkForms';
 import { deleteEvent } from '@/lib/work';
 import { EVENT_KIND_LABEL, type CalEvent, type Task } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Nhóm' };
 
-export default async function GroupPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ loi?: string }> }) {
+export default async function GroupPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ loi?: string; tb?: string }> }) {
   const { id } = await params;
-  const { loi } = await searchParams;
+  const { loi, tb } = await searchParams;
   const { supabase, userId, ctx } = await requireSession();
   const { data: group } = await supabase.from('groups').select('*').eq('id', id).maybeSingle<Group>();
   if (!group) notFound();
@@ -29,6 +32,18 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     supabase.from('tasks').select('*').eq('group_id', id).order('status').order('due_date', { ascending: true, nullsFirst: false }).limit(200).returns<Task[]>(),
     supabase.from('events').select('*').eq('group_id', id).gte('ends_at', new Date(Date.now() - 86400000).toISOString()).order('starts_at').limit(30).returns<CalEvent[]>(),
   ]);
+  const taskIds = (tasks ?? []).map((t) => t.id);
+  const [{ data: linkRows }, { data: children }, { data: parent }] = await Promise.all([
+    taskIds.length ? supabase.from('task_links').select('*').in('task_id', taskIds).order('created_at').returns<TaskLink[]>() : Promise.resolve({ data: [] as TaskLink[] }),
+    supabase.from('groups').select('id, name, description, archived_at').eq('parent_id', id).order('created_at', { ascending: false }),
+    group.parent_id ? supabase.from('groups').select('id, name').eq('id', group.parent_id).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  const links = new Map<string, TaskLink[]>();
+  (linkRows ?? []).forEach((l) => links.set(l.task_id, [...(links.get(l.task_id) ?? []), l]));
+  const childIds = (children ?? []).map((c) => c.id);
+  const { data: childTasks } = childIds.length
+    ? await supabase.from('tasks').select('group_id, status, due_date').in('group_id', childIds)
+    : { data: [] as { group_id: string; status: Task['status']; due_date: string | null }[] };
   const ids = [...new Set([...(members ?? []).map((m) => m.user_id), ...(log ?? []).map((l) => l.actor_id).filter(Boolean) as string[], ...(tasks ?? []).map((t) => t.assignee_id).filter(Boolean) as string[], group.created_by, group.updated_by].filter(Boolean) as string[])];
   const { data: people } = await supabase.from('profiles').select('id, email, full_name, system_role, is_active, position, phone, office').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).returns<Profile[]>();
   const person = new Map((people ?? []).map((p) => [p.id, p]));
@@ -44,6 +59,9 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const canCreate = seesAll || Boolean(me?.can_create);
   const canEdit = seesAll || Boolean(me?.can_edit);
   const memberOptions = (members ?? []).map((m) => ({ id: m.user_id, label: person.get(m.user_id)?.full_name || person.get(m.user_id)?.email || 'Người dùng' }));
+  const canNudge = canEdit || canManage;
+  const canAttach = seesAll || Boolean(me?.can_upload);
+  const canSub = !group.archived_at && (canCreate || canManage);
   const sortedMembers = [...(members ?? [])].sort((a, b) => rankMember({ ...a, profile: person.get(a.user_id) }) - rankMember({ ...b, profile: person.get(b.user_id) }));
   const openTasks = (tasks ?? []).filter((t) => t.status !== 'done');
   const doneTasks = (tasks ?? []).filter((t) => t.status === 'done');
@@ -53,20 +71,56 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
       <PageHead
         title={group.name}
         sub={<>{KIND_LABEL[group.kind]}{group.archived_at ? ' · Đã lưu trữ' : ''} · Tạo bởi {name(group.created_by)} lúc {fmtDateTime(group.created_at)} · Sửa lần cuối bởi {name(group.updated_by)} lúc {fmtDateTime(group.updated_at)}</>}
-        actions={<Link href="/nhom" className="btn-secondary">← Khám phá dự án</Link>}
+        actions={parent ? <Link href={`/nhom/${parent.id}`} className="btn-secondary">← {parent.name}</Link> : <Link href="/nhom" className="btn-secondary">← Khám phá dự án</Link>}
       />
+      {tb && <p role="status" className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{tb}</p>}
       {loi && <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{loi}</p>}
       {group.description && <p className="mb-4 max-w-3xl text-sm">{group.description}</p>}
       <MemberStrip allHref="#thanh-vien" members={(members ?? []).map((m) => ({ user_id: m.user_id, is_manager: m.is_manager, is_clerk: m.is_clerk, profile: person.get(m.user_id) }))} />
 
+      <TaskProgress tasks={tasks ?? []} name={name} groupId={group.id} canNudge={canNudge} />
+
+      {(childIds.length > 0 || canSub) && (
+        <section className="card mb-4" aria-labelledby="kgc-h">
+          <h2 id="kgc-h" className="mb-1 font-semibold">Không gian sự kiện / việc chung ({childIds.length})</h2>
+          <p className="mb-3 text-sm muted">Mỗi không gian chỉ gồm người tham gia, để giao việc, đôn đốc và gắn sản phẩm riêng.</p>
+          {childIds.length > 0 && (
+            <ul className="mb-3 grid gap-3 sm:grid-cols-2">
+              {(children ?? []).map((c) => {
+                const p = progressOf((childTasks ?? []).filter((t) => t.group_id === c.id));
+                return (
+                  <li key={c.id}>
+                    <Link href={`/nhom/${c.id}`} className="block rounded-lg border border-slate-200 p-3 hover:border-brand-600 dark:border-slate-800">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="font-medium">{c.name}</span>
+                        {c.archived_at && <span className="chip">Đã lưu trữ</span>}
+                      </div>
+                      {c.description && <p className="truncate text-xs muted">{c.description}</p>}
+                      <ProgressBar pct={p.pct} className="mt-2" />
+                      <p className="mt-1 text-xs muted">{p.done}/{p.total} việc xong{p.overdue ? <span className="font-semibold text-red-600 dark:text-red-400"> · {p.overdue} quá hạn</span> : ''}</p>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {canSub && (
+            <details>
+              <summary className="cursor-pointer text-sm font-medium text-brand-600 dark:text-brand-100">+ Tạo không gian mới</summary>
+              <SubgroupForm parentId={group.id} people={memberOptions} me={userId} />
+            </details>
+          )}
+        </section>
+      )}
+
       <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_360px]">
         <section className="card">
           <h2 className="mb-3 font-semibold">Đầu việc ({openTasks.length} đang mở)</h2>
-          <TaskList tasks={openTasks} name={name} canDelete={canEdit} empty="Chưa có việc đang mở." />
+          <TaskList tasks={openTasks} name={name} canDelete={canEdit} empty="Chưa có việc đang mở." links={links} canNudge={canNudge} canAttach={canAttach} me={userId} />
           {doneTasks.length > 0 && (
             <details className="mt-3">
               <summary className="cursor-pointer text-sm muted">Đã hoàn thành ({doneTasks.length})</summary>
-              <TaskList tasks={doneTasks} name={name} canDelete={canEdit} />
+              <TaskList tasks={doneTasks} name={name} canDelete={canEdit} links={links} canAttach={canAttach} me={userId} />
             </details>
           )}
         </section>

@@ -217,3 +217,73 @@ export async function clearReadNotifications() {
   await supabase.from('notifications').delete().not('read_at', 'is', null);
   refresh();
 }
+
+// ---- Không gian con, đôn đốc, sản phẩm ----
+
+const back = (groupId: string | null | undefined, key: 'loi' | 'tb', msg: string) =>
+  redirect(`/nhom/${groupId ?? ''}?${key}=${encodeURIComponent(msg)}`);
+
+export async function createSubgroup(_prev: FormState, form: FormData): Promise<FormState> {
+  const parent = uuidOrNull(text(form, 'parent_id'));
+  const name = text(form, 'name');
+  if (!parent) return { error: 'Thiếu nhóm cha.' };
+  if (!name) return { error: 'Hãy đặt tên cho không gian.' };
+  const members = form.getAll('member_ids').map(String).filter((v) => uuidOrNull(v));
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('create_subgroup', {
+    p_parent: parent,
+    p_name: name,
+    p_description: text(form, 'description') || null,
+    p_member_ids: members,
+  });
+  if (error) return { error: errText(error) };
+  refresh(parent);
+  redirect(`/nhom/${data}`);
+}
+
+export async function nudgeTask(form: FormData) {
+  const id = uuidOrNull(text(form, 'id'));
+  const groupId = uuidOrNull(text(form, 'group_id'));
+  if (!id) return;
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('nudge_task', { p_task: id, p_message: text(form, 'message') || null });
+  refresh(groupId ?? undefined);
+  back(groupId, error ? 'loi' : 'tb', error ? errText(error) : 'Đã gửi lời nhắc.');
+}
+
+export async function nudgeOverdue(form: FormData) {
+  const groupId = uuidOrNull(text(form, 'group_id'));
+  if (!groupId) return;
+  const supabase = await createClient();
+  const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+  const { data: tasks } = await supabase
+    .from('tasks').select('id').eq('group_id', groupId).neq('status', 'done').not('assignee_id', 'is', null).lt('due_date', today);
+  let ok = 0;
+  for (const t of tasks ?? []) {
+    const { error } = await supabase.rpc('nudge_task', { p_task: t.id, p_message: null });
+    if (!error) ok++;
+  }
+  refresh(groupId);
+  back(groupId, 'tb', ok ? `Đã nhắc ${ok} việc quá hạn.` : 'Không có việc quá hạn nào cần nhắc (hoặc vừa nhắc trong 1 giờ qua).');
+}
+
+export async function addTaskLink(form: FormData) {
+  const task_id = uuidOrNull(text(form, 'task_id'));
+  const groupId = uuidOrNull(text(form, 'group_id'));
+  const url = text(form, 'url');
+  if (!task_id) return;
+  if (!/^https:\/\/(drive|docs)\.google\.com\//.test(url)) back(groupId, 'loi', 'Chỉ nhận link Google Drive hoặc Google Docs (bắt đầu bằng https://drive.google.com/ hoặc https://docs.google.com/).');
+  const supabase = await createClient();
+  const { error } = await supabase.from('task_links').insert({ task_id, url, label: text(form, 'label') || null });
+  refresh(groupId ?? undefined);
+  if (error) back(groupId, 'loi', errText(error));
+}
+
+export async function deleteTaskLink(form: FormData) {
+  const id = uuidOrNull(text(form, 'id'));
+  const groupId = uuidOrNull(text(form, 'group_id'));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from('task_links').delete().eq('id', id);
+  refresh(groupId ?? undefined);
+}
