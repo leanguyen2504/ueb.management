@@ -1,7 +1,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/dang-nhap', '/auth'];
+// /api/cron tự kiểm tra CRON_SECRET.
+const PUBLIC_PATHS = ['/dang-nhap', '/auth', '/api/cron'];
 
 // Làm mới phiên đăng nhập và chuyển người chưa đăng nhập về trang đăng nhập.
 export async function updateSession(request: NextRequest) {

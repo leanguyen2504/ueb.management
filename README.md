@@ -14,13 +14,14 @@ Web app tiếng Việt để Hiệu trưởng và tổ thư ký theo dõi nhóm,
 | 2. Nghiệp vụ | Khám phá dự án, đầu việc, lịch nhóm (đã có); mốc, trạng thái tùy chỉnh, hồ sơ cuộc họp, tài liệu Drive dạng liên kết, Jira dạng liên kết, tìm kiếm (chưa làm) | Đang làm |
 | 3. Cá nhân và nhắc việc | Dashboard của tôi, Việc của tôi, Lịch của tôi, Trang đặt lịch, Thông báo (đã có); Trợ lý công việc theo quy tắc, xuất Excel, nhắc việc qua email (chưa làm) | Đang làm |
 | 4. Bàn giao | Phiên bàn giao quản trị, xuất dữ liệu bàn giao | Chưa làm |
-| 5. Tích hợp | Google Calendar (chỉ đọc), Google Drive, Jira (chỉ đọc), khi được cấp quyền | Chưa làm |
+| 5. Tích hợp | Google Calendar (chỉ đọc, lịch dùng chung), Google Drive, Jira (chỉ đọc), khi được cấp quyền | Google Calendar: đang làm |
 
 ## Tài liệu
 
 - [Cấu hình và triển khai](docs/cau-hinh.md): tạo Supabase, Vercel, biến môi trường.
 - [Phân quyền](docs/phan-quyen.md): vai trò, quyền theo nhóm và cách cơ sở dữ liệu kiểm tra.
 - [Vận hành](docs/van-hanh.md): mời người dùng, khóa tài khoản, xem nhật ký, sao lưu.
+- [Google Calendar](docs/google-calendar.md): đọc lịch Google dùng chung (ví dụ lịch tuần BGH), cách cấp quyền và bật/tắt module.
 
 ## Chạy trên máy
 
