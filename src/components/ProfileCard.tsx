@@ -1,18 +1,18 @@
 import Link from 'next/link';
 import { ROLE_LABEL, type Profile } from '@/lib/types';
+import { Avatar } from '@/components/Avatar';
 
 export type ProfileGroup = { id: string; name: string; role: string };
 
-const initials = (p: Pick<Profile, 'full_name' | 'email'>) =>
-  (p.full_name || p.email).split(/\s+/).filter(Boolean).slice(-2).map((w) => w[0]!.toUpperCase()).join('');
 
 // Thẻ hồ sơ dùng chung cho trang Hồ sơ của tôi và trang xem hồ sơ người khác.
-export function ProfileCard({ profile, isAdmin, groups, bookingSlug, isMe }: {
+export function ProfileCard({ profile, isAdmin, groups, bookingSlug, isMe, avatarUrl }: {
   profile: Profile;
   isAdmin?: boolean;
   groups: ProfileGroup[];
   bookingSlug?: string | null;
   isMe?: boolean;
+  avatarUrl?: string | null;
 }) {
   const rows: [string, React.ReactNode][] = [
     ['Email', <a key="e" href={`mailto:${profile.email}`} className="text-brand-600 hover:underline dark:text-brand-100">{profile.email}</a>],
@@ -23,7 +23,7 @@ export function ProfileCard({ profile, isAdmin, groups, bookingSlug, isMe }: {
   return (
     <section className="card">
       <div className="flex flex-wrap items-center gap-4">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xl font-semibold text-white" aria-hidden="true">{initials(profile)}</div>
+        <Avatar name={profile.full_name || profile.email} url={avatarUrl} size={96} />
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold">{profile.full_name || profile.email}</h2>
           <p className="text-sm muted">{[profile.position, profile.unit].filter(Boolean).join(' · ') || 'Chưa cập nhật chức vụ'}</p>

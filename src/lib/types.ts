@@ -10,6 +10,7 @@ export type Profile = {
   phone: string | null;
   office: string | null;
   bio: string | null;
+  avatar_path?: string | null;
   system_role: SystemRole;
   is_active: boolean;
   updated_at: string;

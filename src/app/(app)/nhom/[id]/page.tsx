@@ -9,6 +9,7 @@ import { KIND_LABEL, PERMS, ROLE_LABEL, type Group, type GroupMember, type Profi
 import { fmtDateTime, fmtTime } from '@/lib/format';
 import { TaskList } from '@/components/TaskList';
 import { MemberStrip, rankMember } from '@/components/MemberStrip';
+import { avatarUrls } from '@/lib/avatars';
 import { ProgressBar, TaskProgress, progressOf } from '@/components/TaskProgress';
 import { SubgroupForm } from '../SubgroupForm';
 import type { TaskLink } from '@/lib/types';
@@ -45,8 +46,9 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     ? await supabase.from('tasks').select('group_id, status, due_date').in('group_id', childIds)
     : { data: [] as { group_id: string; status: Task['status']; due_date: string | null }[] };
   const ids = [...new Set([...(members ?? []).map((m) => m.user_id), ...(log ?? []).map((l) => l.actor_id).filter(Boolean) as string[], ...(tasks ?? []).map((t) => t.assignee_id).filter(Boolean) as string[], group.created_by, group.updated_by].filter(Boolean) as string[])];
-  const { data: people } = await supabase.from('profiles').select('id, email, full_name, system_role, is_active, position, phone, office').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).returns<Profile[]>();
+  const { data: people } = await supabase.from('profiles').select('id, email, full_name, system_role, is_active, position, phone, office, avatar_path').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).returns<Profile[]>();
   const person = new Map((people ?? []).map((p) => [p.id, p]));
+  const avatars = await avatarUrls(supabase, (members ?? []).map((m) => person.get(m.user_id)?.avatar_path));
   const name = (uid: string | null) => (uid ? person.get(uid)?.full_name || person.get(uid)?.email || 'Người dùng' : 'Hệ thống');
 
   // Chỉ để ẩn/hiện nút; cơ sở dữ liệu kiểm tra lại quyền khi lưu.
@@ -76,7 +78,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
       {tb && <p role="status" className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{tb}</p>}
       {loi && <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{loi}</p>}
       {group.description && <p className="mb-4 max-w-3xl text-sm">{group.description}</p>}
-      <MemberStrip allHref="#thanh-vien" members={(members ?? []).map((m) => ({ user_id: m.user_id, is_manager: m.is_manager, is_clerk: m.is_clerk, profile: person.get(m.user_id) }))} />
+      <MemberStrip allHref="#thanh-vien" members={(members ?? []).map((m) => ({ user_id: m.user_id, is_manager: m.is_manager, is_clerk: m.is_clerk, profile: person.get(m.user_id), avatarUrl: avatars.get(person.get(m.user_id)?.avatar_path ?? '') }))} />
 
       <TaskProgress tasks={tasks ?? []} name={name} groupId={group.id} canNudge={canNudge} />
 
