@@ -8,6 +8,7 @@ import { cancelInvitation, removeMember, setArchived, updateMember } from '../ac
 import { KIND_LABEL, PERMS, ROLE_LABEL, type Group, type GroupMember, type Profile } from '@/lib/types';
 import { fmtDateTime, fmtTime } from '@/lib/format';
 import { TaskList } from '@/components/TaskList';
+import { MemberStrip, rankMember } from '@/components/MemberStrip';
 import { EventForm, TaskForm } from '@/components/WorkForms';
 import { deleteEvent } from '@/lib/work';
 import { EVENT_KIND_LABEL, type CalEvent, type Task } from '@/lib/types';
@@ -29,7 +30,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     supabase.from('events').select('*').eq('group_id', id).gte('ends_at', new Date(Date.now() - 86400000).toISOString()).order('starts_at').limit(30).returns<CalEvent[]>(),
   ]);
   const ids = [...new Set([...(members ?? []).map((m) => m.user_id), ...(log ?? []).map((l) => l.actor_id).filter(Boolean) as string[], ...(tasks ?? []).map((t) => t.assignee_id).filter(Boolean) as string[], group.created_by, group.updated_by].filter(Boolean) as string[])];
-  const { data: people } = await supabase.from('profiles').select('id, email, full_name, system_role, is_active').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).returns<Profile[]>();
+  const { data: people } = await supabase.from('profiles').select('id, email, full_name, system_role, is_active, position, phone, office').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).returns<Profile[]>();
   const person = new Map((people ?? []).map((p) => [p.id, p]));
   const name = (uid: string | null) => (uid ? person.get(uid)?.full_name || person.get(uid)?.email || 'Người dùng' : 'Hệ thống');
 
@@ -43,6 +44,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const canCreate = seesAll || Boolean(me?.can_create);
   const canEdit = seesAll || Boolean(me?.can_edit);
   const memberOptions = (members ?? []).map((m) => ({ id: m.user_id, label: person.get(m.user_id)?.full_name || person.get(m.user_id)?.email || 'Người dùng' }));
+  const sortedMembers = [...(members ?? [])].sort((a, b) => rankMember({ ...a, profile: person.get(a.user_id) }) - rankMember({ ...b, profile: person.get(b.user_id) }));
   const openTasks = (tasks ?? []).filter((t) => t.status !== 'done');
   const doneTasks = (tasks ?? []).filter((t) => t.status === 'done');
 
@@ -55,6 +57,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
       />
       {loi && <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{loi}</p>}
       {group.description && <p className="mb-4 max-w-3xl text-sm">{group.description}</p>}
+      <MemberStrip allHref="#thanh-vien" members={(members ?? []).map((m) => ({ user_id: m.user_id, is_manager: m.is_manager, is_clerk: m.is_clerk, profile: person.get(m.user_id) }))} />
 
       <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_360px]">
         <section className="card">
@@ -106,7 +109,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
-          <section className="card overflow-x-auto">
+          <section id="thanh-vien" className="card scroll-mt-4 overflow-x-auto">
             <h2 className="mb-3 font-semibold">Thành viên ({members?.length ?? 0})</h2>
             {canManage && <div className="mb-4"><AddMemberForm groupId={group.id} canAssignRole={isLead} /></div>}
             <table className="table">
@@ -114,7 +117,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                 <tr><th>Người dùng</th><th>Trưởng nhóm</th><th>Văn thư</th>{EDIT_PERMS.map(([k, l]) => <th key={k}>{l}</th>)}{canManage && <th />}</tr>
               </thead>
               <tbody>
-                {(members ?? []).map((m) => {
+                {sortedMembers.map((m) => {
                   const p = person.get(m.user_id);
                   const formId = `m-${m.user_id}`;
                   const canEditRow = canManage && (isLead || (!m.is_manager && !m.is_clerk));
