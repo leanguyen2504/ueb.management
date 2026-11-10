@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { TIMEZONE } from '@/lib/env';
 import { resolveAuth } from './service-account';
 import { listEvents, type GoogleAuth } from './google-api';
+import { listPublicIcsEvents } from './ics';
 
 // Cửa sổ lưu lịch: 30 ngày trước đến 180 ngày sau.
 const PAST_DAYS = 30;
@@ -21,11 +22,15 @@ const errMessage = (e: unknown) =>
       : e.message.slice(0, 400)
     : 'Lỗi không xác định khi tải lịch.';
 
-async function syncSource(admin: Admin, auth: GoogleAuth, src: SourceRow): Promise<SyncResult> {
+async function syncSource(admin: Admin, auth: GoogleAuth | { publicIcs: true }, src: SourceRow): Promise<SyncResult> {
   const now = Date.now();
   const stamp = new Date().toISOString();
   try {
-    const rows = await listEvents(auth, src.calendar_id, new Date(now - PAST_DAYS * 86400000), new Date(now + FUTURE_DAYS * 86400000), TIMEZONE);
+    const from = new Date(now - PAST_DAYS * 86400000);
+    const to = new Date(now + FUTURE_DAYS * 86400000);
+    const rows = 'publicIcs' in auth
+      ? await listPublicIcsEvents(src.calendar_id, from, to, TIMEZONE)
+      : await listEvents(auth, src.calendar_id, from, to, TIMEZONE);
     const del = await admin.from('calendar_events').delete().eq('source_id', src.id);
     if (del.error) throw new Error(del.error.message);
     for (let i = 0; i < rows.length; i += 500) {
@@ -51,7 +56,7 @@ export async function syncCalendars(opts: { sourceIds?: string[]; force?: boolea
   const cutoff = Date.now() - STALE_MS;
   const due = (data ?? []).filter((s) => opts.force || !s.last_synced_at || new Date(s.last_synced_at).getTime() < cutoff);
   if (!due.length) return [];
-  let auth: GoogleAuth;
+  let auth: GoogleAuth | { publicIcs: true };
   try {
     auth = await resolveAuth();
   } catch (e) {
