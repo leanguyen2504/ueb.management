@@ -121,7 +121,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                   return (
                     <tr key={m.user_id}>
                       <td>
-                        <div className="font-medium">{p?.full_name || p?.email}</div>
+                        <Link href={`/nguoi/${m.user_id}`} className="font-medium hover:underline">{p?.full_name || p?.email}</Link>
                         <div className="text-xs muted">{p?.email}{p ? ` · ${ROLE_LABEL[p.system_role]}` : ''}{p && !p.is_active ? ' · Đã khóa' : ''}</div>
                         {canEditRow && (
                           <form id={formId} action={updateMember}>
