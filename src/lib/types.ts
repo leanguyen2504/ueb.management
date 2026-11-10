@@ -33,6 +33,7 @@ export type GroupMember = {
   group_id: string;
   user_id: string;
   is_manager: boolean;
+  is_clerk: boolean;
   can_view: boolean;
   can_create: boolean;
   can_edit: boolean;
@@ -68,6 +69,105 @@ export const PERMS = [
   ['can_create', 'Tạo'],
   ['can_edit', 'Sửa'],
   ['can_upload', 'Tải/gắn tài liệu'],
-  ['can_manage_members', 'Quản lý thành viên'],
+  ['can_manage_members', 'Mời và gỡ thành viên'],
 ] as const;
 export type PermKey = (typeof PERMS)[number][0];
+
+export type TaskStatus = 'todo' | 'doing' | 'review' | 'done';
+export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type EventKind = 'meeting' | 'event' | 'deadline' | 'other';
+export type BookingStatus = 'pending' | 'accepted' | 'declined' | 'cancelled';
+
+export type Task = {
+  id: string;
+  group_id: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  due_date: string | null;
+  assignee_id: string | null;
+  completed_at: string | null;
+  created_by: string | null;
+  updated_at: string;
+};
+
+export type CalEvent = {
+  id: string;
+  group_id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  kind: EventKind;
+  starts_at: string;
+  ends_at: string;
+  created_by: string | null;
+};
+
+export type BookingPage = {
+  user_id: string;
+  is_open: boolean;
+  intro: string | null;
+  hours_note: string | null;
+  slot_minutes: number;
+};
+
+export type Booking = {
+  id: string;
+  host_id: string;
+  requester_id: string;
+  starts_at: string;
+  ends_at: string;
+  topic: string;
+  note: string | null;
+  status: BookingStatus;
+  response_note: string | null;
+  created_at: string;
+};
+
+export type AppNotification = {
+  id: number;
+  kind: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  read_at: string | null;
+  created_at: string;
+};
+
+// Lịch từ nguồn ngoài (ví dụ Google Calendar chỉ đọc), trộn vào trang Lịch của tôi.
+export type ExternalEvent = {
+  id: string;
+  title: string;
+  starts_at: string;
+  ends_at: string;
+  location?: string | null;
+  all_day?: boolean;
+  url?: string | null;
+  source_label?: string;
+};
+
+export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
+  todo: 'Cần làm',
+  doing: 'Đang làm',
+  review: 'Chờ duyệt',
+  done: 'Hoàn thành',
+};
+export const TASK_PRIORITY_LABEL: Record<TaskPriority, string> = {
+  low: 'Thấp',
+  normal: 'Bình thường',
+  high: 'Cao',
+  urgent: 'Khẩn',
+};
+export const EVENT_KIND_LABEL: Record<EventKind, string> = {
+  meeting: 'Cuộc họp',
+  event: 'Sự kiện',
+  deadline: 'Hạn chót',
+  other: 'Khác',
+};
+export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
+  pending: 'Chờ phản hồi',
+  accepted: 'Đã đồng ý',
+  declined: 'Từ chối',
+  cancelled: 'Đã hủy',
+};

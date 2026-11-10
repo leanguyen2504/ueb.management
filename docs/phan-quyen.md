@@ -13,6 +13,9 @@ Quyền có hai lớp: vai trò hệ thống (gắn với người dùng) và qu
 
 ## Quyền trong nhóm
 
+Mỗi nhóm có hai vai trò: **Trưởng nhóm** (đủ mọi quyền) và **Văn thư**. Chỉ hai vai trò này mời, thêm và gỡ thành viên; quyền "quản lý thành viên" được tính tự động từ vai trò, không tích tay được. Văn thư chỉ thêm, sửa, gỡ thành viên thường; chỉ Trưởng nhóm, quản trị hệ thống và thư ký toàn trường bổ nhiệm hoặc gỡ Trưởng nhóm và Văn thư (trigger `guard_member_roles`).
+
+
 Mỗi dòng `group_members` có 5 quyền: xem, tạo, sửa, tải/gắn tài liệu, quản lý thành viên. Người quản lý nhóm luôn có đủ 5 quyền (trigger tự bật). Nhóm có bộ quyền mặc định cho thành viên mới.
 
 ## Hàm kiểm tra quyền
@@ -24,6 +27,18 @@ Nằm trong schema `private` (không mở qua API):
 - Tài khoản bị khóa (`profiles.is_active = false`) không có quyền nào.
 
 Đổi vai trò và phạm vi thư ký chỉ qua hàm `admin_set_user` và `admin_set_secretary_scope`, cả hai kiểm tra quyền quản trị. Người dùng chỉ tự sửa được họ tên, đơn vị, chức vụ của mình.
+
+## Đầu việc, lịch, đặt lịch, thông báo
+
+| Bảng | Xem | Tạo | Sửa / xóa |
+| --- | --- | --- | --- |
+| `tasks` | quyền xem nhóm, hoặc là người được giao | quyền tạo trong nhóm | quyền sửa trong nhóm; người được giao (không có quyền sửa) chỉ đổi được trạng thái |
+| `events` | quyền xem nhóm | quyền tạo trong nhóm | quyền sửa trong nhóm |
+| `booking_pages` | mọi người dùng đang hoạt động | chính chủ | chính chủ |
+| `bookings` | người đặt, người nhận, quản trị | người đặt (luôn ở trạng thái chờ) | người nhận đồng ý/từ chối; người đặt chỉ hủy; không sửa nội dung đã gửi; không đồng ý hai lịch trùng giờ |
+| `notifications` | chỉ người nhận | chỉ trigger | người nhận đánh dấu đã đọc hoặc xóa |
+
+Người được giao việc phải là thành viên nhóm (hoặc Hiệu trưởng, quản trị, thư ký toàn trường). Người khác chỉ thấy giờ bận của người nhận lịch qua hàm `booking_busy`, không thấy nội dung.
 
 ## Lịch sử và nhật ký
 

@@ -54,7 +54,7 @@ export default async function UsersPage() {
               })}
             </tbody>
           </table>
-          <p className="p-3 text-xs muted">Thư ký không tích &quot;toàn trường&quot; chỉ quản lý các nhóm mình là người quản lý. Bỏ tích &quot;Hoạt động&quot; để khóa tài khoản: người đó không xem được dữ liệu nào nữa.</p>
+          <p className="p-3 text-xs muted">Thư ký không tích &quot;toàn trường&quot; chỉ quản lý các nhóm mình là Trưởng nhóm. Bỏ tích &quot;Hoạt động&quot; để khóa tài khoản: người đó không xem được dữ liệu nào nữa.</p>
         </section>
         <div className="space-y-4">
           <InviteForm groups={options} showRole />
