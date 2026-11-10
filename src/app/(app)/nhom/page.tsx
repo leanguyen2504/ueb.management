@@ -17,14 +17,14 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
   if (q.trim()) query = query.ilike('name', `%${q.trim().replace(/[%_]/g, '')}%`);
   const [{ data: groups }, { data: mine }, { data: counts }, { data: allNames }] = await Promise.all([
     query.returns<Group[]>(),
-    supabase.from('group_members').select('group_id, is_manager').eq('user_id', userId),
+    supabase.from('group_members').select('group_id, is_manager, is_clerk').eq('user_id', userId),
     supabase.from('group_members').select('group_id'),
     supabase.from('groups').select('id, name'),
   ]);
   const { data: taskRows } = await supabase.from('tasks').select('group_id').neq('status', 'done');
   const openTasks = new Map<string, number>();
   (taskRows ?? []).forEach((t) => openTasks.set(t.group_id, (openTasks.get(t.group_id) ?? 0) + 1));
-  const role = new Map((mine ?? []).map((m) => [m.group_id, m.is_manager ? 'Quản lý' : 'Thành viên']));
+  const role = new Map((mine ?? []).map((m) => [m.group_id, m.is_manager ? 'Trưởng nhóm' : m.is_clerk ? 'Văn thư' : 'Thành viên']));
   const parentName = new Map((allNames ?? []).map((g) => [g.id, g.name]));
   const memberCount = new Map<string, number>();
   (counts ?? []).forEach((c) => memberCount.set(c.group_id, (memberCount.get(c.group_id) ?? 0) + 1));

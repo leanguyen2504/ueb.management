@@ -33,6 +33,7 @@ export type GroupMember = {
   group_id: string;
   user_id: string;
   is_manager: boolean;
+  is_clerk: boolean;
   can_view: boolean;
   can_create: boolean;
   can_edit: boolean;
@@ -68,7 +69,7 @@ export const PERMS = [
   ['can_create', 'Tạo'],
   ['can_edit', 'Sửa'],
   ['can_upload', 'Tải/gắn tài liệu'],
-  ['can_manage_members', 'Quản lý thành viên'],
+  ['can_manage_members', 'Mời và gỡ thành viên'],
 ] as const;
 export type PermKey = (typeof PERMS)[number][0];
 

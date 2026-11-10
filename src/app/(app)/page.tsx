@@ -88,13 +88,13 @@ export default async function DashboardPage() {
                 <li key={g.id}>
                   <Link href={`/nhom/${g.id}`} className="flex items-center justify-between py-2 hover:text-brand-600">
                     <span>{g.name}</span>
-                    <span className="chip">{mineIds.get(g.id) ? 'Quản lý' : KIND_LABEL[g.kind]}</span>
+                    <span className="chip">{mineIds.get(g.id) ? 'Trưởng nhóm' : KIND_LABEL[g.kind]}</span>
                   </Link>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm muted">Bạn chưa tham gia nhóm nào. Người quản lý nhóm sẽ thêm bạn vào nhóm.</p>
+            <p className="text-sm muted">Bạn chưa tham gia nhóm nào. Trưởng nhóm hoặc Văn thư sẽ thêm bạn vào nhóm.</p>
           )}
         </section>
         <section className="card">

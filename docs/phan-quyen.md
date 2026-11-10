@@ -13,6 +13,9 @@ Quyền có hai lớp: vai trò hệ thống (gắn với người dùng) và qu
 
 ## Quyền trong nhóm
 
+Mỗi nhóm có hai vai trò: **Trưởng nhóm** (đủ mọi quyền) và **Văn thư**. Chỉ hai vai trò này mời, thêm và gỡ thành viên; quyền "quản lý thành viên" được tính tự động từ vai trò, không tích tay được. Văn thư chỉ thêm, sửa, gỡ thành viên thường; chỉ Trưởng nhóm, quản trị hệ thống và thư ký toàn trường bổ nhiệm hoặc gỡ Trưởng nhóm và Văn thư (trigger `guard_member_roles`).
+
+
 Mỗi dòng `group_members` có 5 quyền: xem, tạo, sửa, tải/gắn tài liệu, quản lý thành viên. Người quản lý nhóm luôn có đủ 5 quyền (trigger tự bật). Nhóm có bộ quyền mặc định cho thành viên mới.
 
 ## Hàm kiểm tra quyền

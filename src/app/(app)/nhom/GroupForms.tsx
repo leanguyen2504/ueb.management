@@ -26,7 +26,7 @@ export function CreateGroupForm() {
       <div><label className="label" htmlFor="g-desc">Mô tả</label><textarea id="g-desc" name="description" rows={2} className="input" /></div>
       <FormMessage state={state} />
       <SubmitButton pendingText="Đang tạo…">Tạo nhóm</SubmitButton>
-      <p className="text-xs muted">Bạn sẽ là người quản lý của nhóm mới.</p>
+      <p className="text-xs muted">Bạn sẽ là Trưởng nhóm của nhóm mới.</p>
     </form>
   );
 }
@@ -62,14 +62,23 @@ export function EditGroupForm({ group }: { group: Group }) {
   );
 }
 
-export function AddMemberForm({ groupId }: { groupId: string }) {
+export function AddMemberForm({ groupId, canAssignRole }: { groupId: string; canAssignRole: boolean }) {
   const [state, action] = useActionState(addMember, null);
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="group_id" value={groupId} />
       <div className="flex flex-col gap-2 md:flex-row md:items-end">
         <div className="flex-1"><label className="label" htmlFor="m-email">Thêm thành viên bằng email</label><input id="m-email" name="email" type="email" required placeholder="ten@vnu.edu.vn" className="input" /></div>
-        <label className="flex items-center gap-2 text-sm md:pb-2"><input type="checkbox" name="is_manager" /> Người quản lý</label>
+        {canAssignRole && (
+          <div>
+            <label className="label" htmlFor="m-role">Vai trò</label>
+            <select id="m-role" name="role" defaultValue="member" className="input">
+              <option value="member">Thành viên</option>
+              <option value="clerk">Văn thư</option>
+              <option value="manager">Trưởng nhóm</option>
+            </select>
+          </div>
+        )}
         <SubmitButton pendingText="Đang thêm…">Thêm</SubmitButton>
       </div>
       <FormMessage state={state} />
