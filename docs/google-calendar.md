@@ -76,4 +76,4 @@ Sau đó **Deployments → Redeploy** để biến mới có hiệu lực.
 
 - Mã: `src/lib/google-calendar/`. Trang Lịch gọi `getGoogleCalendarEvents(supabase, userId, fromISO, toISO)`.
 - Đăng nhập Google bằng JWT ký RS256 (`service-account.ts`), không dùng thư viện ngoài. Phạm vi quyền: `calendar.readonly`.
-- Bảng: `calendar_sources` (quản trị ghi, có nhật ký), `calendar_events` (chỉ máy chủ ghi bằng khóa service). Kiểm thử RLS: `supabase/tests/30_lich_google.sql`.
+- Bảng: `calendar_sources` (quản trị ghi, có nhật ký), `calendar_events` (chỉ máy chủ ghi bằng khóa service). Kiểm thử RLS: `supabase/tests/40_lich_google.sql`.

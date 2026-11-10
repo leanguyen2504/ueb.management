@@ -30,6 +30,7 @@ create table public.calendar_events (
   ends_at timestamptz not null,
   all_day boolean not null default false,
   location text,
+  description text,
   url text,
   html_link text,
   unique (source_id, google_event_id)

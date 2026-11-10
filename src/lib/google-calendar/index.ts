@@ -15,6 +15,10 @@ export type GoogleCalendarEvent = {
   all_day: boolean;
   url: string | null;
   source_label: string;
+  source_id: string;
+  description: string | null;
+  meet_url: string | null;
+  html_link: string | null;
 };
 
 export const isGoogleCalendarEnabled = () => features.googleCalendar();
@@ -36,7 +40,7 @@ export async function getGoogleCalendarEvents(
   const labelOf = new Map(sources.map((s) => [s.id, s.label as string]));
   const { data: events } = await supabase
     .from('calendar_events')
-    .select('id, source_id, title, starts_at, ends_at, all_day, location, url, html_link')
+    .select('id, source_id, title, starts_at, ends_at, all_day, location, description, url, html_link')
     .in('source_id', [...labelOf.keys()])
     .lt('starts_at', toISO)
     .gt('ends_at', fromISO)
@@ -51,5 +55,9 @@ export async function getGoogleCalendarEvents(
     all_day: e.all_day,
     url: e.url ?? e.html_link,
     source_label: labelOf.get(e.source_id) ?? 'Google Calendar',
+    source_id: e.source_id,
+    description: e.description,
+    meet_url: e.url,
+    html_link: e.html_link,
   }));
 }

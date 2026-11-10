@@ -21,6 +21,7 @@ export type EventRow = {
   ends_at: string;
   all_day: boolean;
   location: string | null;
+  description: string | null;
   url: string | null;
   html_link: string | null;
 };
@@ -43,6 +44,25 @@ export function zonedMidnight(d: string, tz: string): string {
     .find((p) => p.type === 'timeZoneName')
     ?.value.replace('GMT', '');
   return new Date(`${d}T00:00:00${off || '+00:00'}`).toISOString();
+}
+
+// Mô tả trên Google có thể chứa HTML đơn giản (<i>, <u>, <br>): chuyển thành chữ thường.
+export function htmlToText(s: string | undefined): string | null {
+  if (!s) return null;
+  const t = s
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li)>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return t ? t.slice(0, 2000) : null;
 }
 
 function meetingUrl(e: GoogleEvent): string | null {
@@ -68,6 +88,7 @@ export function toRow(e: GoogleEvent, tz: string): EventRow | null {
     ends_at: ends > starts ? ends : starts,
     all_day: allDay,
     location: clean(e.location, 300),
+    description: htmlToText(e.description),
     url: clean(meetingUrl(e), 500),
     html_link: clean(e.htmlLink, 500),
   };
