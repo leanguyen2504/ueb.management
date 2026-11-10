@@ -12,6 +12,8 @@ create table public.calendar_sources (
   -- office: Hiệu trưởng, thư ký và quản trị xem được. all: mọi người dùng đang hoạt động.
   visibility text not null default 'office' check (visibility in ('office', 'all')),
   is_enabled boolean not null default true,
+  -- Những người coi buổi họp trong lịch này là giờ bận của mình (trang đặt lịch ẩn các giờ đó).
+  busy_user_ids uuid[] not null default '{}',
   last_synced_at timestamptz,
   last_error text,
   event_count int not null default 0,
@@ -36,6 +38,7 @@ create table public.calendar_events (
   unique (source_id, google_event_id)
 );
 create index calendar_events_range_idx on public.calendar_events (starts_at, ends_at);
+create index calendar_events_source_idx on public.calendar_events (source_id, starts_at);
 
 create trigger calendar_sources_audit before insert or update on public.calendar_sources
   for each row execute function private.set_audit_columns();
@@ -60,8 +63,8 @@ revoke all on public.calendar_sources from anon, authenticated;
 revoke all on public.calendar_events from anon, authenticated;
 grant select on public.calendar_sources, public.calendar_events to authenticated;
 -- Chỉ quản trị thêm, sửa, xóa nguồn lịch. Trạng thái đồng bộ do máy chủ ghi.
-grant insert (calendar_id, label, visibility, is_enabled) on public.calendar_sources to authenticated;
-grant update (label, visibility, is_enabled) on public.calendar_sources to authenticated;
+grant insert (calendar_id, label, visibility, is_enabled, busy_user_ids) on public.calendar_sources to authenticated;
+grant update (label, visibility, is_enabled, busy_user_ids) on public.calendar_sources to authenticated;
 grant delete on public.calendar_sources to authenticated;
 
 create policy calendar_sources_read on public.calendar_sources for select to authenticated
@@ -87,7 +90,7 @@ language plpgsql security definer
 set search_path = ''
 as $$
 begin
-  if tg_op = 'UPDATE' and (old.label, old.visibility, old.is_enabled) is not distinct from (new.label, new.visibility, new.is_enabled) then
+  if tg_op = 'UPDATE' and (old.label, old.visibility, old.is_enabled, old.busy_user_ids) is not distinct from (new.label, new.visibility, new.is_enabled, new.busy_user_ids) then
     return new; -- chỉ đổi trạng thái đồng bộ
   end if;
   insert into public.activity_log (actor_id, action, entity_type, entity_id, old_data, new_data)
@@ -96,8 +99,8 @@ begin
     lower(tg_op),
     'calendar_sources',
     coalesce(new.id, old.id)::text,
-    case when tg_op <> 'INSERT' then jsonb_build_object('calendar_id', old.calendar_id, 'label', old.label, 'visibility', old.visibility, 'is_enabled', old.is_enabled) end,
-    case when tg_op <> 'DELETE' then jsonb_build_object('calendar_id', new.calendar_id, 'label', new.label, 'visibility', new.visibility, 'is_enabled', new.is_enabled) end
+    case when tg_op <> 'INSERT' then jsonb_build_object('calendar_id', old.calendar_id, 'label', old.label, 'visibility', old.visibility, 'is_enabled', old.is_enabled, 'busy_user_ids', old.busy_user_ids) end,
+    case when tg_op <> 'DELETE' then jsonb_build_object('calendar_id', new.calendar_id, 'label', new.label, 'visibility', new.visibility, 'is_enabled', new.is_enabled, 'busy_user_ids', new.busy_user_ids) end
   );
   return coalesce(new, old);
 end;

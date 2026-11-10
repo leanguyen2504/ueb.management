@@ -36,6 +36,10 @@ export async function updateSource(form: FormData) {
   if (form.has('label')) patch.label = String(form.get('label')).trim().slice(0, 80) || 'Lịch Google';
   if (form.has('visibility')) patch.visibility = vis(form.get('visibility'));
   if (form.has('is_enabled')) patch.is_enabled = form.get('is_enabled') === 'true';
+  if (form.has('busy_form')) {
+    const uuid = /^[0-9a-f-]{36}$/i;
+    patch.busy_user_ids = form.getAll('busy_user_ids').map(String).filter((v) => uuid.test(v));
+  }
   await supabase.from('calendar_sources').update(patch).eq('id', id);
   revalidatePath(PATH);
 }

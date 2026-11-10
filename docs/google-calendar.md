@@ -7,6 +7,7 @@ Hệ thống đọc một hoặc nhiều lịch Google dùng chung (ví dụ "L�
 - Quản trị hệ thống thêm lịch tại **Tài khoản → Cấu hình lịch Google dùng chung** (`/quan-tri/lich-google`), bằng mã lịch hoặc dán link lịch dùng chung.
 - Máy chủ đọc lịch qua Google Calendar API, lưu các buổi họp từ 30 ngày trước đến 180 ngày sau vào bảng `calendar_events`. Buổi họp lặp lại được Google trải ra từng lần.
 - Lịch được tải lại khi có người mở trang Lịch (nếu bản lưu đã cũ hơn 10 phút), khi quản trị bấm "Tải lại ngay", và mỗi sáng 5 giờ bằng Vercel Cron.
+- Mỗi lịch có mục **Tính là giờ bận của**: chọn những người (ví dụ Hiệu trưởng) mà trang đặt lịch phải ẩn các giờ trùng với buổi họp trong lịch này.
 - Mỗi lịch có quyền xem riêng: **Hiệu trưởng, thư ký và quản trị** (mặc định) hoặc **Mọi người dùng**. Quyền được kiểm tra bằng RLS trong cơ sở dữ liệu.
 
 ## Hai cách cấp quyền đọc lịch

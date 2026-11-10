@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: 'Lịch Google' };
 
 type Source = {
   id: string; calendar_id: string; label: string; visibility: 'office' | 'all'; is_enabled: boolean;
-  last_synced_at: string | null; last_error: string | null; event_count: number;
+  last_synced_at: string | null; last_error: string | null; event_count: number; busy_user_ids: string[];
 };
 
 export default async function GoogleCalendarAdminPage() {
@@ -22,6 +22,10 @@ export default async function GoogleCalendarAdminPage() {
   const hasApiKey = !!process.env.GOOGLE_CALENDAR_API_KEY;
   const { data } = await supabase.from('calendar_sources').select('*').order('created_at');
   const sources = (data ?? []) as Source[];
+  const { data: people } = await supabase
+    .from('profiles').select('id, full_name, email, system_role').eq('is_active', true).order('full_name');
+  const rank: Record<string, number> = { principal: 0, secretary: 1, member: 2 };
+  const persons = (people ?? []).sort((a, b) => (rank[a.system_role] ?? 3) - (rank[b.system_role] ?? 3));
 
   return (
     <>
@@ -85,6 +89,25 @@ export default async function GoogleCalendarAdminPage() {
               </div>
               <SubmitButton className="btn-secondary">Lưu</SubmitButton>
             </form>
+            <details className="text-sm">
+              <summary className="cursor-pointer select-none">
+                Tính là giờ bận của: {s.busy_user_ids.length ? `${s.busy_user_ids.length} người` : <span className="muted">chưa ai</span>}
+              </summary>
+              <form action={updateSource} className="mt-2 space-y-2">
+                <input type="hidden" name="id" value={s.id} />
+                <input type="hidden" name="busy_form" value="1" />
+                <p className="text-xs muted">Trang đặt lịch của những người được chọn sẽ ẩn các giờ trùng với buổi họp trong lịch này.</p>
+                <div className="grid max-h-60 gap-1 overflow-y-auto sm:grid-cols-2">
+                  {persons.map((p) => (
+                    <label key={p.id} className="flex items-center gap-2">
+                      <input type="checkbox" name="busy_user_ids" value={p.id} defaultChecked={s.busy_user_ids.includes(p.id)} />
+                      <span className="truncate">{p.full_name || p.email}</span>
+                    </label>
+                  ))}
+                </div>
+                <SubmitButton className="btn-secondary">Lưu người dùng lịch này</SubmitButton>
+              </form>
+            </details>
           </div>
         ))}
       </div>
