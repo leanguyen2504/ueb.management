@@ -24,7 +24,7 @@ Hướng dẫn cho người dựng hệ thống lần đầu hoặc người ti�
 
 ## 2. Tạo dự án Vercel
 
-1. Import repo GitHub này vào Vercel (Framework: Next.js, giữ mặc định).
+1. Import repo GitHub này vào Vercel (Framework: Next.js, giữ mặc định). `vercel.json` đặt máy chủ ở Singapore (`sin1`), cùng khu vực với Supabase, để trang tải nhanh từ Việt Nam.
 2. **Settings → Environment Variables**: khai báo các biến ở bảng dưới cho Production và Preview.
 3. Deploy. Mỗi pull request có một bản Preview riêng.
 
