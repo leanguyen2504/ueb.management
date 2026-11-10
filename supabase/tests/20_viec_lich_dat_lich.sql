@@ -54,38 +54,69 @@ select set_config('request.jwt.claim.sub', :tv1, false);
 select t.ok(t.count('select * from public.events') = 0, 'tài khoản bị khóa không thấy lịch');
 select t.ok(t.count('select * from public.tasks') = 0, 'tài khoản bị khóa không thấy việc');
 
--- 5. Trang đặt lịch: Hiệu trưởng mở trang; tv2 gửi yêu cầu; chỉ hai bên thấy.
+-- 5. Trang đặt lịch: Hiệu trưởng mở trang có đuôi link; mọi yêu cầu đi qua book_public.
 select set_config('request.jwt.claim.sub', :hieutruong, false);
-insert into public.booking_pages (user_id, hours_note) values (:hieutruong, 'Sáng thứ Ba');
+insert into public.booking_pages (user_id, slug, weekly_hours, location)
+values (:hieutruong, 'hieu-truong', '{"1":["00:00","23:59"],"2":["00:00","23:59"],"3":["00:00","23:59"],"4":["00:00","23:59"],"5":["00:00","23:59"],"6":["00:00","23:59"],"7":["00:00","23:59"]}', 'Phòng Hiệu trưởng');
 select t.denied(format($$insert into public.booking_pages (user_id) values (%L)$$, :thuky), 'mở trang đặt lịch thay người khác');
+select t.denied($$update public.booking_pages set weekly_hours = '{"1":["17:00","08:00"]}' where true$$, 'giờ nhận lịch sai');
 
+-- Giờ hẹn: 9:00 sáng (giờ Việt Nam) hai ngày tới.
+select ((date_trunc('day', now() at time zone 'Asia/Ho_Chi_Minh') + interval '2 day 9 hour') at time zone 'Asia/Ho_Chi_Minh')::text as t9 \gset
 select set_config('request.jwt.claim.sub', :tv2, false);
-select t.denied(format($$insert into public.bookings (host_id, requester_id, starts_at, ends_at, topic) values (%L, %L, now() + interval '2 day', now() + interval '2 day 30 min', 'x')$$, :thuky, :tv2), 'đặt lịch với người chưa mở trang');
-select t.denied(format($$insert into public.bookings (host_id, requester_id, starts_at, ends_at, topic) values (%L, %L, now() + interval '2 day', now() + interval '2 day 30 min', 'x')$$, :hieutruong, :thuky), 'đặt lịch thay người khác');
-select t.denied(format($$insert into public.bookings (host_id, requester_id, starts_at, ends_at, topic, status) values (%L, %L, now() + interval '2 day', now() + interval '2 day 30 min', 'x', 'accepted')$$, :hieutruong, :tv2), 'tự đặt trạng thái đồng ý');
-insert into public.bookings (id, host_id, requester_id, starts_at, ends_at, topic)
-values ('30000000-0000-0000-0000-000000000001', :hieutruong, :tv2, now() + interval '2 day', now() + interval '2 day 30 min', 'Xin ý kiến đề án');
-select t.denied($$update public.bookings set status = 'accepted' where id = '30000000-0000-0000-0000-000000000001'$$, 'người đặt tự đồng ý');
-select t.denied($$update public.bookings set topic = 'khác' where id = '30000000-0000-0000-0000-000000000001'$$, 'sửa nội dung yêu cầu đã gửi');
+select t.denied($$insert into public.bookings (host_id, requester_id, starts_at, ends_at, topic) values ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000d2', now() + interval '2 day', now() + interval '2 day 30 min', 'x')$$, 'chèn thẳng vào bookings');
+select t.denied(format($$select public.book_public('khong-co', %L, 30, 'a', 'a@b.vn', 'x', null)$$, :'t9'), 'đặt lịch với trang không tồn tại');
+select t.denied(format($$select public.book_public('hieu-truong', %L, 25, 'a', 'a@b.vn', 'x', null)$$, :'t9'), 'thời lượng không được nhận');
+select t.denied(format($$select public.book_public('hieu-truong', %L::timestamptz + interval '7 min', 30, 'a', 'a@b.vn', 'x', null)$$, :'t9'), 'giờ lệch bước 15 phút');
+select t.denied($$select public.book_public('hieu-truong', now() + interval '200 day', 30, 'a', 'a@b.vn', 'x', null)$$, 'ngoài số ngày nhận lịch');
+select public.book_public('hieu-truong', :'t9', 30, 'Thành viên 2', 'tv2@vnu.edu.vn', 'Xin ý kiến đề án', null);
+select t.ok((select requester_id from public.bookings where topic = 'Xin ý kiến đề án') = :tv2, 'người đã đăng nhập đặt lịch được ghi là người đặt');
+select t.denied($$update public.bookings set status = 'accepted' where topic = 'Xin ý kiến đề án'$$, 'người đặt tự đồng ý');
+select t.denied($$update public.bookings set topic = 'khác' where topic = 'Xin ý kiến đề án'$$, 'sửa nội dung yêu cầu đã gửi');
+-- Giờ đã có yêu cầu thì không đặt chồng được.
+select t.denied(format($$select public.book_public('hieu-truong', %L::timestamptz + interval '15 min', 30, 'b', 'b@b.vn', 'y', null)$$, :'t9'), 'đặt chồng giờ đã có yêu cầu');
+
+-- 6. Khách ngoài (chưa đăng nhập) đặt lịch, xem trạng thái bằng mã bí mật, không thấy bảng.
+reset role;
+set role anon;
+select set_config('request.jwt.claim.sub', '', false);
+select t.ok((select count(*) from public.booking_page_public('hieu-truong')) = 1, 'khách xem được trang đặt lịch');
+select t.ok((select bool_and(label is null) from public.booking_page_busy('hieu-truong', now(), now() + interval '7 day')), 'khách chỉ thấy giờ bận, không thấy nội dung');
+select public.book_public('hieu-truong', :'t9'::timestamptz + interval '1 hour', 45, 'Khách Ngoài', 'khach@gmail.com', 'Hợp tác', 'Ghi chú') as tok \gset
+select t.ok((select status from public.booking_by_token(:'tok')) = 'pending', 'khách xem trạng thái bằng mã');
+select t.ok((select location from public.booking_by_token(:'tok')) is null, 'địa điểm ẩn khi chưa xác nhận');
+select t.denied($$select * from public.bookings$$, 'khách đọc bookings');
+reset role;
+set role authenticated;
 
 select set_config('request.jwt.claim.sub', :thuky, false);
 select t.ok(t.count('select * from public.bookings') = 0, 'người thứ ba không thấy yêu cầu đặt lịch');
-select t.ok(t.count(format($$select * from public.booking_busy(%L, now(), now() + interval '7 day')$$, :hieutruong)) = 1, 'người khác chỉ thấy giờ bận');
 
 select set_config('request.jwt.claim.sub', :hieutruong, false);
-select t.ok(t.count('select * from public.notifications where kind = ''booking_new''') = 1, 'người nhận được thông báo yêu cầu gặp');
-update public.bookings set status = 'accepted', response_note = 'Gặp tại phòng Hiệu trưởng' where id = '30000000-0000-0000-0000-000000000001';
+select t.ok(t.count('select * from public.notifications where kind = ''booking_new''') = 2, 'người nhận được thông báo yêu cầu gặp');
+select t.ok((select bool_and(label is not null) from public.booking_page_busy('hieu-truong', now(), now() + interval '7 day')), 'chủ trang thấy nội dung giờ bận');
+update public.bookings set status = 'accepted', response_note = 'Gặp tại phòng Hiệu trưởng' where topic = 'Xin ý kiến đề án';
+update public.bookings set status = 'accepted' where topic = 'Hợp tác';
+reset role;
+set role anon;
+select t.ok((select location from public.booking_by_token(:'tok')) = 'Phòng Hiệu trưởng', 'địa điểm hiện sau khi xác nhận');
+select public.cancel_by_token(:'tok');
+select t.ok((select status from public.booking_by_token(:'tok')) = 'cancelled', 'khách hủy bằng mã');
+reset role;
+set role authenticated;
 
--- 6. Trùng giờ với lịch đã đồng ý bị chặn.
+-- Lịch nhóm chặn giờ trên trang của Thư ký (Họp giao ban ngày mai).
 select set_config('request.jwt.claim.sub', :thuky, false);
-insert into public.bookings (id, host_id, requester_id, starts_at, ends_at, topic)
-values ('30000000-0000-0000-0000-000000000002', :hieutruong, :thuky, now() + interval '2 day 10 min', now() + interval '2 day 40 min', 'Trùng giờ');
-select set_config('request.jwt.claim.sub', :hieutruong, false);
-select t.denied($$update public.bookings set status = 'accepted' where id = '30000000-0000-0000-0000-000000000002'$$, 'đồng ý hai lịch trùng giờ');
+insert into public.booking_pages (user_id, slug, weekly_hours) values (:thuky, 'thu-ky', '{"1":["00:00","23:59"],"2":["00:00","23:59"],"3":["00:00","23:59"],"4":["00:00","23:59"],"5":["00:00","23:59"],"6":["00:00","23:59"],"7":["00:00","23:59"]}');
+select (select starts_at from public.events where title = 'Họp giao ban')::text as hop \gset
+select t.ok((select count(*) from public.booking_page_busy('thu-ky', now(), now() + interval '3 day')) >= 1, 'lịch nhóm tính là giờ bận');
+select set_config('request.jwt.claim.sub', :tv2, false);
+select t.denied(format($$select public.book_public('thu-ky', date_trunc('hour', %L::timestamptz), 60, 'a', 'a@b.vn', 'x', null)$$, :'hop'), 'đặt trùng giờ họp nhóm');
 
 select set_config('request.jwt.claim.sub', :tv2, false);
 select t.ok(t.count('select * from public.notifications where kind = ''booking_accepted''') = 1, 'người đặt nhận thông báo được đồng ý');
-update public.bookings set status = 'cancelled' where id = '30000000-0000-0000-0000-000000000001';
+update public.bookings set status = 'cancelled' where topic = 'Xin ý kiến đề án';
+
 
 -- 7. Thông báo: chỉ của mình; chỉ đổi read_at; không tự tạo được.
 update public.notifications set read_at = now() where user_id = auth.uid();
@@ -99,7 +130,6 @@ select t.denied(format($$delete from public.notifications where user_id = %L$$, 
 reset role;
 set role anon;
 select t.denied($$select * from public.tasks$$, 'khách đọc tasks');
-select t.denied($$select * from public.bookings$$, 'khách đọc bookings');
 reset role;
 
 select 'OK: kiểm thử việc, lịch, đặt lịch, thông báo' as ket_qua;
