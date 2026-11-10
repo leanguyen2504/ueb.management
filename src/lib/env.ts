@@ -19,6 +19,8 @@ export const serverEnv = {
       .split(',')
       .map((d) => d.trim().toLowerCase())
       .filter(Boolean),
+  // Địa chỉ Jira của trường, để tạo link tới từng mã Jira (chỉ tạo link, không gọi API).
+  jiraBaseUrl: () => (process.env.JIRA_BASE_URL || '').trim() || null,
   bootstrapAdminEmail: () => (process.env.BOOTSTRAP_ADMIN_EMAIL || '').trim().toLowerCase(),
 };
 

@@ -93,3 +93,11 @@ Mỗi dòng có **người đôn đốc** (mặc định là người tạo); ng
 File đã đính kèm vào sự kiện trên Google Calendar và link Drive dán trong mô tả sự kiện tự hiện trong phần tài liệu (đọc qua API: cần tài khoản dịch vụ hoặc API key; đọc qua iCal công khai thì chỉ có link trong mô tả và file đính kèm nếu Google có xuất).
 
 Quyền: ai xem được lịch thì xem được hồ sơ. Hiệu trưởng, thư ký, quản trị và Văn thư của nhóm (nếu xem được lịch đó) mới thêm, sửa, gỡ. Mọi thao tác được ghi nhật ký. Hồ sơ gắn theo mã sự kiện Google nên không mất khi lịch đồng bộ lại hoặc buổi họp bị dời giờ.
+
+### Quy trình theo văn bản phân công hồ sơ họp
+
+- Mỗi buổi họp có thêm: mã Jira (tự đọc từ tên sự kiện dạng `(KHTC-6447)`, hoặc đầu mối ghi), link thư mục Drive của buổi họp, tình trạng xử lý (để trống thì tự suy ra) và nội dung cần theo dõi.
+- Hạn: tài liệu trước họp muộn nhất 24 giờ trước giờ họp, biên bản muộn nhất 24 giờ sau khi họp xong. Quá hạn hiện màu đỏ, sắp đến hạn hiện màu vàng.
+- Mảng công tác và đầu mối: `/quan-tri/mang-cong-tac` (Hiệu trưởng, thư ký, quản trị sửa). Đầu mối lưu bằng email nên có thể phân công trước khi người đó đăng nhập.
+- Bảng tổng hợp 7 cột: `/hop/tong-hop`, lọc theo tuần/tháng, mảng, đầu mối; nút "Xuất Excel" tải file CSV.
+- Link Jira: đặt biến môi trường `JIRA_BASE_URL` (địa chỉ máy chủ Jira nội bộ) trên Vercel. Hệ thống chỉ tạo link `…/browse/MÃ`, không gọi Jira. Không đặt thì mã Jira hiện dạng chữ.

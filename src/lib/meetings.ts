@@ -1,6 +1,7 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getGoogleCalendarEvents, type GoogleCalendarEvent } from '@/lib/google-calendar';
+import { autoStatus, jiraKeyIn, type DocType, type MeetingStatus } from '@/lib/meeting-rules';
 
 // Hồ sơ cuộc họp: buổi họp từ lịch Google dùng chung kèm tài liệu trước họp và biên bản
 // (bảng meeting_items). RLS quyết định ai xem, ai gắn được.
@@ -20,8 +21,33 @@ export type MeetingItem = {
   title: string | null;
   url: string | null;
   note: string | null;
+  doc_type: DocType | null;
+  area_id: string | null;
   created_by: string | null;
+  updated_by: string | null;
   updated_at: string;
+};
+
+// Thông tin chung của buổi họp do đầu mối ghi (bảng meeting_records).
+export type MeetingRecord = {
+  source_id: string;
+  event_key: string;
+  jira_key: string | null;
+  drive_folder_url: string | null;
+  status: MeetingStatus | null;
+  follow_up: string | null;
+  updated_by: string | null;
+  updated_at: string;
+};
+
+// Mảng công tác và đầu mối (bảng work_areas).
+export type WorkArea = {
+  id: string;
+  name: string;
+  group_id: string | null;
+  primary_email: string | null;
+  coordinator_emails: string[];
+  sort_order: number;
 };
 
 export type Meeting = {
@@ -38,11 +64,21 @@ export type Meeting = {
   meet_url: string | null;
   attachments: { title: string; url: string }[];
   items: MeetingItem[];
+  record: MeetingRecord | null;
+  // Mã Jira: đầu mối ghi, hoặc tự đọc trong tên/mô tả sự kiện.
+  jira_key: string | null;
+  status: MeetingStatus;
   // Hồ sơ còn đó nhưng buổi họp đã bị xóa hoặc dời khỏi khoảng ngày đang xem.
   gone?: boolean;
 };
 
-const ITEM_COLS = 'id, source_id, event_key, meeting_title, meeting_starts_at, kind, party, party_group_id, assignee_id, title, url, note, created_by, updated_at';
+const ITEM_COLS = 'id, source_id, event_key, meeting_title, meeting_starts_at, kind, party, party_group_id, assignee_id, title, url, note, doc_type, area_id, created_by, updated_by, updated_at';
+const RECORD_COLS = 'source_id, event_key, jira_key, drive_folder_url, status, follow_up, updated_by, updated_at, meeting_title, meeting_starts_at';
+
+export async function loadAreas(supabase: SupabaseClient): Promise<WorkArea[]> {
+  const { data } = await supabase.from('work_areas').select('id, name, group_id, primary_email, coordinator_emails, sort_order').order('sort_order').order('name').returns<WorkArea[]>();
+  return data ?? [];
+}
 const keyOf = (sourceId: string, eventKey: string) => `${sourceId}|${eventKey}`;
 
 // Số bên đã gửi / tổng số bên được đề nghị gửi tài liệu trước họp, và biên bản đã có chưa.
@@ -76,6 +112,9 @@ export async function loadMeetings(supabase: SupabaseClient, userId: string, fro
       meet_url: e.meet_url,
       attachments: e.attachments,
       items: [],
+      record: null,
+      jira_key: null,
+      status: 'chuan_bi',
     });
   }
 
@@ -104,21 +143,56 @@ export async function loadMeetings(supabase: SupabaseClient, userId: string, fro
         m = {
           source_id: it.source_id, source_label: '', event_key: it.event_key, title: it.meeting_title || '(Buổi họp)',
           starts_at: it.meeting_starts_at, ends_at: it.meeting_starts_at, all_day: false, location: null, description: null,
-          html_link: null, meet_url: null, attachments: [], items: [], gone: true,
+          html_link: null, meet_url: null, attachments: [], items: [], record: null, jira_key: null, status: 'chuan_bi', gone: true,
         };
         byKey.set(k, m);
       }
       m.items.push(it);
     }
   }
+  // Thông tin chung của buổi họp.
+  const recResults = await Promise.all([
+    ...chunks.map((c) => supabase.from('meeting_records').select(RECORD_COLS).in('event_key', c).returns<(MeetingRecord & { meeting_title: string; meeting_starts_at: string })[]>()),
+    supabase.from('meeting_records').select(RECORD_COLS).gte('meeting_starts_at', fromIso).lt('meeting_starts_at', toIso).returns<(MeetingRecord & { meeting_title: string; meeting_starts_at: string })[]>(),
+  ]);
+  for (const r of recResults) {
+    for (const rec of r.data ?? []) {
+      const m = byKey.get(keyOf(rec.source_id, rec.event_key))
+        ?? byTitleTime.get(`${rec.source_id}|${new Date(rec.meeting_starts_at).getTime()}|${rec.meeting_title.trim().toLowerCase()}`);
+      if (m && !m.record) m.record = rec;
+    }
+  }
+  for (const m of byKey.values()) {
+    m.jira_key = m.record?.jira_key ?? jiraKeyIn(m.title, m.description);
+    m.status = m.record?.status ?? autoStatus(m.items, m.ends_at);
+  }
+
   return [...byKey.values()].sort((a, b) => a.starts_at.localeCompare(b.starts_at) || a.title.localeCompare(b.title));
 }
 
 // Buổi họp "của tôi": tôi đôn đốc một bên, nhóm tôi tham gia là một bên, hoặc tên nhóm
 // tôi tham gia xuất hiện trong tên/thành phần buổi họp.
-export function isMyMeeting(m: Meeting, userId: string, myGroups: { id: string; name: string }[]): boolean {
+export function isMyMeeting(m: Meeting, userId: string, myGroups: { id: string; name: string }[], myAreas: WorkArea[] = []): boolean {
   const ids = new Set(myGroups.map((g) => g.id));
-  if (m.items.some((i) => i.assignee_id === userId || (i.party_group_id && ids.has(i.party_group_id)))) return true;
+  const areaIds = new Set(myAreas.map((a) => a.id));
+  const areaGroups = new Set(myAreas.map((a) => a.group_id).filter(Boolean));
+  if (m.items.some((i) => i.assignee_id === userId || (i.party_group_id && (ids.has(i.party_group_id) || areaGroups.has(i.party_group_id))) || (i.area_id && areaIds.has(i.area_id)))) return true;
+  const text0 = `${m.title}\n${m.description ?? ''}`.toLowerCase();
+  if (myAreas.some((a) => a.name.trim().length >= 4 && text0.includes(a.name.trim().toLowerCase()))) return true;
   const text = `${m.title}\n${m.description ?? ''}`.toLowerCase();
   return myGroups.some((g) => g.name.trim().length >= 4 && text.includes(g.name.trim().toLowerCase()));
+}
+
+// Mảng mà một email là đầu mối chính hoặc phối hợp.
+export function areasOf(areas: WorkArea[], email: string | null | undefined): WorkArea[] {
+  const e = (email ?? '').toLowerCase();
+  return e ? areas.filter((a) => a.primary_email === e || a.coordinator_emails.includes(e)) : [];
+}
+
+// Mảng của một dòng tài liệu: mảng đã gắn, hoặc mảng ứng với nhóm của bên gửi.
+export function areaOfItem(areas: WorkArea[], it: Pick<MeetingItem, 'area_id' | 'party_group_id' | 'party'>): WorkArea | null {
+  if (it.area_id) return areas.find((a) => a.id === it.area_id) ?? null;
+  if (it.party_group_id) { const a = areas.find((x) => x.group_id === it.party_group_id); if (a) return a; }
+  const p = (it.party ?? '').trim().toLowerCase();
+  return p ? areas.find((a) => a.name.trim().toLowerCase() === p) ?? null : null;
 }
