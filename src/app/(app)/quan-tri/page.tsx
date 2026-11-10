@@ -9,7 +9,8 @@ export const metadata: Metadata = { title: 'Quản trị danh mục' };
 export default async function AdminHub() {
   const { supabase, ctx } = await requireSession();
   const isPrincipal = ctx.role === 'principal';
-  if (!ctx.is_admin && !isPrincipal && !ctx.can_create_group) redirect('/');
+  const isOffice = ctx.is_admin || isPrincipal || ctx.role === 'secretary';
+  if (!isOffice && !ctx.can_create_group) redirect('/');
 
   const [users, groups, invites] = await Promise.all([
     supabase.from('profiles').select('id', { count: 'exact', head: true }),
@@ -22,6 +23,7 @@ export default async function AdminHub() {
     { href: '/nhom', title: 'Đơn vị, dự án và sự kiện', desc: 'Tạo, sửa, lưu trữ nhóm; cấu hình quyền mặc định và thành viên.', stat: `${groups.count ?? 0} nhóm đang hoạt động` },
     (ctx.is_admin || isPrincipal) && { href: '/quan-tri/nhat-ky', title: 'Nhật ký hoạt động', desc: 'Ai đã thêm, sửa, xóa gì và lúc nào. Không ai sửa được nhật ký.', stat: 'Chỉ xem' },
     ctx.is_admin && { href: '/quan-tri/lich-google', title: 'Lịch Google dùng chung', desc: 'Kết nối lịch Google (ví dụ lịch tuần BGH) để hiện trên trang Lịch. Chỉ đọc.', stat: '' },
+    isOffice && { href: '/quan-tri/mang-cong-tac', title: 'Mảng công tác và đầu mối', desc: 'Phân công đầu mối theo dõi hồ sơ họp cho từng khoa, viện, phòng.', stat: '' },
     { href: '/moi', title: 'Lời mời đồng nghiệp', desc: 'Mời người có email @vnu.edu.vn kèm nhóm đề xuất.', stat: '' },
   ].filter(Boolean) as { href: string; title: string; desc: string; stat: string }[];
 
