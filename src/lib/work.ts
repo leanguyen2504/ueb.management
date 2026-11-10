@@ -100,50 +100,82 @@ export async function deleteEvent(form: FormData) {
 
 // ---- Trang đặt lịch ----
 
+const DURATIONS = [15, 30, 45, 60, 90, 120];
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 export async function saveBookingPage(_prev: FormState, form: FormData): Promise<FormState> {
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   const user_id = claims?.claims?.sub;
   if (!user_id) return { error: 'Phiên đăng nhập đã hết hạn.' };
-  const slot = Number(text(form, 'slot_minutes') || 30);
-  if (!Number.isInteger(slot) || slot < 10 || slot > 240) return { error: 'Thời lượng mỗi lượt từ 10 đến 240 phút.' };
+  const slug = text(form, 'slug').toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/.test(slug)) return { error: 'Đuôi link gồm 3 đến 60 chữ thường không dấu, số, dấu gạch ngang.' };
+  const durations = DURATIONS.filter((d) => form.get(`d_${d}`) === 'on');
+  if (!durations.length) return { error: 'Hãy chọn ít nhất một thời lượng.' };
+  const weekly: Record<string, [string, string]> = {};
+  for (let i = 1; i <= 7; i++) {
+    if (form.get(`day_${i}`) !== 'on') continue;
+    const from = text(form, `from_${i}`);
+    const to = text(form, `to_${i}`);
+    if (!HHMM.test(from) || !HHMM.test(to) || from >= to) return { error: 'Giờ nhận lịch chưa đúng: giờ bắt đầu phải trước giờ kết thúc.' };
+    weekly[String(i)] = [from, to];
+  }
+  const num = (k: string, min: number, max: number, dflt: number) => {
+    const n = Number(text(form, k) || dflt);
+    return Number.isInteger(n) && n >= min && n <= max ? n : dflt;
+  };
   const { error } = await supabase.from('booking_pages').upsert({
     user_id,
-    is_open: form.get('is_open') === 'on',
+    slug,
+    title: text(form, 'title') || null,
     intro: text(form, 'intro') || null,
-    hours_note: text(form, 'hours_note') || null,
-    slot_minutes: slot,
+    location: text(form, 'location') || null,
+    durations,
+    weekly_hours: weekly,
+    min_notice_minutes: num('min_notice_minutes', 0, 20160, 0),
+    horizon_days: num('horizon_days', 1, 180, 30),
+    buffer_minutes: num('buffer_minutes', 0, 120, 0),
   });
-  if (error) return { error: errText(error) };
+  if (error) return { error: error.code === '23505' ? 'Đuôi link này đã có người dùng. Hãy chọn đuôi khác.' : errText(error) };
   refresh();
-  return { ok: 'Đã lưu trang đặt lịch.' };
+  return { ok: 'Đã lưu cài đặt.' };
 }
 
-export async function requestBooking(_prev: FormState, form: FormData): Promise<FormState> {
+export async function setBookingOpen(form: FormData) {
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
-  const requester_id = claims?.claims?.sub;
-  const host_id = uuidOrNull(text(form, 'host_id'));
-  const topic = text(form, 'topic');
-  const starts_at = fromLocalInput(text(form, 'starts_at'));
-  const minutes = Number(text(form, 'minutes') || 30);
-  if (!requester_id) return { error: 'Phiên đăng nhập đã hết hạn.' };
-  if (!host_id) return { error: 'Hãy chọn người muốn gặp.' };
-  if (!topic) return { error: 'Hãy nhập nội dung cần gặp.' };
-  if (!starts_at) return { error: 'Hãy chọn thời gian.' };
-  if (!Number.isInteger(minutes) || minutes < 10 || minutes > 240) return { error: 'Thời lượng không hợp lệ.' };
-  const ends_at = new Date(new Date(starts_at).getTime() + minutes * 60000).toISOString();
-  const { error } = await supabase.from('bookings').insert({
-    host_id,
-    requester_id,
-    starts_at,
-    ends_at,
-    topic,
-    note: text(form, 'note') || null,
+  const user_id = claims?.claims?.sub;
+  if (!user_id) return;
+  await supabase.from('booking_pages').update({ is_open: form.get('open') === '1' }).eq('user_id', user_id);
+  refresh();
+}
+
+// Khách (có hoặc không đăng nhập) gửi yêu cầu qua liên kết đặt lịch.
+export async function bookPublic(_prev: FormState, form: FormData): Promise<FormState> {
+  const slug = text(form, 'slug');
+  const starts = text(form, 'starts_at');
+  const minutes = Number(text(form, 'minutes'));
+  if (!slug || !starts || !Number.isInteger(minutes)) return { error: 'Hãy chọn giờ.' };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('book_public', {
+    p_slug: slug,
+    p_starts_at: starts,
+    p_minutes: minutes,
+    p_name: text(form, 'name'),
+    p_email: text(form, 'email'),
+    p_topic: text(form, 'topic'),
+    p_note: text(form, 'note') || null,
   });
   if (error) return { error: errText(error) };
-  refresh();
-  return { ok: 'Đã gửi yêu cầu. Bạn sẽ nhận thông báo khi người nhận phản hồi.' };
+  redirect(`/hen/trang-thai/${data}`);
+}
+
+export async function cancelByToken(form: FormData) {
+  const token = uuidOrNull(text(form, 'token'));
+  if (!token) return;
+  const supabase = await createClient();
+  await supabase.rpc('cancel_by_token', { p_token: token });
+  revalidatePath(`/hen/trang-thai/${token}`);
 }
 
 export async function respondBooking(form: FormData) {

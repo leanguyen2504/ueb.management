@@ -1,10 +1,10 @@
 'use client';
 
 import { useActionState } from 'react';
-import { createEvent, createTask, requestBooking, saveBookingPage } from '@/lib/work';
+import { createEvent, createTask } from '@/lib/work';
 import { FormMessage } from '@/components/FormMessage';
 import { SubmitButton } from '@/components/SubmitButton';
-import { EVENT_KIND_LABEL, TASK_PRIORITY_LABEL, type BookingPage } from '@/lib/types';
+import { EVENT_KIND_LABEL, TASK_PRIORITY_LABEL } from '@/lib/types';
 
 export type Option = { id: string; label: string };
 
@@ -73,37 +73,6 @@ export function EventForm({ groupId, groups }: { groupId?: string; groups?: Opti
       <FormMessage state={state} />
       <SubmitButton pendingText="Đang lưu…">Thêm vào lịch</SubmitButton>
       <p className="text-xs muted">Thành viên của nhóm sẽ nhận thông báo. Giờ theo giờ Việt Nam.</p>
-    </form>
-  );
-}
-
-export function BookingPageForm({ page }: { page: BookingPage | null }) {
-  const [state, action] = useActionState(saveBookingPage, null);
-  return (
-    <form action={action} className="space-y-3">
-      <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" name="is_open" defaultChecked={page?.is_open ?? true} /> Nhận yêu cầu đặt lịch</label>
-      <div><label className="label" htmlFor="bp-hours">Khung giờ nhận lịch</label><input id="bp-hours" name="hours_note" defaultValue={page?.hours_note ?? ''} maxLength={300} className="input" placeholder="Ví dụ: Sáng thứ Ba và thứ Năm, 8:00 đến 11:00" /></div>
-      <div><label className="label" htmlFor="bp-intro">Lời nhắn cho người đặt</label><textarea id="bp-intro" name="intro" rows={2} defaultValue={page?.intro ?? ''} className="input" placeholder="Ví dụ: Ghi rõ nội dung và tài liệu cần xem trước." /></div>
-      <div className="max-w-40"><label className="label" htmlFor="bp-slot">Mỗi lượt (phút)</label><input id="bp-slot" name="slot_minutes" type="number" min={10} max={240} step={5} defaultValue={page?.slot_minutes ?? 30} className="input" /></div>
-      <FormMessage state={state} />
-      <SubmitButton>{page ? 'Lưu' : 'Mở trang đặt lịch'}</SubmitButton>
-    </form>
-  );
-}
-
-export function BookingRequestForm({ hostId, slotMinutes }: { hostId: string; slotMinutes: number }) {
-  const [state, action] = useActionState(requestBooking, null);
-  return (
-    <form action={action} className="space-y-3">
-      <input type="hidden" name="host_id" value={hostId} />
-      <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
-        <div><label className="label" htmlFor="b-start">Thời gian</label><input id="b-start" name="starts_at" type="datetime-local" required className="input" /></div>
-        <div><label className="label" htmlFor="b-min">Thời lượng (phút)</label><input id="b-min" name="minutes" type="number" min={10} max={240} step={5} defaultValue={slotMinutes} className="input" /></div>
-      </div>
-      <div><label className="label" htmlFor="b-topic">Nội dung cần gặp</label><input id="b-topic" name="topic" required maxLength={300} className="input" /></div>
-      <div><label className="label" htmlFor="b-note">Ghi chú thêm</label><textarea id="b-note" name="note" rows={2} className="input" /></div>
-      <FormMessage state={state} />
-      <SubmitButton pendingText="Đang gửi…">Gửi yêu cầu</SubmitButton>
     </form>
   );
 }

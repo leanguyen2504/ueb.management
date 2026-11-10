@@ -107,15 +107,23 @@ export type CalEvent = {
 export type BookingPage = {
   user_id: string;
   is_open: boolean;
+  slug: string | null;
+  title: string | null;
   intro: string | null;
-  hours_note: string | null;
-  slot_minutes: number;
+  location: string | null;
+  durations: number[];
+  weekly_hours: Partial<Record<'1' | '2' | '3' | '4' | '5' | '6' | '7', [string, string]>>;
+  min_notice_minutes: number;
+  horizon_days: number;
+  buffer_minutes: number;
 };
 
 export type Booking = {
   id: string;
   host_id: string;
-  requester_id: string;
+  requester_id: string | null;
+  guest_name: string | null;
+  guest_email: string | null;
   starts_at: string;
   ends_at: string;
   topic: string;
