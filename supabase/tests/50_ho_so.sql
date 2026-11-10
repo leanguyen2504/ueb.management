@@ -12,3 +12,13 @@ select t.denied(format($$update public.profiles set bio = 'x' where id = %L$$, :
 select t.denied($$update public.profiles set system_role = 'principal' where id = auth.uid()$$, 'tự đổi vai trò');
 reset role;
 select 'OK: kiểm thử hồ sơ cá nhân' as ket_qua;
+
+-- Ảnh cá nhân: chỉ trỏ vào thư mục của chính mình.
+\set tv2 '''00000000-0000-0000-0000-0000000000d2'''
+set role authenticated;
+select set_config('request.jwt.claim.sub', :tv2, false);
+update public.profiles set avatar_path = :tv2 || '/a.jpg' where id = :tv2;
+select t.ok((select avatar_path from public.profiles where id = :tv2) = '00000000-0000-0000-0000-0000000000d2/a.jpg', 'đặt ảnh của mình');
+select t.denied($$update public.profiles set avatar_path = 'nguoi-khac/a.jpg' where id = '00000000-0000-0000-0000-0000000000d2'$$, 'ảnh ngoài thư mục của mình');
+select t.denied($$update public.profiles set avatar_path = '00000000-0000-0000-0000-0000000000d2/x.jpg' where id <> '00000000-0000-0000-0000-0000000000d2'$$, 'đặt ảnh cho người khác');
+reset role;

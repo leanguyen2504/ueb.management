@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
 import { ProfileCard } from '@/components/ProfileCard';
 import { ProfileForm } from './ProfileForm';
+import { AvatarForm } from './AvatarForm';
 import { signOut } from '@/app/dang-nhap/actions';
 import { loadProfileExtras } from '@/lib/profile-data';
 
@@ -22,6 +23,7 @@ export default async function AccountPage() {
       <div className="grid gap-4 lg:grid-cols-[1fr_420px]">
         <ProfileCard profile={profile} isMe {...extras} />
         <div className="space-y-4">
+          <AvatarForm hasAvatar={Boolean(extras.avatarUrl)} />
           <ProfileForm profile={profile} />
           {ctx.is_admin && (
             <p className="text-sm"><Link href="/quan-tri/lich-google" className="text-brand-700 underline dark:text-brand-300">Cấu hình lịch Google dùng chung</Link></p>

@@ -1,10 +1,12 @@
 import Link from 'next/link';
 import type { Profile } from '@/lib/types';
+import { Avatar } from '@/components/Avatar';
 
 export type StripMember = {
   user_id: string;
   is_manager: boolean;
   is_clerk: boolean;
+  avatarUrl?: string | null;
   profile?: Pick<Profile, 'full_name' | 'email' | 'position' | 'phone' | 'office' | 'is_active'>;
 };
 
@@ -21,7 +23,6 @@ export function rankMember(m: StripMember): number {
   return 4;
 }
 
-const initials = (s: string) => s.split(/\s+/).filter(Boolean).slice(-2).map((w) => w[0]!.toUpperCase()).join('');
 const COLORS = ['bg-brand-600', 'bg-emerald-600', 'bg-amber-600', 'bg-sky-600', 'bg-rose-600', 'bg-violet-600'];
 
 function badge(m: StripMember) {
@@ -55,7 +56,7 @@ export function MemberStrip({ members, max = 8, allHref }: { members: StripMembe
           return (
             <li key={m.user_id}>
               <Link href={`/nguoi/${m.user_id}`} className="flex h-full items-start gap-3 rounded-lg border border-slate-200 p-3 hover:border-brand-600 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50">
-                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white ${COLORS[i % COLORS.length]}`} aria-hidden="true">{initials(name)}</span>
+                <Avatar name={name} url={m.avatarUrl} size={44} className={COLORS[i % COLORS.length]} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{name}</span>
                   <span className="block truncate text-xs muted">{p?.position || 'Chưa cập nhật chức vụ'}</span>
