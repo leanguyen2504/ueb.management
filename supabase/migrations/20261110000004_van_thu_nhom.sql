@@ -70,8 +70,7 @@ create trigger group_members_guard before insert or update or delete on public.g
   for each row execute function private.guard_member_roles();
 
 -- Lời mời: chỉ Trưởng nhóm (hoặc quản trị, thư ký toàn trường) mời người làm Trưởng nhóm hay Văn thư.
-drop policy invitations_insert on public.invitations;
-create policy invitations_insert on public.invitations for insert to authenticated
+alter policy invitations_insert on public.invitations
   with check (
     not make_admin
     and accepted_at is null

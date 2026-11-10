@@ -58,18 +58,14 @@ as $$
 $$;
 grant execute on function private.email_domain_allowed(text) to authenticated;
 
-drop policy invitations_read on public.invitations;
-drop policy invitations_insert on public.invitations;
-drop policy invitations_delete on public.invitations;
-
-create policy invitations_read on public.invitations for select to authenticated
+alter policy invitations_read on public.invitations
   using (
     private.is_admin()
     or (private.is_active_user() and created_by = auth.uid())
     or (group_id is not null and private.has_group_perm(group_id, 'manage_members'))
   );
 
-create policy invitations_insert on public.invitations for insert to authenticated
+alter policy invitations_insert on public.invitations
   with check (
     not make_admin
     and accepted_at is null
@@ -85,7 +81,7 @@ create policy invitations_insert on public.invitations for insert to authenticat
     )
   );
 
-create policy invitations_delete on public.invitations for delete to authenticated
+alter policy invitations_delete on public.invitations
   using (
     accepted_at is null
     and (
