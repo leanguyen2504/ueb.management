@@ -44,7 +44,7 @@ export default async function GoogleCalendarAdminPage() {
         ) : hasApiKey ? (
           <p>Đang dùng API key: chỉ đọc được lịch để ở chế độ công khai.</p>
         ) : (
-          <p className="text-amber-700 dark:text-amber-400">Chưa khai báo khóa Google (GOOGLE_SERVICE_ACCOUNT_JSON hoặc GOOGLE_CALENDAR_API_KEY). Xem docs/google-calendar.md.</p>
+          <p>Chưa có khóa Google: hệ thống đọc lịch qua địa chỉ iCal công khai, nên chỉ đọc được lịch để công khai. Lịch riêng tư cần GOOGLE_SERVICE_ACCOUNT_JSON hoặc GOOGLE_CALENDAR_API_KEY (xem docs/google-calendar.md).</p>
         )}
         <p className="muted">Lịch tự tải lại khi có người mở trang Lịch (nếu đã cũ hơn 10 phút) và mỗi sáng một lần.</p>
       </div>

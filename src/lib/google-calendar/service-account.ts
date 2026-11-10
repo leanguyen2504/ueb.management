@@ -46,14 +46,15 @@ export async function getAccessToken(sa: ServiceAccount): Promise<string> {
   return body.access_token;
 }
 
-// Chọn cách xác thực: ưu tiên tài khoản dịch vụ, nếu không có thì dùng API key
+// Chọn cách xác thực: ưu tiên tài khoản dịch vụ, rồi API key
 // (GOOGLE_CALENDAR_API_KEY, chỉ đọc được lịch công khai).
-export async function resolveAuth(): Promise<{ token: string } | { apiKey: string }> {
+// Không có khóa nào thì đọc lịch công khai qua địa chỉ iCal công khai.
+export async function resolveAuth(): Promise<{ token: string } | { apiKey: string } | { publicIcs: true }> {
   const sa = readServiceAccount();
   if (sa) return { token: await getAccessToken(sa) };
   const apiKey = process.env.GOOGLE_CALENDAR_API_KEY?.trim();
   if (apiKey) return { apiKey };
-  throw new Error('Chưa khai báo GOOGLE_SERVICE_ACCOUNT_JSON hoặc GOOGLE_CALENDAR_API_KEY trên Vercel.');
+  return { publicIcs: true };
 }
 
 export function serviceAccountEmail(): string | null {

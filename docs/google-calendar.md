@@ -20,6 +20,8 @@ Hệ thống đọc một hoặc nhiều lịch Google dùng chung (ví dụ "L�
 
 Nếu khai báo cả hai, hệ thống dùng tài khoản dịch vụ.
 
+**Không cần khóa nếu lịch công khai:** khi không có biến nào ở trên, hệ thống đọc lịch qua địa chỉ iCal công khai của Google (`/calendar/ical/<mã lịch>/public/basic.ics`). Chỉ cần bật module và thêm mã lịch. Cách này không có link "Mở trên Google Calendar" cho từng buổi họp.
+
 ## Bước 1. Tạo project Google Cloud và bật Calendar API
 
 1. Mở <https://console.cloud.google.com/>, đăng nhập bằng tài khoản sẽ quản lý lâu dài (nên là tài khoản của đơn vị để dễ bàn giao).
