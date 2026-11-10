@@ -13,7 +13,7 @@ export default async function AccountPage() {
     <>
       <PageHead title="Tài khoản" sub={`${profile.email} · ${ctx.is_admin ? 'Quản trị hệ thống · ' : ''}${ROLE_LABEL[profile.system_role]}`} />
       <ProfileForm profile={profile} />
-      <p className="mt-3 max-w-xl text-xs muted">Vai trò và quyền do quản trị hệ thống và người quản lý nhóm cấp; bạn không tự đổi được.</p>
+      <p className="mt-3 max-w-xl text-xs muted">Vai trò và quyền do quản trị hệ thống và Trưởng nhóm, Văn thư cấp; bạn không tự đổi được.</p>
       <form action={signOut} className="mt-6"><button className="btn-danger">Đăng xuất</button></form>
     </>
   );

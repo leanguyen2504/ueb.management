@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import { requireAdmin } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
-import { InviteForm } from './InviteForm';
-import { cancelInvite, setUser } from './actions';
+import { InviteForm, type GroupOption } from '@/components/InviteForm';
+import { cancelInvite } from '@/lib/invite';
+import { setUser } from './actions';
 import { ROLE_LABEL, type Profile } from '@/lib/types';
 import { fmtDateTime } from '@/lib/format';
 
@@ -10,11 +11,17 @@ export const metadata: Metadata = { title: 'Người dùng' };
 
 export default async function UsersPage() {
   const { supabase, userId } = await requireAdmin();
-  const [{ data: users }, { data: scopes }, { data: invites }] = await Promise.all([
+  const [{ data: users }, { data: scopes }, { data: invites }, { data: groups }] = await Promise.all([
     supabase.from('profiles').select('*').order('full_name').returns<Profile[]>(),
     supabase.from('secretary_scopes').select('user_id, all_groups'),
     supabase.from('invitations').select('id, email, system_role, group_id, created_at, expires_at').is('accepted_at', null).order('created_at', { ascending: false }),
+    supabase.from('groups').select('id, name, parent_id').is('archived_at', null).order('name'),
   ]);
+  const groupName = new Map((groups ?? []).map((g) => [g.id, g.name]));
+  const options: GroupOption[] = (groups ?? [])
+    .filter((g) => g.parent_id || !(groups ?? []).some((c) => c.parent_id === g.id))
+    .map((g) => ({ id: g.id, name: g.name, parent: g.parent_id ? groupName.get(g.parent_id) ?? null : null }))
+    .sort((a, b) => `${a.parent ?? ''}${a.name}`.localeCompare(`${b.parent ?? ''}${b.name}`, 'vi'));
   const allScope = new Set((scopes ?? []).filter((s) => s.all_groups).map((s) => s.user_id));
 
   return (
@@ -47,17 +54,17 @@ export default async function UsersPage() {
               })}
             </tbody>
           </table>
-          <p className="p-3 text-xs muted">Thư ký không tích &quot;toàn trường&quot; chỉ quản lý các nhóm mình là người quản lý. Bỏ tích &quot;Hoạt động&quot; để khóa tài khoản: người đó không xem được dữ liệu nào nữa.</p>
+          <p className="p-3 text-xs muted">Thư ký không tích &quot;toàn trường&quot; chỉ quản lý các nhóm mình là Trưởng nhóm. Bỏ tích &quot;Hoạt động&quot; để khóa tài khoản: người đó không xem được dữ liệu nào nữa.</p>
         </section>
         <div className="space-y-4">
-          <InviteForm />
+          <InviteForm groups={options} showRole />
           <section className="card">
             <h2 className="mb-2 font-semibold">Lời mời chưa nhận ({invites?.length ?? 0})</h2>
             {invites?.length ? (
               <ul className="divide-y divide-slate-100 text-sm dark:divide-slate-800">
                 {invites.map((i) => (
                   <li key={i.id} className="flex items-start justify-between gap-2 py-2">
-                    <span>{i.email}<br /><span className="text-xs muted">{ROLE_LABEL[i.system_role as keyof typeof ROLE_LABEL]}{i.group_id ? ' · mời vào nhóm' : ''} · hết hạn {fmtDateTime(i.expires_at)}</span></span>
+                    <span>{i.email}<br /><span className="text-xs muted">{ROLE_LABEL[i.system_role as keyof typeof ROLE_LABEL]}{i.group_id ? ` · ${groupName.get(i.group_id) ?? 'nhóm'}` : ''} · hết hạn {fmtDateTime(i.expires_at)}</span></span>
                     <form action={cancelInvite}><input type="hidden" name="id" value={i.id} /><button className="text-xs text-red-600 hover:underline dark:text-red-400">Hủy</button></form>
                   </li>
                 ))}

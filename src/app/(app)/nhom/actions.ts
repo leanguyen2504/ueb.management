@@ -64,7 +64,9 @@ export async function setArchived(form: FormData) {
 export async function addMember(_prev: FormState, form: FormData): Promise<FormState> {
   const groupId = String(form.get('group_id'));
   const email = String(form.get('email') || '').trim().toLowerCase();
-  const isManager = bool(form, 'is_manager');
+  const role = String(form.get('role') || 'member');
+  const isManager = role === 'manager';
+  const isClerk = role === 'clerk';
   if (!email) return { error: 'Hãy nhập email.' };
   const supabase = await createClient();
 
@@ -76,6 +78,7 @@ export async function addMember(_prev: FormState, form: FormData): Promise<FormS
       group_id: groupId,
       user_id: person.id,
       is_manager: isManager,
+      is_clerk: isClerk,
       can_view: g?.default_can_view ?? true,
       can_create: g?.default_can_create ?? false,
       can_edit: g?.default_can_edit ?? false,
@@ -87,7 +90,7 @@ export async function addMember(_prev: FormState, form: FormData): Promise<FormS
   }
 
   // Chưa có tài khoản: tạo lời mời; khi người đó đăng nhập lần đầu sẽ tự vào nhóm.
-  const { error } = await supabase.from('invitations').insert({ email, group_id: groupId, is_manager: isManager });
+  const { error } = await supabase.from('invitations').insert({ email, group_id: groupId, is_manager: isManager, is_clerk: isClerk });
   if (error) return { error: errText(error) };
   revalidatePath(`/nhom/${groupId}`);
   return { ok: `${email} chưa có tài khoản. Đã tạo lời mời; người này đăng nhập bằng email trường là vào nhóm.` };
@@ -96,19 +99,26 @@ export async function addMember(_prev: FormState, form: FormData): Promise<FormS
 export async function updateMember(form: FormData) {
   const groupId = String(form.get('group_id'));
   const userId = String(form.get('user_id'));
-  const row: Record<string, boolean> = { is_manager: bool(form, 'is_manager') };
-  for (const [k] of PERMS) row[k] = bool(form, k);
+  // Ô vai trò bị khóa (Văn thư) không gửi lên: không đổi vai trò.
+  const row: Record<string, boolean> = {};
+  if (form.has('is_manager') || form.has('is_clerk') || form.get('role_editable') === '1') {
+    row.is_manager = bool(form, 'is_manager');
+    row.is_clerk = bool(form, 'is_clerk');
+  }
+  for (const [k] of PERMS) if (k !== 'can_manage_members') row[k] = bool(form, k);
   const supabase = await createClient();
-  await supabase.from('group_members').update(row).eq('group_id', groupId).eq('user_id', userId);
+  const { error } = await supabase.from('group_members').update(row).eq('group_id', groupId).eq('user_id', userId);
   revalidatePath(`/nhom/${groupId}`);
+  if (error) redirect(`/nhom/${groupId}?loi=${encodeURIComponent(errText(error))}`);
 }
 
 export async function removeMember(form: FormData) {
   const groupId = String(form.get('group_id'));
   const userId = String(form.get('user_id'));
   const supabase = await createClient();
-  await supabase.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId);
+  const { error } = await supabase.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId);
   revalidatePath(`/nhom/${groupId}`);
+  if (error) redirect(`/nhom/${groupId}?loi=${encodeURIComponent(errText(error))}`);
 }
 
 export async function cancelInvitation(form: FormData) {

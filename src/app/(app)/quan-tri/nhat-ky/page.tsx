@@ -14,6 +14,9 @@ const ENTITY: Record<string, string> = {
   invitations: 'Lời mời',
   secretary_scopes: 'Phạm vi thư ký',
   system_settings: 'Cấu hình hệ thống',
+  tasks: 'Đầu việc',
+  events: 'Lịch',
+  bookings: 'Đặt lịch',
 };
 const PAGE = 50;
 

@@ -42,12 +42,9 @@ insert into auth.users (id, email) values (:admin, 'NTKLing@vnu.edu.vn');
 select t.ok((select current_admin_id from public.system_settings) = :admin, 'người được mời make_admin trở thành quản trị');
 select t.ok((select email from public.profiles where id = :admin) = 'ntkling@vnu.edu.vn', 'email được chuẩn hóa chữ thường');
 
--- 2. Email ngoài tên miền bị chặn; email trong tên miền không cần lời mời,
---    thành viên thường và không thuộc nhóm nào.
+-- 2. Đăng ký không được mời hoặc sai tên miền bị chặn.
+select t.denied($$insert into auth.users (email) values ('nguoila@vnu.edu.vn')$$, 'email chưa được mời');
 select t.denied($$insert into auth.users (email) values ('ai@gmail.com')$$, 'email ngoài tên miền');
-insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000e1', 'NguoiLa@vnu.edu.vn');
-select t.ok((select system_role from public.profiles where email = 'nguoila@vnu.edu.vn') = 'member', 'tự đăng ký là thành viên thường');
-select t.ok((select current_admin_id from public.system_settings) = :admin, 'tự đăng ký không đổi quản trị');
 
 -- 3. Quản trị mời người dùng (chạy như người dùng đã đăng nhập, RLS áp dụng).
 set role authenticated;
@@ -129,10 +126,6 @@ select public.admin_set_user(:tv1, 'member', false);
 select t.denied(format($$select public.admin_set_user(%L, 'member', false)$$, :admin), 'quản trị tự khóa mình');
 select set_config('request.jwt.claim.sub', :tv1, false);
 select t.ok(t.count('select * from public.groups') = 0, 'tài khoản bị khóa không thấy nhóm');
--- Người tự đăng ký chưa thuộc nhóm nào thì không thấy nhóm, nhật ký.
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000e1', false);
-select t.ok(t.count('select * from public.groups') = 0, 'người tự đăng ký không thấy nhóm');
-select t.ok(t.count('select * from public.activity_log') = 0, 'người tự đăng ký không thấy nhật ký');
 select set_config('request.jwt.claim.sub', :tv1, false);
 select t.denied($$update public.profiles set full_name = 'x' where id = auth.uid()$$, 'tài khoản bị khóa sửa hồ sơ');
 
@@ -147,5 +140,28 @@ reset role;
 set role anon;
 select t.denied($$select * from public.profiles$$, 'khách đọc profiles');
 reset role;
+
+-- 14. Người dùng thường mời đồng nghiệp cùng tên miền, kèm nhóm đề xuất mình xem được.
+set role authenticated;
+select set_config('request.jwt.claim.sub', :tv2, false);
+insert into public.invitations (email, group_id) values ('dongnghiep@vnu.edu.vn', '10000000-0000-0000-0000-000000000001');
+select t.ok(t.count($$select * from public.invitations where email = 'dongnghiep@vnu.edu.vn'$$) = 1, 'người mời thấy lời mời mình gửi');
+select t.denied($$insert into public.invitations (email) values ('ai@gmail.com')$$, 'mời email ngoài tên miền');
+select t.denied($$insert into public.invitations (email, system_role) values ('x2@vnu.edu.vn', 'secretary')$$, 'thành viên mời thư ký');
+select t.denied($$insert into public.invitations (email, group_id, is_manager) values ('x3@vnu.edu.vn', '10000000-0000-0000-0000-000000000001', true)$$, 'thành viên mời người quản lý nhóm');
+-- Nhóm mình không xem được thì không đề xuất được.
+reset role;
+select set_config('request.jwt.claim.sub', '', false);
+insert into public.groups (id, name) values ('10000000-0000-0000-0000-000000000002', 'Nhóm kín');
+set role authenticated;
+select set_config('request.jwt.claim.sub', :tv2, false);
+select t.denied($$insert into public.invitations (email, group_id) values ('x4@vnu.edu.vn', '10000000-0000-0000-0000-000000000002')$$, 'đề xuất nhóm mình không xem được');
+-- Tài khoản bị khóa không mời được.
+select set_config('request.jwt.claim.sub', :tv1, false);
+select t.denied($$insert into public.invitations (email) values ('x5@vnu.edu.vn')$$, 'tài khoản bị khóa mời người');
+reset role;
+insert into auth.users (email) values ('dongnghiep@vnu.edu.vn');
+select t.ok((select system_role from public.profiles where email = 'dongnghiep@vnu.edu.vn') = 'member', 'người được đồng nghiệp mời là thành viên');
+select t.ok((select m.can_view and not m.is_manager from public.group_members m join public.profiles p on p.id = m.user_id where p.email = 'dongnghiep@vnu.edu.vn'), 'người được mời vào nhóm đề xuất với quyền mặc định');
 
 select 'OK: kiểm thử phân quyền giai đoạn 1' as ket_qua;
