@@ -88,13 +88,17 @@ export async function loadMeetings(supabase: SupabaseClient, userId: string, fro
     ...chunks.map((c) => supabase.from('meeting_items').select(ITEM_COLS).in('event_key', c).order('created_at').returns<MeetingItem[]>()),
     supabase.from('meeting_items').select(ITEM_COLS).gte('meeting_starts_at', fromIso).lt('meeting_starts_at', toIso).order('created_at').returns<MeetingItem[]>(),
   ]);
+  // Dự phòng khi mã sự kiện đổi (ví dụ đổi cách đọc lịch): gắn hồ sơ vào buổi họp cùng lịch,
+  // cùng giờ và cùng tên, để không hiện hai dòng cho một buổi họp.
+  const byTitleTime = new Map<string, Meeting>();
+  for (const m of byKey.values()) byTitleTime.set(`${m.source_id}|${new Date(m.starts_at).getTime()}|${m.title.trim().toLowerCase()}`, m);
   const seen = new Set<string>();
   for (const r of results) {
     for (const it of r.data ?? []) {
       if (seen.has(it.id)) continue;
       seen.add(it.id);
       const k = keyOf(it.source_id, it.event_key);
-      let m = byKey.get(k);
+      let m = byKey.get(k) ?? byTitleTime.get(`${it.source_id}|${new Date(it.meeting_starts_at).getTime()}|${it.meeting_title.trim().toLowerCase()}`);
       if (!m) {
         if (it.meeting_starts_at < fromIso || it.meeting_starts_at >= toIso) continue;
         m = {
