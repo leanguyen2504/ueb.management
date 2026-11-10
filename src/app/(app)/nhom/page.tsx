@@ -3,18 +3,18 @@ import Link from 'next/link';
 import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
 import { CreateGroupForm } from './GroupForms';
+import { GroupTable } from './GroupTable';
 import { KIND_LABEL, type Group } from '@/lib/types';
 import { fmtDateTime } from '@/lib/format';
 
 export const metadata: Metadata = { title: 'Khám phá dự án' };
 
-export default async function GroupsPage({ searchParams }: { searchParams: Promise<{ q?: string; luu_tru?: string; loai?: string }> }) {
-  const { q = '', luu_tru, loai = '' } = await searchParams;
+export default async function GroupsPage({ searchParams }: { searchParams: Promise<{ luu_tru?: string; loai?: string }> }) {
+  const { luu_tru, loai = '' } = await searchParams;
   const { supabase, userId, ctx } = await requireSession();
   let query = supabase.from('groups').select('*').order('name');
   query = luu_tru ? query.not('archived_at', 'is', null) : query.is('archived_at', null);
   if (loai && loai in KIND_LABEL) query = query.eq('kind', loai);
-  if (q.trim()) query = query.ilike('name', `%${q.trim().replace(/[%_]/g, '')}%`);
   const [{ data: groups }, { data: mine }, { data: counts }, { data: allNames }] = await Promise.all([
     query.returns<Group[]>(),
     supabase.from('group_members').select('group_id, is_manager, is_clerk').eq('user_id', userId),
@@ -34,42 +34,34 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
       <PageHead title="Khám phá dự án" sub="Đơn vị, dự án và sự kiện bạn xem được. Mở từng mục để xem đầu việc, lịch và thành viên." />
       <nav className="mb-3 flex flex-wrap gap-2" aria-label="Lọc theo loại">
         {[['', 'Tất cả'], ...Object.entries(KIND_LABEL)].map(([k, label]) => (
-          <Link key={k} href={`/nhom?${new URLSearchParams({ ...(k ? { loai: k } : {}), ...(q ? { q } : {}), ...(luu_tru ? { luu_tru } : {}) })}`}
+          <Link key={k} href={`/nhom?${new URLSearchParams({ ...(k ? { loai: k } : {}), ...(luu_tru ? { luu_tru } : {}) })}`}
             aria-current={loai === k ? 'page' : undefined} className={loai === k ? 'btn px-3 py-1' : 'btn-secondary px-3 py-1'}>{label}</Link>
         ))}
       </nav>
-      <form className="mb-4 flex flex-wrap gap-2" role="search">
-        {loai && <input type="hidden" name="loai" value={loai} />}
-        <input name="q" defaultValue={q} placeholder="Tìm theo tên" className="input max-w-xs" aria-label="Tìm theo tên" />
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="luu_tru" value="1" defaultChecked={Boolean(luu_tru)} /> Nhóm đã lưu trữ</label>
-        <button className="btn-secondary">Lọc</button>
-      </form>
-      <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
-        <section className="card overflow-x-auto p-0">
-          {groups?.length ? (
-            <table className="table">
-              <thead><tr><th>Tên</th><th>Loại</th><th>Việc đang mở</th><th>Thành viên</th><th>Vai trò của tôi</th><th>Cập nhật</th></tr></thead>
-              <tbody>
-                {groups.map((g) => (
-                  <tr key={g.id}>
-                    <td>
-                      <Link href={`/nhom/${g.id}`} className="font-medium text-brand-600 hover:underline dark:text-brand-100">{g.name}</Link>
-                      {g.parent_id && parentName.get(g.parent_id) && <div className="text-xs muted">{parentName.get(g.parent_id)}</div>}
-                    </td>
-                    <td>{KIND_LABEL[g.kind]}</td>
-                    <td>{openTasks.get(g.id) ?? 0}</td>
-                    <td>{memberCount.get(g.id) ?? 0}</td>
-                    <td>{role.get(g.id) ?? <span className="muted">Xem theo phạm vi</span>}</td>
-                    <td className="whitespace-nowrap muted">{fmtDateTime(g.updated_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="p-4 text-sm muted">{q ? 'Không tìm thấy nhóm phù hợp.' : 'Chưa có nhóm nào bạn được xem.'}</p>
-          )}
-        </section>
-        {ctx.can_create_group && <CreateGroupForm />}
+      <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
+        <Link href={`/nhom?${new URLSearchParams({ ...(loai ? { loai } : {}), ...(luu_tru ? {} : { luu_tru: '1' }) })}`} className="btn-secondary px-3 py-1">
+          {luu_tru ? 'Quay lại nhóm đang hoạt động' : 'Xem nhóm đã lưu trữ'}
+        </Link>
+        {luu_tru && <span className="muted">Đang xem nhóm đã lưu trữ.</span>}
+      </div>
+      <div className="space-y-4">
+        {ctx.can_create_group && !luu_tru && <CreateGroupForm />}
+        {groups?.length ? (
+          <GroupTable rows={groups.map((g) => ({
+            id: g.id,
+            name: g.name,
+            parent: (g.parent_id && parentName.get(g.parent_id)) || '',
+            kind: g.kind,
+            kindLabel: KIND_LABEL[g.kind],
+            openTasks: openTasks.get(g.id) ?? 0,
+            members: memberCount.get(g.id) ?? 0,
+            role: role.get(g.id) ?? '',
+            updatedAt: g.updated_at,
+            updatedLabel: fmtDateTime(g.updated_at),
+          }))} />
+        ) : (
+          <p className="card text-sm muted">{luu_tru ? 'Chưa có nhóm nào đã lưu trữ.' : 'Chưa có nhóm nào bạn được xem.'}</p>
+        )}
       </div>
     </>
   );
