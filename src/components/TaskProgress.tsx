@@ -45,7 +45,7 @@ export function TaskProgress({ tasks, name, groupId, canNudge }: { tasks: Task[]
         {canNudge && p.overdue > 0 && (
           <form action={nudgeOverdue}>
             <input type="hidden" name="group_id" value={groupId} />
-            <button className="btn-secondary border-red-300 px-3 py-1 text-sm text-red-700 dark:border-red-700 dark:text-red-300">Đôn đốc {p.overdue} việc quá hạn</button>
+            <button className="btn-secondary border-orange-300 px-3 py-1 text-sm text-orange-700 dark:border-orange-700 dark:text-orange-300">Đôn đốc {p.overdue} việc quá hạn</button>
           </form>
         )}
       </div>
@@ -54,7 +54,7 @@ export function TaskProgress({ tasks, name, groupId, canNudge }: { tasks: Task[]
         {stat('Chưa làm', p.todo)}
         {stat('Đang làm / chờ duyệt', p.doing, 'text-sky-600 dark:text-sky-400')}
         {stat('Đã xong', p.done, 'text-emerald-600 dark:text-emerald-400')}
-        {stat('Quá hạn', p.overdue, p.overdue ? 'text-red-600 dark:text-red-400' : '')}
+        {stat('Quá hạn', p.overdue, p.overdue ? 'text-orange-600 dark:text-orange-400' : '')}
       </div>
       <details open={rows.length <= 8}>
         <summary className="cursor-pointer text-sm font-medium">Theo từng người</summary>
@@ -66,7 +66,7 @@ export function TaskProgress({ tasks, name, groupId, canNudge }: { tasks: Task[]
                 <td>{r.uid ? name(r.uid) : <span className="muted">Chưa giao</span>}</td>
                 <td>{r.done}</td>
                 <td>{r.total - r.done}</td>
-                <td className={r.overdue ? 'font-semibold text-red-600 dark:text-red-400' : ''}>{r.overdue}</td>
+                <td className={r.overdue ? 'font-semibold text-orange-600 dark:text-orange-400' : ''}>{r.overdue}</td>
                 <td><ProgressBar pct={r.pct} /></td>
               </tr>
             ))}

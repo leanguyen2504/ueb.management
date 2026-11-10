@@ -7,7 +7,7 @@ const PRIORITY_CLASS: Record<Task['priority'], string> = {
   low: '',
   normal: '',
   high: 'border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300',
-  urgent: 'border-red-300 text-red-700 dark:border-red-700 dark:text-red-300',
+  urgent: 'border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300',
 };
 
 // Danh sách việc; nút đổi trạng thái chỉ là giao diện, cơ sở dữ liệu kiểm tra quyền.
@@ -47,7 +47,7 @@ export function TaskList({
               <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 text-xs muted">
                 {groupName && <Link href={`/nhom/${t.group_id}`} className="hover:underline">{groupName(t.group_id)}</Link>}
                 {t.assignee_id ? <span>Người làm: {name(t.assignee_id)}</span> : <span>Chưa giao</span>}
-                {t.due_date && <span className={overdue ? 'font-semibold text-red-600 dark:text-red-400' : ''}>Hạn {fmtDate(t.due_date)}{overdue ? ' (quá hạn)' : ''}</span>}
+                {t.due_date && <span className={overdue ? 'font-semibold text-orange-600 dark:text-orange-400' : ''}>Hạn {fmtDate(t.due_date)}{overdue ? ' (quá hạn)' : ''}</span>}
                 {t.priority !== 'normal' && <span className={`chip ${PRIORITY_CLASS[t.priority]}`}>{TASK_PRIORITY_LABEL[t.priority]}</span>}
               </div>
               {t.description && <p className="mt-1 text-sm">{t.description}</p>}
@@ -57,7 +57,7 @@ export function TaskList({
               <form action={nudgeTask}>
                 <input type="hidden" name="id" value={t.id} />
                 <input type="hidden" name="group_id" value={t.group_id} />
-                <button className={`btn-secondary px-2 py-1 text-xs ${overdue ? 'border-red-300 text-red-700 dark:border-red-700 dark:text-red-300' : ''}`} title="Gửi thông báo nhắc người được giao">Đôn đốc</button>
+                <button className={`btn-secondary px-2 py-1 text-xs ${overdue ? 'border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300' : ''}`} title="Gửi thông báo nhắc người được giao">Đôn đốc</button>
               </form>
             )}
             <form action={setTaskStatus} className="flex items-center gap-1">
@@ -70,7 +70,7 @@ export function TaskList({
             {canDelete && (
               <form action={deleteTask}>
                 <input type="hidden" name="id" value={t.id} />
-                <button className="px-2 py-1 text-xs text-red-600 hover:underline dark:text-red-400">Xóa</button>
+                <button className="px-2 py-1 text-xs text-orange-600 hover:underline dark:text-orange-400">Xóa</button>
               </form>
             )}
           </li>
@@ -93,7 +93,7 @@ function TaskLinks({ task, links, canAttach, me }: { task: Task; links: TaskLink
                 <form action={deleteTaskLink}>
                   <input type="hidden" name="id" value={l.id} />
                   <input type="hidden" name="group_id" value={task.group_id} />
-                  <button className="text-xs text-red-600 dark:text-red-400" aria-label="Gỡ sản phẩm">×</button>
+                  <button className="text-xs text-orange-600 dark:text-orange-400" aria-label="Gỡ sản phẩm">×</button>
                 </form>
               )}
             </li>

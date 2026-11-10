@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireSession } from '@/lib/session';
-import { PageHead } from '@/components/PageHead';
+import { HopTabs, PageHead } from '@/components/PageHead';
 import { addDays, dayStartIso, fmtDate, fmtDateTime, fmtTime, vnDay, weekdayShort } from '@/lib/format';
 import { isGoogleCalendarEnabled } from '@/lib/google-calendar';
 import { areaOfItem, areasOf, isMyMeeting, loadAreas, loadMeetings, meetingProgress, type Meeting, type MeetingItem, type WorkArea } from '@/lib/meetings';
@@ -11,6 +11,7 @@ import { loadPeople } from '@/lib/people';
 import { serverEnv } from '@/lib/env';
 import { AddItemForm, EditItemForm, RecordForm, type PersonOption } from './MeetingForms';
 import { deleteMeetingItem } from './actions';
+import { OpenFromHash } from '@/components/OpenFromHash';
 
 export const metadata: Metadata = { title: 'Hồ sơ cuộc họp' };
 
@@ -32,7 +33,7 @@ function href(sp: SP, patch: Partial<SP>) {
 function Toggle({ on, to, children }: { on: boolean; to: string; children: React.ReactNode }) {
   return (
     <Link href={to} aria-current={on ? 'true' : undefined}
-      className={`rounded-lg px-3 py-1.5 text-sm ${on ? 'bg-brand-600 font-medium text-white' : 'border border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}>
+      className={`rounded-xl px-3 py-1.5 text-sm ${on ? 'bg-brand-600 font-semibold text-white dark:bg-brand-300 dark:text-brand-900' : 'border border-slate-200 bg-white font-medium hover:border-brand-600 dark:border-slate-700 dark:bg-slate-900'}`}>
       {children}
     </Link>
   );
@@ -64,6 +65,7 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Pro
   if (!isGoogleCalendarEnabled()) {
     return (
       <>
+        <HopTabs current="hop" />
         <PageHead title="Hồ sơ cuộc họp" />
         <p className="card text-sm muted">Chưa bật module lịch Google dùng chung nên chưa có buổi họp. Quản trị bật tại Cấu hình lịch Google.</p>
       </>
@@ -109,11 +111,12 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
+      <HopTabs current="hop" day={from} />
       <PageHead
         title="Hồ sơ cuộc họp"
         sub={<>Tài liệu trước họp (muộn nhất 24 giờ trước họp) và biên bản sau họp (muộn nhất 24 giờ sau họp), gắn bằng link Google Drive. {missingTotal > 0 && <span className="font-medium text-amber-700 dark:text-amber-300">{missingTotal} mục đang chờ gửi.</span>}</>}
-        actions={<><Link href={`/hop/tong-hop?ngay=${from}`} className="btn-secondary">Bảng tổng hợp</Link>{ctx.is_admin || ctx.role === 'principal' || ctx.role === 'secretary' ? <Link href="/quan-tri/mang-cong-tac" className="btn-secondary">Mảng và đầu mối</Link> : null}</>}
       />
+      <OpenFromHash />
       <datalist id="ds-ben">{partyNames.map((p) => <option key={p} value={p} />)}</datalist>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -154,7 +157,7 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Pro
 const DL_CLASS: Record<Deadline['state'], string> = {
   ok: '',
   soon: 'border-amber-300 text-amber-800 dark:border-amber-700 dark:text-amber-300',
-  late: 'border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300',
+  late: 'border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-300',
   done: 'border-green-300 text-green-800 dark:border-green-700 dark:text-green-300',
 };
 
@@ -199,7 +202,7 @@ function ItemRow({ it, v }: { it: MeetingItem; v: View }) {
           <div className="flex flex-wrap items-center gap-2">
             {(it.party || area) && <span className="font-medium">{it.party || area?.name}</span>}
             {it.url ? (
-              <a href={it.url} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline dark:text-brand-300">
+              <a href={it.url} target="_blank" rel="noopener noreferrer" className="link">
                 {it.title || (it.doc_type ? DOC_TYPES[it.doc_type] : 'Mở tài liệu')} ↗
               </a>
             ) : (
@@ -221,7 +224,7 @@ function ItemRow({ it, v }: { it: MeetingItem; v: View }) {
             </details>
             <form action={deleteMeetingItem}>
               <input type="hidden" name="id" value={it.id} />
-              <button type="submit" className="text-sm text-red-600 hover:underline dark:text-red-400">Gỡ</button>
+              <button type="submit" className="text-sm text-orange-600 hover:underline dark:text-orange-400">Gỡ</button>
             </form>
           </div>
         )}
@@ -230,83 +233,109 @@ function ItemRow({ it, v }: { it: MeetingItem; v: View }) {
   );
 }
 
+// Mỗi buổi họp là một dòng gọn (giờ, mã Jira, tình trạng, hạn gấp nhất, số tài liệu);
+// bấm vào để mở phần A/B, các hạn, link Drive/Meet/Google Calendar và biểu mẫu.
+const RANK: Record<Deadline['state'], number> = { late: 0, soon: 1, ok: 2, done: 3 };
 function MeetingCard({ m, v }: { m: Meeting; v: View }) {
   const anchor = meetingAnchor(m.source_id, m.event_key);
   const pre = m.items.filter((i) => i.kind === 'pre');
   const minutes = m.items.filter((i) => i.kind === 'minutes');
-  const time = m.all_day ? 'Cả ngày' : m.gone ? fmtTime(m.starts_at) : `${fmtTime(m.starts_at)}–${fmtTime(m.ends_at)}`;
   const row = (it: MeetingItem) => <ItemRow key={it.id} it={it} v={v} />;
   const jUrl = m.jira_key ? jiraUrl(v.jiraBase, m.jira_key) : null;
   const ref = { source_id: m.source_id, event_key: m.event_key, title: m.title, starts_at: m.starts_at };
+  const p = meetingProgress(m);
+  const dls = deadlines(m.items, m.starts_at, m.ends_at, m.status);
+  const worst = [...dls].sort((a, b) => RANK[a.state] - RANK[b.state])[0];
+  const pct = p.preTotal ? Math.round((p.preDone / p.preTotal) * 100) : 0;
   return (
-    <article id={anchor} className="card scroll-mt-20">
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="w-24 shrink-0 text-sm font-semibold">{time}</div>
-        <div className="min-w-0 flex-1">
-          <h3 className="font-semibold">
+    <details id={anchor} className="card group scroll-mt-20 overflow-hidden p-0 md:p-0" data-hash-open>
+      <summary className="grid cursor-pointer list-none grid-cols-[4.5rem_1fr] items-center gap-x-4 gap-y-2 px-4 py-3.5 hover:bg-slate-50 md:grid-cols-[5.5rem_1fr_auto] md:px-5 dark:hover:bg-slate-800/50">
+        <div className="font-display text-[15px] font-semibold tabular-nums">
+          {m.all_day ? 'Cả ngày' : fmtTime(m.starts_at)}
+          {!m.all_day && !m.gone && <span className="block font-sans text-xs font-normal muted">đến {fmtTime(m.ends_at)}</span>}
+        </div>
+        <div className="min-w-0">
+          <h3 className="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-[15px] font-semibold">
             {m.jira_key && (jUrl
-              ? <a href={jUrl} target="_blank" rel="noopener noreferrer" className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-brand-700 hover:underline dark:bg-slate-800 dark:text-brand-300">{m.jira_key}</a>
-              : <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs dark:bg-slate-800">{m.jira_key}</span>)}
-            {m.title}
+              ? <a href={jUrl} target="_blank" rel="noopener noreferrer" className="rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-xs font-medium text-brand-700 hover:underline dark:bg-brand-900 dark:text-brand-100">{m.jira_key}</a>
+              : <span className="rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-xs font-medium text-brand-700 dark:bg-brand-900 dark:text-brand-100">{m.jira_key}</span>)}
+            <span>{m.title}</span>
           </h3>
-          <div className="text-xs muted">
-            {[m.location, m.source_label].filter(Boolean).join(' · ')}
-            {m.gone && 'Buổi họp không còn trên lịch Google (đã xóa hoặc dời ngày); hồ sơ vẫn được giữ.'}
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs muted">
+            <span className={`chip ${m.status === 'hoan_tat' ? DL_CLASS.done : ''}`}>{STATUS_LABEL[m.status]}</span>
+            {worst && worst.state !== 'done' && worst.state !== 'ok' && (
+              <span className={`chip ${DL_CLASS[worst.state]}`}>{worst.label}: {worst.state === 'late' ? 'quá hạn' : `hạn ${fmtDateTime(worst.due)}`}</span>
+            )}
+            <span>{[m.location, m.source_label].filter(Boolean).join(' · ')}</span>
           </div>
-          <div className="mt-1.5"><StatusChips m={m} /></div>
-          {m.record?.follow_up && <p className="mt-1.5 text-sm"><span className="font-medium">Cần theo dõi:</span> {m.record.follow_up}</p>}
         </div>
-        <div className="flex flex-wrap gap-2 text-sm">
-          {m.record?.drive_folder_url && <a href={m.record.drive_folder_url} target="_blank" rel="noopener noreferrer" className="btn-secondary">Thư mục Drive</a>}
-          {m.meet_url && <a href={m.meet_url} target="_blank" rel="noopener noreferrer" className="btn-secondary">Họp trực tuyến</a>}
-          {m.html_link && <a href={m.html_link} target="_blank" rel="noopener noreferrer" className="btn-secondary">Google Calendar</a>}
+        <div className="col-span-2 flex items-center gap-3 md:col-span-1">
+          {p.preTotal > 0 ? (
+            <span className="flex h-12 w-12 items-center justify-center rounded-full" style={{ background: `conic-gradient(${pct === 100 ? '#1d7f55' : '#b8902e'} ${pct}%, rgba(120,100,95,.18) 0)` }} title={`Tài liệu trước họp: ${p.preDone}/${p.preTotal} bên`}>
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-semibold tabular-nums dark:bg-slate-900">{p.preDone}/{p.preTotal}</span>
+            </span>
+          ) : <span className="chip">{m.attachments.length ? `${m.attachments.length} tài liệu` : 'Chưa có tài liệu'}</span>}
+          <svg className="h-5 w-5 text-slate-400 transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
         </div>
-      </div>
+      </summary>
 
-      {m.description && (
-        <details className="mt-2 text-sm">
-          <summary className="cursor-pointer muted">Thành phần, chi tiết</summary>
-          <p className="mt-1 whitespace-pre-line">{m.description}</p>
-        </details>
-      )}
+      <div className="space-y-4 border-t border-slate-200 bg-slate-50/60 px-4 py-4 md:px-5 dark:border-slate-800 dark:bg-slate-950/40">
+        {m.gone && <p className="text-sm muted">Buổi họp không còn trên lịch Google (đã xóa hoặc dời ngày); hồ sơ vẫn được giữ.</p>}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <StatusChips m={m} />
+          <div className="flex flex-wrap gap-2 text-sm">
+            {m.record?.drive_folder_url && <a href={m.record.drive_folder_url} target="_blank" rel="noopener noreferrer" className="btn-secondary px-3 py-1.5">Thư mục Drive ↗</a>}
+            {m.meet_url && <a href={m.meet_url} target="_blank" rel="noopener noreferrer" className="btn-secondary px-3 py-1.5">Họp trực tuyến ↗</a>}
+            {m.html_link && <a href={m.html_link} target="_blank" rel="noopener noreferrer" className="btn-secondary px-3 py-1.5">Google Calendar ↗</a>}
+          </div>
+        </div>
+        {m.record?.follow_up && <p className="rounded-xl bg-gold-50 px-3 py-2 text-sm dark:bg-gold-600/15"><span className="font-semibold">Cần theo dõi:</span> {m.record.follow_up}</p>}
 
-      <div className="mt-3 grid gap-4 md:grid-cols-2">
-        <section>
-          <h4 className="text-sm font-semibold">A. Tài liệu trước họp</h4>
-          {m.attachments.length > 0 && (
-            <ul className="mt-1 space-y-1 text-sm">
-              {m.attachments.map((a) => (
-                <li key={a.url}>
-                  <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline dark:text-brand-300">{a.title} ↗</a>
-                  <span className="text-xs muted"> · đính kèm trên lịch</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          {pre.length ? <ul className="divide-y divide-slate-100 text-sm dark:divide-slate-800">{pre.map(row)}</ul>
-            : !m.attachments.length && <p className="mt-1 text-sm muted">Chưa có tài liệu.</p>}
-        </section>
-        <section>
-          <h4 className="text-sm font-semibold">B. Biên bản và tài liệu sau họp</h4>
-          {minutes.length ? <ul className="divide-y divide-slate-100 text-sm dark:divide-slate-800">{minutes.map(row)}</ul>
-            : <p className="mt-1 text-sm muted">Chưa có biên bản.</p>}
-        </section>
-      </div>
-
-      {v.canFile && (
-        <div className="mt-3 space-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
-          <details>
-            <summary className="cursor-pointer text-sm font-medium text-brand-600 dark:text-brand-300">+ Thêm bên cần gửi, tài liệu hoặc biên bản</summary>
-            <div className="mt-3"><AddItemForm meeting={ref} people={v.people} partiesListId="ds-ben" uid={anchor} /></div>
+        {m.description && (
+          <details className="text-sm">
+            <summary className="cursor-pointer muted">Thành phần, chi tiết</summary>
+            <p className="mt-1 whitespace-pre-line">{m.description}</p>
           </details>
-          <details>
-            <summary className="cursor-pointer text-sm font-medium text-brand-600 dark:text-brand-300">Mã Jira, thư mục Drive, tình trạng xử lý</summary>
-            <div className="mt-3">
-              <RecordForm meeting={ref} values={m.record} autoJira={jiraKeyIn(m.title, m.description)} autoStatusLabel={STATUS_LABEL[autoStatus(m.items, m.ends_at)]} uid={`${anchor}-r`} />
-            </div>
-          </details>
+        )}
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <section>
+            <h4 className="font-display text-sm font-semibold">A. Tài liệu trước họp {p.preTotal > 0 && <span className="chip ml-1">{p.preDone}/{p.preTotal} bên</span>}</h4>
+            {m.attachments.length > 0 && (
+              <ul className="mt-1 space-y-1 text-sm">
+                {m.attachments.map((a) => (
+                  <li key={a.url}>
+                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="link">{a.title} ↗</a>
+                    <span className="text-xs muted"> · đính kèm trên lịch</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {pre.length ? <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">{pre.map(row)}</ul>
+              : !m.attachments.length && <p className="mt-1 text-sm muted">Chưa có tài liệu.</p>}
+          </section>
+          <section>
+            <h4 className="font-display text-sm font-semibold">B. Biên bản và tài liệu sau họp</h4>
+            {minutes.length ? <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">{minutes.map(row)}</ul>
+              : <p className="mt-1 text-sm muted">Chưa có biên bản.</p>}
+          </section>
         </div>
-      )}
-    </article>
+
+        {v.canFile && (
+          <div className="space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+            <details>
+              <summary className="cursor-pointer text-sm font-semibold text-brand-600 dark:text-brand-300">+ Thêm bên cần gửi, tài liệu hoặc biên bản</summary>
+              <div className="mt-3"><AddItemForm meeting={ref} people={v.people} partiesListId="ds-ben" uid={anchor} /></div>
+            </details>
+            <details>
+              <summary className="cursor-pointer text-sm font-medium text-brand-600 dark:text-brand-300">Mã Jira, thư mục Drive, tình trạng xử lý</summary>
+              <div className="mt-3">
+                <RecordForm meeting={ref} values={m.record} autoJira={jiraKeyIn(m.title, m.description)} autoStatusLabel={STATUS_LABEL[autoStatus(m.items, m.ends_at)]} uid={`${anchor}-r`} />
+              </div>
+            </details>
+          </div>
+        )}
+      </div>
+    </details>
   );
 }

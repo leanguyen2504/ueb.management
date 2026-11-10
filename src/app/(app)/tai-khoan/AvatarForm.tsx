@@ -55,7 +55,7 @@ export function AvatarForm({ hasAvatar }: { hasAvatar: boolean }) {
           </button>
         )}
       </div>
-      {err ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{err}</p> : <FormMessage state={state} />}
+      {err ? <p role="alert" className="text-sm text-orange-600 dark:text-orange-400">{err}</p> : <FormMessage state={state} />}
       <p className="text-xs muted">Ảnh được cắt vuông và thu nhỏ trước khi tải lên. Chỉ đồng nghiệp đã đăng nhập xem được.</p>
     </section>
   );

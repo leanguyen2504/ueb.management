@@ -16,6 +16,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="vi" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* Lexend cho tiêu đề, Be Vietnam Pro cho nội dung: cả hai hiển thị tốt dấu tiếng Việt. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Lexend:wght@500;600&display=swap" />
+        <style>{`:root{--font-body:'Be Vietnam Pro';--font-heading:'Lexend'}`}</style>
       </head>
       <body>{children}</body>
     </html>

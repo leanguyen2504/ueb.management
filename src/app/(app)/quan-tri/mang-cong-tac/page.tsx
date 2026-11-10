@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { requireSession } from '@/lib/session';
-import { PageHead } from '@/components/PageHead';
+import { HopTabs, PageHead } from '@/components/PageHead';
 import { loadAreas } from '@/lib/meetings';
 import { AreaForm } from './AreaForm';
 import { deleteArea } from './actions';
@@ -24,6 +24,7 @@ export default async function AreasPage() {
 
   return (
     <>
+      <HopTabs current="mang" />
       <PageHead title="Mảng công tác và đầu mối" sub="Theo văn bản phân công: mỗi mảng có một đầu mối phụ trách chính và người phối hợp. Khi thêm bên gửi tài liệu trùng tên mảng, đầu mối của mảng đó tự thấy buổi họp trong mục &quot;Của tôi&quot;." />
       <div className="card mb-4">
         <h2 className="mb-3 font-semibold">Thêm mảng</h2>
@@ -47,7 +48,7 @@ export default async function AreasPage() {
                 </details>
                 <form action={deleteArea}>
                   <input type="hidden" name="id" value={a.id} />
-                  <button type="submit" className="text-sm text-red-600 hover:underline dark:text-red-400">Xóa</button>
+                  <button type="submit" className="text-sm text-orange-600 hover:underline dark:text-orange-400">Xóa</button>
                 </form>
               </div>
             </li>

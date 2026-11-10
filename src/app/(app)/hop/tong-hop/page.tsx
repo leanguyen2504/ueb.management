@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireSession } from '@/lib/session';
-import { PageHead } from '@/components/PageHead';
+import { HopTabs, PageHead } from '@/components/PageHead';
 import { addDays, fmtDate, fmtTime, vnDay } from '@/lib/format';
 import { buildSummary, type SummaryParams, type SummaryLink } from '@/lib/meeting-summary';
 import { jiraUrl } from '@/lib/meeting-rules';
@@ -40,11 +40,11 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
+      <HopTabs current="tong-hop" day={range.from} />
       <PageHead
         title="Bảng tổng hợp hồ sơ họp"
         sub="Mỗi buổi họp một dòng, theo mẫu của văn bản phân công. Lọc theo mảng hoặc đầu mối, xuất ra Excel để gửi Thầy Hiệu trưởng."
         actions={<>
-          <Link href={`/hop?ngay=${range.from}`} className="btn-secondary">Hồ sơ cuộc họp</Link>
           <a href={`/hop/tong-hop/xuat?${qs(sp, { ngay: range.from })}`} className="btn">Xuất Excel</a>
         </>}
       />

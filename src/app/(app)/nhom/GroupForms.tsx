@@ -17,7 +17,7 @@ function KindSelect({ value }: { value?: string }) {
 export function CreateGroupForm() {
   const [state, action] = useActionState(createGroup, null);
   return (
-    <details className="card group py-3" open={Boolean(state?.error)}>
+    <details id="tao-nhom" ref={(el) => { if (el && window.location.hash === '#tao-nhom') el.open = true; }} className="card group scroll-mt-20 py-3" open={Boolean(state?.error) || undefined}>
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold">
         <span>+ Tạo đơn vị, dự án hoặc sự kiện</span>
         <span className="text-xs font-normal muted group-open:hidden">Bấm để mở</span>
