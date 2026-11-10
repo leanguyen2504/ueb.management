@@ -19,6 +19,9 @@ export type GoogleCalendarEvent = {
   description: string | null;
   meet_url: string | null;
   html_link: string | null;
+  // Mã buổi họp giữ nguyên giữa các lần đồng bộ: hồ sơ cuộc họp gắn theo (source_id, event_key).
+  event_key: string;
+  attachments: { title: string; url: string }[];
 };
 
 export const isGoogleCalendarEnabled = () => features.googleCalendar();
@@ -40,7 +43,7 @@ export async function getGoogleCalendarEvents(
   const labelOf = new Map(sources.map((s) => [s.id, s.label as string]));
   const { data: events } = await supabase
     .from('calendar_events')
-    .select('id, source_id, title, starts_at, ends_at, all_day, location, description, url, html_link')
+    .select('id, source_id, google_event_id, title, starts_at, ends_at, all_day, location, description, url, html_link, attachments')
     .in('source_id', [...labelOf.keys()])
     .lt('starts_at', toISO)
     .gt('ends_at', fromISO)
@@ -59,5 +62,7 @@ export async function getGoogleCalendarEvents(
     description: e.description,
     meet_url: e.url,
     html_link: e.html_link,
+    event_key: e.google_event_id,
+    attachments: Array.isArray(e.attachments) ? e.attachments : [],
   }));
 }

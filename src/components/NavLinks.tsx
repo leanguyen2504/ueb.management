@@ -12,6 +12,7 @@ const ICONS: Record<string, React.ReactNode> = {
   tasks: <><rect x="3.5" y="3.5" width="17" height="17" rx="3" /><path d="m8 12 3 3 5-6" /></>,
   calendar: <><rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4M7.5 14h4M7.5 17h7" /></>,
   booking: <><rect x="3.5" y="5" width="13" height="13" rx="2" /><path d="M3.5 10h13M7 3v4M13 3v4" /><circle cx="17.5" cy="17.5" r="3.5" /><path d="M17.5 16v1.7l1 .8" /></>,
+  folder: <><path d="M3.5 6.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /><path d="M8 13h8M8 16.5h5" /></>,
   bell: <><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></>,
   admin: <><path d="M5 4v6M5 14v6M12 4v3M12 11v9M19 4v9M19 17v3" /><path d="M3 12h4M10 9h4M17 15h4" /></>,
   groups: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5" /></>,

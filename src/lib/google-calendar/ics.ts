@@ -1,5 +1,5 @@
 import ICAL from 'ical.js';
-import { htmlToText, zonedMidnight, type EventRow } from './google-api';
+import { collectAttachments, htmlToText, zonedMidnight, type EventRow } from './google-api';
 
 // Đọc lịch Google để ở chế độ công khai qua địa chỉ iCal công khai, không cần
 // API key hay tài khoản dịch vụ. Buổi họp lặp lại được trải thành từng lần.
@@ -26,6 +26,15 @@ function meetingUrl(ev: Ev): string | null {
     /https:\/\/(?:meet\.google\.com|[\w.-]*zoom\.us|teams\.microsoft\.com|teams\.live\.com)\/[^\s<>"')]+/i,
   );
   return m ? m[0].slice(0, 500) : null;
+}
+
+// ATTACH;FILENAME=Tờ trình.pdf;FMTTYPE=...:https://drive.google.com/...
+function attachmentsOf(ev: Ev): { title: string | null; url: string | null }[] {
+  return ev.component.getAllProperties('attach').map((p) => {
+    const v = p.getFirstValue();
+    const name = p.getParameter('filename');
+    return { title: typeof name === 'string' ? name : null, url: typeof v === 'string' ? v : null };
+  });
 }
 
 function toIso(t: Time, tz: string): string {
@@ -58,12 +67,14 @@ export function parseIcs(text: string, from: Date, to: Date, tz: string): EventR
   const out: EventRow[] = [];
   const seen = new Set<string>();
   const fromT = ICAL.Time.fromJSDate(from, true);
-  const push = (ev: Ev, start: Time, end: Time) => {
+  // key giữ nguyên khi buổi họp bị dời giờ, để hồ sơ cuộc họp (gắn theo key) không bị mất:
+  // buổi họp đơn lẻ dùng UID; mỗi lần của buổi họp lặp lại dùng UID + giờ gốc của lần đó.
+  const push = (ev: Ev, start: Time, end: Time, key: string) => {
     if (ev.component.getFirstPropertyValue('status') === 'CANCELLED') return;
     const s = toIso(start, tz);
     const e = toIso(end, tz);
     if (new Date(e) <= from || new Date(s) >= to) return;
-    const id = `${ev.uid}_${s}`;
+    const id = key;
     if (seen.has(id)) return;
     seen.add(id);
     out.push({
@@ -76,6 +87,7 @@ export function parseIcs(text: string, from: Date, to: Date, tz: string): EventR
       description: htmlToText(ev.description ?? undefined),
       url: meetingUrl(ev),
       html_link: null,
+      attachments: collectAttachments(attachmentsOf(ev), ev.description),
     });
   };
 
@@ -83,7 +95,8 @@ export function parseIcs(text: string, from: Date, to: Date, tz: string): EventR
     if (out.length >= MAX_EVENTS) break;
     if (!ev.startDate) continue;
     if (!ev.isRecurring()) {
-      push(ev, ev.startDate, ev.endDate ?? ev.startDate);
+      const rid = ev.isRecurrenceException() ? `_${toIso(ev.recurrenceId, tz)}` : '';
+      push(ev, ev.startDate, ev.endDate ?? ev.startDate, `${ev.uid}${rid}`);
       continue;
     }
     const it = ev.iterator();
@@ -92,7 +105,7 @@ export function parseIcs(text: string, from: Date, to: Date, tz: string): EventR
       if (next.toJSDate() >= to) break;
       const det = ev.getOccurrenceDetails(next);
       if (det.endDate.compare(fromT) <= 0) continue;
-      push(det.item, det.startDate, det.endDate);
+      push(det.item, det.startDate, det.endDate, `${ev.uid}_${toIso(next, tz)}`);
     }
   }
   return out;

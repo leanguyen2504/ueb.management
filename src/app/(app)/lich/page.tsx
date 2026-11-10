@@ -9,6 +9,7 @@ import { loadPeople } from '@/lib/people';
 import { getGoogleCalendarEvents, isGoogleCalendarEnabled } from '@/lib/google-calendar';
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { PALETTE, VIEW_LABEL, type CalItem, type CalSource, type CalView } from '@/components/calendar/types';
+import { meetingAnchor } from '@/lib/meeting-anchor';
 import { addDay, dayStart, monthGridStart, vnDayOf, weekStart } from '@/components/calendar/time';
 
 export const metadata: Metadata = { title: 'Lịch của tôi' };
@@ -89,6 +90,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       key: g.id, source: `g:${g.source_id}`, title: g.title, starts_at: g.starts_at, ends_at: g.ends_at, all_day: g.all_day,
       location: g.location, description: g.description,
       links: [
+        { href: `/hop?ngay=${vnDayOf(g.starts_at)}#${meetingAnchor(g.source_id, g.event_key)}`, label: 'Hồ sơ cuộc họp' },
         ...(g.meet_url ? [{ href: g.meet_url, label: 'Tham gia họp trực tuyến', external: true }] : []),
         ...(g.html_link ? [{ href: g.html_link, label: 'Mở trên Google Calendar', external: true }] : []),
       ],
