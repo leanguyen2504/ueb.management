@@ -13,7 +13,7 @@ export function AreaForm({ area, groups, uid }: { area?: AreaValues; groups: { i
     <form action={action} className="space-y-3">
       {area && <input type="hidden" name="id" value={area.id} />}
       <div className="grid gap-3 sm:grid-cols-2">
-        <div><label className="label" htmlFor={`${uid}-n`}>Mảng / đơn vị</label><input id={`${uid}-n`} name="name" required maxLength={150} className="input" defaultValue={area?.name ?? ''} placeholder="Ví dụ: Khoa Kinh tế Phát triển" /></div>
+        <div><label className="label" htmlFor={`${uid}-n`}>Mảng / đơn vị</label><input id={`${uid}-n`} name="name" required maxLength={120} className="input" defaultValue={area?.name ?? ''} placeholder="Ví dụ: Khoa Kinh tế Phát triển" /></div>
         <div>
           <label className="label" htmlFor={`${uid}-g`}>Nhóm trên hệ thống (nếu có)</label>
           <select id={`${uid}-g`} name="group_id" className="input" defaultValue={area?.group_id ?? ''}>

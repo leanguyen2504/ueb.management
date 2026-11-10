@@ -11,7 +11,7 @@ const EMAIL = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function fields(form: FormData): { error: string } | { row: Record<string, unknown> } {
-  const name = String(form.get('name') || '').trim().slice(0, 150);
+  const name = String(form.get('name') || '').trim().slice(0, 120);
   if (!name) return { error: 'Hãy ghi tên mảng / đơn vị.' };
   const primary = String(form.get('primary_email') || '').trim().toLowerCase();
   if (primary && !EMAIL.test(primary)) return { error: `Email đầu mối không hợp lệ: ${primary}` };
