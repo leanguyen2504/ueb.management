@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { requireSession } from '@/lib/session';
 import { NavLinks, type NavItem } from '@/components/NavLinks';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { OnlineCount } from '@/components/OnlineCount';
+import { publicEnv } from '@/lib/env';
 import { ROLE_LABEL } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +33,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </Link>
         <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider muted">Không gian làm việc</div>
         <nav className="flex flex-col gap-1" aria-label="Điều hướng chính"><NavLinks items={items} variant="side" /></nav>
-        <p className="mt-auto px-2 text-xs muted">Mỗi tài khoản chỉ thấy dữ liệu của nhóm được cấp quyền.</p>
+        <div className="mt-auto space-y-2">
+          <OnlineCount url={publicEnv.supabaseUrl()} anonKey={publicEnv.supabaseAnonKey()} userId={profile.id} />
+          <p className="px-2 text-xs muted">Mỗi tài khoản chỉ thấy dữ liệu của nhóm được cấp quyền.</p>
+        </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-2.5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
