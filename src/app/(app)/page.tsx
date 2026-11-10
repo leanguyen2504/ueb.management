@@ -4,6 +4,9 @@ import { PageHead } from '@/components/PageHead';
 import { TaskList } from '@/components/TaskList';
 import { loadPeople } from '@/lib/people';
 import { addDays, dayStartIso, fmtDateTime, fmtTime, greeting, todayLabel, vnDay, weekdayShort } from '@/lib/format';
+import { isGoogleCalendarEnabled } from '@/lib/google-calendar';
+import { loadMeetings, meetingProgress } from '@/lib/meetings';
+import { meetingAnchor } from '@/lib/meeting-anchor';
 import { KIND_LABEL, type AppNotification, type Booking, type CalEvent, type Group, type Task } from '@/lib/types';
 
 export default async function DashboardPage() {
@@ -11,13 +14,15 @@ export default async function DashboardPage() {
   const today = vnDay();
   const nowIso = new Date().toISOString();
   const weekEnd = dayStartIso(addDays(today, 7));
-  const [{ data: groups }, { data: mine }, { data: tasks }, { data: events }, { data: pendingBookings }, { data: notes }] = await Promise.all([
+  const [{ data: groups }, { data: mine }, { data: tasks }, { data: events }, { data: pendingBookings }, { data: notes }, meetings] = await Promise.all([
     supabase.from('groups').select('*').is('archived_at', null).order('name').returns<Group[]>(),
     supabase.from('group_members').select('group_id, is_manager').eq('user_id', userId),
     supabase.from('tasks').select('*').eq('assignee_id', userId).neq('status', 'done').order('due_date', { ascending: true, nullsFirst: false }).limit(50).returns<Task[]>(),
     supabase.from('events').select('*').gte('ends_at', nowIso).lt('starts_at', weekEnd).order('starts_at').limit(50).returns<CalEvent[]>(),
     supabase.from('bookings').select('*').eq('host_id', userId).eq('status', 'pending').gte('ends_at', nowIso).returns<Booking[]>(),
     supabase.from('notifications').select('*').is('read_at', null).order('created_at', { ascending: false }).limit(5).returns<AppNotification[]>(),
+    // Buổi họp hôm nay từ lịch Google dùng chung mà tôi được xem (Hiệu trưởng, thư ký...).
+    isGoogleCalendarEnabled() ? loadMeetings(supabase, userId, dayStartIso(today), dayStartIso(addDays(today, 1))).catch(() => []) : Promise.resolve([]),
   ]);
   const mineIds = new Map((mine ?? []).map((m) => [m.group_id, m.is_manager]));
   const myGroups = (groups ?? []).filter((g) => mineIds.has(g.id));
@@ -46,6 +51,37 @@ export default async function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {meetings.length > 0 && (
+        <section className="card mt-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="font-semibold">Họp hôm nay</h2>
+            <Link href="/hop" className="text-sm text-brand-600 hover:underline dark:text-brand-100">Hồ sơ cuộc họp</Link>
+          </div>
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {meetings.map((m) => {
+              const p = meetingProgress(m);
+              return (
+                <li key={`${m.source_id}|${m.event_key}`}>
+                  <Link href={`/hop#${meetingAnchor(m.source_id, m.event_key)}`} className="flex flex-wrap items-start gap-x-3 gap-y-1 py-2 hover:text-brand-600">
+                    <span className="w-12 shrink-0 text-sm font-semibold">{m.all_day ? 'Cả ngày' : fmtTime(m.starts_at)}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">{m.title}</span>
+                      {m.location && <span className="block text-xs muted">{m.location}</span>}
+                    </span>
+                    <span className="flex flex-wrap gap-1.5 text-xs">
+                      {p.preTotal + m.attachments.length > 0
+                        ? <span className={`chip ${p.preDone < p.preTotal ? 'border-amber-300 text-amber-800 dark:border-amber-700 dark:text-amber-300' : ''}`}>{p.preTotal ? `Tài liệu ${p.preDone}/${p.preTotal} bên` : `${m.attachments.length} tài liệu`}</span>
+                        : <span className="chip">Chưa có tài liệu</span>}
+                      {p.minutesDone && <span className="chip">Có biên bản</span>}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[3fr_2fr]">
         <section className="card">

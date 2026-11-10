@@ -12,7 +12,11 @@ export type GoogleEvent = {
   end?: { date?: string; dateTime?: string; timeZone?: string };
   conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] };
   description?: string;
+  attachments?: { fileUrl?: string; title?: string; mimeType?: string }[];
 };
+
+// File đính kèm của buổi họp trên Google Calendar (thường là file Drive).
+export type Attachment = { title: string; url: string };
 
 export type EventRow = {
   google_event_id: string;
@@ -24,6 +28,7 @@ export type EventRow = {
   description: string | null;
   url: string | null;
   html_link: string | null;
+  attachments: Attachment[];
 };
 
 const API = 'https://www.googleapis.com/calendar/v3';
@@ -65,6 +70,26 @@ export function htmlToText(s: string | undefined): string | null {
   return t ? t.slice(0, 2000) : null;
 }
 
+const MAX_ATTACHMENTS = 20;
+
+// Link Google Drive/Docs/Sheets/Slides/Forms dán trong mô tả buổi họp.
+const DRIVE_LINK = /https:\/\/(?:drive|docs)\.google\.com\/[^\s<>"')\]]+/gi;
+
+// Gộp file đính kèm và link Drive trong mô tả, bỏ trùng, chỉ giữ link https.
+export function collectAttachments(list: { title?: string | null; url?: string | null }[], description?: string | null): Attachment[] {
+  const out: Attachment[] = [];
+  const seen = new Set<string>();
+  const add = (url: string | null | undefined, title?: string | null) => {
+    const u = (url ?? '').trim().replace(/&amp;/g, '&');
+    if (!/^https:\/\//i.test(u) || u.length > 1000 || seen.has(u) || out.length >= MAX_ATTACHMENTS) return;
+    seen.add(u);
+    out.push({ title: (title ?? '').trim().slice(0, 200) || 'Tài liệu Google Drive', url: u });
+  };
+  for (const a of list) add(a.url, a.title);
+  for (const m of (description ?? '').matchAll(DRIVE_LINK)) add(m[0]);
+  return out;
+}
+
 function meetingUrl(e: GoogleEvent): string | null {
   if (e.hangoutLink) return e.hangoutLink;
   const video = e.conferenceData?.entryPoints?.find((p) => p.entryPointType === 'video' && p.uri?.startsWith('https://'));
@@ -91,6 +116,7 @@ export function toRow(e: GoogleEvent, tz: string): EventRow | null {
     description: htmlToText(e.description),
     url: clean(meetingUrl(e), 500),
     html_link: clean(e.htmlLink, 500),
+    attachments: collectAttachments((e.attachments ?? []).map((a) => ({ title: a.title, url: a.fileUrl })), e.description),
   };
 }
 

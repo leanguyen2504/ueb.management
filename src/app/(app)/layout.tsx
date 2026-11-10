@@ -14,6 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: '/', label: 'Dashboard của tôi', short: 'Dashboard', icon: 'dashboard' },
     { href: '/viec', label: 'Việc của tôi', short: 'Việc', icon: 'tasks' },
     { href: '/lich', label: 'Lịch của tôi', short: 'Lịch', icon: 'calendar' },
+    { href: '/hop', label: 'Hồ sơ cuộc họp', short: 'Họp', icon: 'folder' },
     { href: '/dat-lich', label: 'Trang đặt lịch', short: 'Đặt lịch', icon: 'booking' },
     { href: '/thong-bao', label: 'Thông báo', icon: 'bell', badge: unread ?? 0 },
     { href: '/moi', label: 'Mời đồng nghiệp', short: 'Mời', icon: 'invite' },

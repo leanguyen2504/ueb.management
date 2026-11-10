@@ -80,3 +80,16 @@ Sau đó **Deployments → Redeploy** để biến mới có hiệu lực.
 - Mã: `src/lib/google-calendar/`. Trang Lịch gọi `getGoogleCalendarEvents(supabase, userId, fromISO, toISO)`.
 - Đăng nhập Google bằng JWT ký RS256 (`service-account.ts`), không dùng thư viện ngoài. Phạm vi quyền: `calendar.readonly`.
 - Bảng: `calendar_sources` (quản trị ghi, có nhật ký), `calendar_events` (chỉ máy chủ ghi bằng khóa service). Kiểm thử RLS: `supabase/tests/40_lich_google.sql`.
+
+## Hồ sơ cuộc họp (tài liệu trước họp, biên bản)
+
+Trang **Hồ sơ cuộc họp** (`/hop`) liệt kê buổi họp theo ngày hoặc tuần từ các lịch Google dùng chung. Mỗi buổi họp có hai phần:
+
+- **Tài liệu trước họp**: mỗi bên (khoa, viện, phòng...) một dòng. Văn thư/thư ký ghi các bên cần gửi (mỗi dòng một bên); dòng chưa có link hiện **Chờ gửi**. Khi nhận được file, bấm **Dán link** và dán link Google Drive. File vẫn nằm trên Drive, hệ thống chỉ lưu link.
+- **Biên bản, kết luận sau họp**: dán link biên bản sau khi họp xong.
+
+Mỗi dòng có **người đôn đốc** (mặc định là người tạo); người được giao nhận thông báo. Tên bên trùng tên một nhóm trong hệ thống thì được gắn với nhóm đó, và thành viên nhóm thấy buổi họp khi lọc **Của tôi**. Bộ lọc **Còn thiếu** chỉ hiện buổi họp còn bên chưa gửi.
+
+File đã đính kèm vào sự kiện trên Google Calendar và link Drive dán trong mô tả sự kiện tự hiện trong phần tài liệu (đọc qua API: cần tài khoản dịch vụ hoặc API key; đọc qua iCal công khai thì chỉ có link trong mô tả và file đính kèm nếu Google có xuất).
+
+Quyền: ai xem được lịch thì xem được hồ sơ. Hiệu trưởng, thư ký, quản trị và Văn thư của nhóm (nếu xem được lịch đó) mới thêm, sửa, gỡ. Mọi thao tác được ghi nhật ký. Hồ sơ gắn theo mã sự kiện Google nên không mất khi lịch đồng bộ lại hoặc buổi họp bị dời giờ.
