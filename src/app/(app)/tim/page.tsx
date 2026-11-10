@@ -10,8 +10,9 @@ export const metadata: Metadata = { title: 'Tìm kiếm' };
 
 // Tìm theo từ khóa trên mọi dữ liệu người dùng được xem (RLS lọc theo quyền):
 // cuộc họp trên lịch Google, mã Jira, tài liệu họp, nhóm, việc, lịch nhóm và người.
-export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const raw = ((await searchParams).q ?? '').trim().slice(0, 100);
+export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string; loai?: string }> }) {
+  const sp = await searchParams;
+  const raw = (sp.q ?? '').trim().slice(0, 100);
   // Bỏ ký tự có nghĩa đặc biệt trong bộ lọc của PostgREST (, ( ) % * \) để từ khóa không phá câu lọc.
   const q = raw.replace(/[,()%*\\]/g, ' ').replace(/\s+/g, ' ').trim();
   const { supabase } = await requireSession();
@@ -59,11 +60,24 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const meetingList = [...hits.values()].sort((a, b) => b.starts.localeCompare(a.starts));
   const total = meetingList.length + (groups.data?.length ?? 0) + (tasks.data?.length ?? 0) + (events.data?.length ?? 0) + (people.data?.length ?? 0);
 
-  const Section = ({ title, n, children }: { title: string; n: number; children: React.ReactNode }) =>
-    n ? (
-      <section className="card">
+  // Bộ lọc theo nhóm kết quả. "Tất cả" hiện 5 kết quả đầu mỗi nhóm, kèm link xem hết nhóm đó.
+  const FILTERS = [
+    { key: 'hop', label: 'Cuộc họp và tài liệu', n: meetingList.length },
+    { key: 'viec', label: 'Việc', n: tasks.data?.length ?? 0 },
+    { key: 'nhom', label: 'Dự án và nhóm', n: groups.data?.length ?? 0 },
+    { key: 'lich', label: 'Lịch nhóm', n: events.data?.length ?? 0 },
+    { key: 'nguoi', label: 'Người', n: people.data?.length ?? 0 },
+  ];
+  const loai = FILTERS.some((f) => f.key === sp.loai) ? sp.loai! : '';
+  const filterHref = (k: string) => `/tim?${new URLSearchParams({ q: raw, ...(k ? { loai: k } : {}) })}`;
+  const PREVIEW = 5;
+  const pick = <T,>(key: string, list: T[]) => (loai === key ? list : loai ? [] : list.slice(0, PREVIEW));
+  const Section = ({ id, title, n, children }: { id: string; title: string; n: number; children: React.ReactNode }) =>
+    n && (!loai || loai === id) ? (
+      <section className={`card ${loai ? 'lg:col-span-2' : ''}`}>
         <h2 className="mb-2 text-lg font-semibold">{title} <span className="chip ml-1 align-middle">{n}</span></h2>
         <ul className="divide-y divide-slate-200 dark:divide-slate-800">{children}</ul>
+        {!loai && n > PREVIEW && <Link href={filterHref(id)} className="link mt-2 inline-block text-sm">Xem tất cả {n} kết quả</Link>}
       </section>
     ) : null;
   const Row = ({ href, title, sub, right }: { href: string; title: React.ReactNode; sub?: React.ReactNode; right?: React.ReactNode }) => (
@@ -81,36 +95,44 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <PageHead title="Tìm kiếm" sub={total ? `${total} kết quả cho “${q}”` : `Không tìm thấy kết quả cho “${q}”. Thử từ khóa ngắn hơn hoặc có dấu tiếng Việt đầy đủ.`} />
-      <SearchBox q={raw} />
+      <SearchBox q={raw} loai={loai} />
+      {total > 0 && (
+        <nav className="seg mt-4" aria-label="Lọc kết quả">
+          <Link href={filterHref('')} aria-current={!loai ? 'true' : undefined}>Tất cả <span className="tabular-nums opacity-70">{total}</span></Link>
+          {FILTERS.filter((f) => f.n).map((f) => (
+            <Link key={f.key} href={filterHref(f.key)} aria-current={loai === f.key ? 'true' : undefined}>{f.label} <span className="tabular-nums opacity-70">{f.n}</span></Link>
+          ))}
+        </nav>
+      )}
       <div className="mt-5 grid items-start gap-5 lg:grid-cols-2">
-        <Section title="Cuộc họp và tài liệu" n={meetingList.length}>
-          {meetingList.map((m) => (
+        <Section id="hop" title="Cuộc họp và tài liệu" n={meetingList.length}>
+          {pick('hop', meetingList).map((m) => (
             <Row key={m.key} href={m.href}
               title={<>{m.jira && <span className="mr-2 rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-xs text-brand-700 dark:bg-brand-900 dark:text-brand-100">{m.jira}</span>}{m.title}</>}
               sub={<>{fmtDateTime(m.starts)}{m.sub ? ` · ${m.sub}` : ''}{m.docs.length ? <><br />Tài liệu: {m.docs.slice(0, 3).join('; ')}{m.docs.length > 3 ? ` và ${m.docs.length - 3} mục khác` : ''}</> : null}</>} />
           ))}
         </Section>
-        <Section title="Việc" n={tasks.data?.length ?? 0}>
-          {(tasks.data ?? []).map((t) => (
+        <Section id="viec" title="Việc" n={tasks.data?.length ?? 0}>
+          {pick('viec', tasks.data ?? []).map((t) => (
             <Row key={t.id} href={`/nhom/${t.group_id}?tab=viec`} title={t.title}
               sub={`${gName.get(t.group_id) ?? 'Nhóm'}${t.due_date ? ` · hạn ${fmtDate(t.due_date)}` : ''}`}
               right={<span className="chip">{TASK_STATUS_LABEL[t.status]}</span>} />
           ))}
         </Section>
-        <Section title="Dự án và nhóm" n={groups.data?.length ?? 0}>
-          {(groups.data ?? []).map((g) => (
+        <Section id="nhom" title="Dự án và nhóm" n={groups.data?.length ?? 0}>
+          {pick('nhom', groups.data ?? []).map((g) => (
             <Row key={g.id} href={`/nhom/${g.id}`} title={g.name} sub={g.description ?? undefined}
               right={<span className="chip">{g.archived_at ? 'Đã lưu trữ' : KIND_LABEL[g.kind]}</span>} />
           ))}
         </Section>
-        <Section title="Lịch nhóm" n={events.data?.length ?? 0}>
-          {(events.data ?? []).map((e) => (
+        <Section id="lich" title="Lịch nhóm" n={events.data?.length ?? 0}>
+          {pick('lich', events.data ?? []).map((e) => (
             <Row key={e.id} href={`/lich?xem=ngay&ngay=${vnDay(e.starts_at)}`} title={e.title}
               sub={`${fmtDateTime(e.starts_at)} · ${gName.get(e.group_id) ?? 'Nhóm'}${e.location ? ` · ${e.location}` : ''}`} />
           ))}
         </Section>
-        <Section title="Người" n={people.data?.length ?? 0}>
-          {(people.data ?? []).map((p) => (
+        <Section id="nguoi" title="Người" n={people.data?.length ?? 0}>
+          {pick('nguoi', people.data ?? []).map((p) => (
             <Row key={p.id} href={`/nguoi/${p.id}`} title={p.full_name || p.email} sub={[p.position, p.email].filter(Boolean).join(' · ')} />
           ))}
         </Section>
@@ -119,10 +141,11 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   );
 }
 
-function SearchBox({ q }: { q: string }) {
+function SearchBox({ q, loai }: { q: string; loai?: string }) {
   return (
     <form action="/tim" method="get" role="search" className="flex max-w-2xl gap-2">
       <label htmlFor="tim-q" className="sr-only">Từ khóa</label>
+      {loai && <input type="hidden" name="loai" value={loai} />}
       <input id="tim-q" name="q" defaultValue={q} autoFocus={!q} placeholder="Tên cuộc họp, mã Jira, tài liệu, nhóm, việc, người…" className="input" />
       <button className="btn">Tìm</button>
     </form>
