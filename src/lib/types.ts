@@ -182,3 +182,12 @@ export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
   declined: 'Từ chối',
   cancelled: 'Đã hủy',
 };
+
+export type TaskLink = {
+  id: string;
+  task_id: string;
+  url: string;
+  label: string | null;
+  created_at: string;
+  created_by: string | null;
+};
