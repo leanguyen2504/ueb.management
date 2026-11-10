@@ -52,7 +52,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-slate-200 bg-slate-50/85 px-4 py-2.5 backdrop-blur md:px-7 dark:border-slate-800 dark:bg-slate-950/85">
           <Link href="/" className="flex h-9 w-8 items-center justify-center rounded-t-md rounded-b-2xl bg-[#8b1c24] text-[10px] font-semibold text-white ring-2 ring-inset ring-gold-500 md:hidden" aria-label="Hôm nay">UEB</Link>
-          <span className="flex-1" />
+          {/* Ô tìm kiếm chung: tìm cuộc họp, mã Jira, tài liệu, nhóm, việc, lịch và người. */}
+          <form action="/tim" method="get" role="search" className="flex min-w-0 flex-1 items-center">
+            <label htmlFor="top-q" className="flex w-full max-w-md items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-400 focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-100 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-brand-300 dark:focus-within:ring-brand-900">
+              <Icon name="search" className="h-4 w-4" />
+              <span className="sr-only">Tìm kiếm</span>
+              <input id="top-q" name="q" type="search" placeholder="Tìm cuộc họp, mã Jira, tài liệu, người…" className="w-full min-w-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100" />
+            </label>
+          </form>
           <TopMenu label="Tạo mới" buttonClass="btn" button={<><Icon name="plus" className="h-4 w-4" /><span className="hidden sm:inline">Tạo mới</span></>}>
             <Link role="menuitem" href="/viec#tao-viec" className="menu-item">Việc mới</Link>
             <Link role="menuitem" href="/lich?them=1" className="menu-item">Lịch nhóm</Link>
