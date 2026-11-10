@@ -27,7 +27,7 @@ export function LoginForm() {
       <input type="hidden" name="email" value={reqState.email} />
       <p role="status" className="text-sm text-slate-600 dark:text-slate-300">{reqState.info}</p>
       <div>
-        <label htmlFor="code" className="label">Mã đăng nhập</label>
+        <label htmlFor="code" className="label">Mã đăng nhập (nếu thư có mã)</label>
         <input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" required maxLength={10} className="input tracking-widest" autoFocus />
       </div>
       {verState.error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{verState.error}</p>}

@@ -5,6 +5,24 @@ const PUBLIC_PATHS = ['/dang-nhap', '/auth'];
 
 // Làm mới phiên đăng nhập và chuyển người chưa đăng nhập về trang đăng nhập.
 export async function updateSession(request: NextRequest) {
+  // Supabase trả người dùng về Site URL kèm ?code=... (hoặc ?error=...) khi
+  // địa chỉ chuyển hướng chưa nằm trong danh sách cho phép: chuyển sang /auth/confirm.
+  const path0 = request.nextUrl.pathname;
+  if (!path0.startsWith('/auth/')) {
+    const sp = request.nextUrl.searchParams;
+    if (sp.get('code')) {
+      const to = request.nextUrl.clone();
+      to.pathname = '/auth/confirm';
+      to.search = `?code=${encodeURIComponent(sp.get('code')!)}`;
+      return NextResponse.redirect(to);
+    }
+    if (sp.get('error_code') || (sp.get('error') && path0 !== '/dang-nhap')) {
+      const to = request.nextUrl.clone();
+      to.pathname = '/dang-nhap';
+      to.search = '?loi=lien_ket';
+      return NextResponse.redirect(to);
+    }
+  }
   let response = NextResponse.next({ request });
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

@@ -7,6 +7,7 @@ export const metadata: Metadata = { title: 'Đăng nhập' };
 const NOTICE: Record<string, string> = {
   khoa: 'Tài khoản chưa được kích hoạt hoặc đã bị khóa. Hãy liên hệ quản trị hệ thống.',
   lien_ket: 'Liên kết đăng nhập không hợp lệ hoặc đã hết hạn. Hãy yêu cầu mã mới.',
+  trinh_duyet: 'Liên kết đăng nhập phải được mở trên chính trình duyệt đã bấm "Gửi mã đăng nhập", và chỉ dùng được một lần. Hãy gửi lại và mở thư trên trình duyệt này.',
 };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ loi?: string }> }) {
