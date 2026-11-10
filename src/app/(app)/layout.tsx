@@ -19,7 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: '/moi', label: 'Mời đồng nghiệp', short: 'Mời', icon: 'invite' },
   ];
   if (ctx.is_admin || ctx.role === 'principal' || ctx.can_create_group) items.push({ href: '/quan-tri', label: 'Quản trị danh mục', short: 'Quản trị', icon: 'admin' });
-  items.push({ href: '/tai-khoan', label: 'Tài khoản', icon: 'account' });
+  items.push({ href: '/tai-khoan', label: 'Hồ sơ cá nhân', short: 'Hồ sơ', icon: 'account' });
   const roleText = ctx.is_admin ? `Quản trị hệ thống · ${ROLE_LABEL[profile.system_role]}` : ROLE_LABEL[profile.system_role];
 
   return (
@@ -36,7 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-2.5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
           <Link href="/" className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-800 text-[10px] font-bold text-white md:hidden" aria-label="Trang tổng quan">UEB</Link>
-          <div className="min-w-0 flex-1 truncate text-sm"><span className="font-medium">{profile.full_name || profile.email}</span> <span className="muted">· {roleText}</span></div>
+          <div className="min-w-0 flex-1 truncate text-sm"><Link href="/tai-khoan" className="font-medium hover:underline">{profile.full_name || profile.email}</Link> <span className="muted">· {roleText}</span></div>
           <ThemeToggle />
         </header>
         <main id="noi-dung" className="mx-auto w-full max-w-6xl flex-1 p-4 pb-24 md:p-6">{children}</main>

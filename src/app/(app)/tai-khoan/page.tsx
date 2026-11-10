@@ -1,24 +1,34 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
+import { ProfileCard } from '@/components/ProfileCard';
 import { ProfileForm } from './ProfileForm';
 import { signOut } from '@/app/dang-nhap/actions';
-import { ROLE_LABEL } from '@/lib/types';
-import Link from 'next/link';
+import { loadProfileExtras } from '@/lib/profile-data';
 
-export const metadata: Metadata = { title: 'Tài khoản' };
+export const metadata: Metadata = { title: 'Hồ sơ cá nhân' };
 
 export default async function AccountPage() {
-  const { profile, ctx } = await requireSession();
+  const { supabase, userId, profile, ctx } = await requireSession();
+  const extras = await loadProfileExtras(supabase, userId);
   return (
     <>
-      <PageHead title="Tài khoản" sub={`${profile.email} · ${ctx.is_admin ? 'Quản trị hệ thống · ' : ''}${ROLE_LABEL[profile.system_role]}`} />
-      <ProfileForm profile={profile} />
-      <p className="mt-3 max-w-xl text-xs muted">Vai trò và quyền do quản trị hệ thống và Trưởng nhóm, Văn thư cấp; bạn không tự đổi được.</p>
-      {ctx.is_admin && (
-        <p className="mt-4 text-sm"><Link href="/quan-tri/lich-google" className="text-brand-700 underline dark:text-brand-300">Cấu hình lịch Google dùng chung</Link></p>
-      )}
-      <form action={signOut} className="mt-6"><button className="btn-danger">Đăng xuất</button></form>
+      <PageHead
+        title="Hồ sơ cá nhân"
+        sub="Đồng nghiệp đã đăng nhập xem được hồ sơ này. Vai trò và quyền do quản trị hệ thống, Trưởng nhóm và Văn thư cấp."
+        actions={<Link href={`/nguoi/${userId}`} className="btn-secondary">Xem như người khác thấy</Link>}
+      />
+      <div className="grid gap-4 lg:grid-cols-[1fr_420px]">
+        <ProfileCard profile={profile} isMe {...extras} />
+        <div className="space-y-4">
+          <ProfileForm profile={profile} />
+          {ctx.is_admin && (
+            <p className="text-sm"><Link href="/quan-tri/lich-google" className="text-brand-700 underline dark:text-brand-300">Cấu hình lịch Google dùng chung</Link></p>
+          )}
+          <form action={signOut}><button className="btn-danger">Đăng xuất</button></form>
+        </div>
+      </div>
     </>
   );
 }

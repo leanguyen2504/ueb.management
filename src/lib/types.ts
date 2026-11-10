@@ -7,6 +7,9 @@ export type Profile = {
   full_name: string;
   unit: string | null;
   position: string | null;
+  phone: string | null;
+  office: string | null;
+  bio: string | null;
   system_role: SystemRole;
   is_active: boolean;
   updated_at: string;
