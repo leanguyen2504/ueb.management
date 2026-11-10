@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+# Không bao giờ đưa bí mật lên GitHub
+.env
+.env.*
+!.env.example
+supabase/.temp/
+.DS_Store
