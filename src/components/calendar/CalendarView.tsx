@@ -348,7 +348,7 @@ function TimeGrid({ days, today, items, color, href, open }: { days: string[]; t
   return (
     <div className="overflow-x-auto">
       <div className={minW}>
-        <div className="grid border-b border-slate-200 dark:border-slate-800" style={cols}>
+        <div className="grid overflow-y-hidden border-b border-slate-200 [scrollbar-gutter:stable] dark:border-slate-800" style={cols}>
           <div className="self-end pb-1 pr-2 text-right text-[10px] muted">GMT+07</div>
           {days.map((d) => <div key={d} className="border-l border-slate-200 dark:border-slate-800"><DayHeader day={d} today={today} href={href} big={days.length === 1} /></div>)}
           <div />
@@ -358,7 +358,7 @@ function TimeGrid({ days, today, items, color, href, open }: { days: string[]; t
             </div>
           ))}
         </div>
-        <div ref={scroller} className="h-[calc(100dvh-230px)] min-h-[420px] overflow-y-auto">
+        <div ref={scroller} className="h-[calc(100dvh-230px)] min-h-[420px] overflow-y-auto [scrollbar-gutter:stable]">
           <div className="relative grid" style={{ ...cols, height: 24 * HOUR_PX }}>
             <div className="relative">
               {Array.from({ length: 23 }, (_, h) => (
