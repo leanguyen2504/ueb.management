@@ -42,9 +42,12 @@ insert into auth.users (id, email) values (:admin, 'NTKLing@vnu.edu.vn');
 select t.ok((select current_admin_id from public.system_settings) = :admin, 'người được mời make_admin trở thành quản trị');
 select t.ok((select email from public.profiles where id = :admin) = 'ntkling@vnu.edu.vn', 'email được chuẩn hóa chữ thường');
 
--- 2. Đăng ký không được mời hoặc sai tên miền bị chặn.
-select t.denied($$insert into auth.users (email) values ('nguoila@vnu.edu.vn')$$, 'email chưa được mời');
+-- 2. Email ngoài tên miền bị chặn; email trong tên miền không cần lời mời,
+--    thành viên thường và không thuộc nhóm nào.
 select t.denied($$insert into auth.users (email) values ('ai@gmail.com')$$, 'email ngoài tên miền');
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000e1', 'NguoiLa@vnu.edu.vn');
+select t.ok((select system_role from public.profiles where email = 'nguoila@vnu.edu.vn') = 'member', 'tự đăng ký là thành viên thường');
+select t.ok((select current_admin_id from public.system_settings) = :admin, 'tự đăng ký không đổi quản trị');
 
 -- 3. Quản trị mời người dùng (chạy như người dùng đã đăng nhập, RLS áp dụng).
 set role authenticated;
@@ -126,6 +129,11 @@ select public.admin_set_user(:tv1, 'member', false);
 select t.denied(format($$select public.admin_set_user(%L, 'member', false)$$, :admin), 'quản trị tự khóa mình');
 select set_config('request.jwt.claim.sub', :tv1, false);
 select t.ok(t.count('select * from public.groups') = 0, 'tài khoản bị khóa không thấy nhóm');
+-- Người tự đăng ký chưa thuộc nhóm nào thì không thấy nhóm, nhật ký.
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000e1', false);
+select t.ok(t.count('select * from public.groups') = 0, 'người tự đăng ký không thấy nhóm');
+select t.ok(t.count('select * from public.activity_log') = 0, 'người tự đăng ký không thấy nhật ký');
+select set_config('request.jwt.claim.sub', :tv1, false);
 select t.denied($$update public.profiles set full_name = 'x' where id = auth.uid()$$, 'tài khoản bị khóa sửa hồ sơ');
 
 -- 12. Nhật ký không sửa, không xóa được, kể cả quản trị.
