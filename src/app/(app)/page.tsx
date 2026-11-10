@@ -9,7 +9,8 @@ import { loadMeetings, meetingProgress } from '@/lib/meetings';
 import { meetingAnchor } from '@/lib/meeting-anchor';
 import { KIND_LABEL, type AppNotification, type Booking, type CalEvent, type Group, type Task } from '@/lib/types';
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ lich?: string }> }) {
+  const { lich } = await searchParams;
   const { supabase, userId, profile } = await requireSession();
   const today = vnDay();
   const nowIso = new Date().toISOString();
@@ -32,6 +33,42 @@ export default async function DashboardPage() {
   const overdue = openTasks.filter((t) => t.due_date && t.due_date < today).length;
   const { name } = await loadPeople(supabase, [userId]);
 
+  // Họp hôm nay: buổi họp lịch Google (kèm tiến độ hồ sơ) và lịch nhóm của tôi. Một buổi họp
+  // có cả trong lịch nhóm và lịch Google (cùng giờ, cùng tên) chỉ hiện một dòng theo lịch Google.
+  const tomorrowIso = dayStartIso(addDays(today, 1));
+  const norm = (t: string) => t.trim().toLowerCase().replace(/\s+/g, ' ');
+  const googleSeen = new Set(meetings.map((m) => `${new Date(m.starts_at).getTime()}|${norm(m.title)}`));
+  const sourceLabels = new Map<string, string>();
+  for (const m of meetings) if (m.source_label) sourceLabels.set(m.source_id, m.source_label);
+  const filters = [
+    { key: '', label: 'Tất cả' },
+    ...[...sourceLabels].map(([id, label]) => ({ key: `g:${id}`, label })),
+    { key: 'nhom', label: 'Lịch nhóm của tôi' },
+  ];
+  const filter = filters.some((f) => f.key === lich) ? lich! : '';
+  type TodayItem = { key: string; start: string; time: string; title: string; location: string | null; source: string; href: string; chip?: string; warn?: boolean };
+  const todayItems: TodayItem[] = [
+    ...meetings
+      .filter((m) => !filter || filter === `g:${m.source_id}`)
+      .map((m) => {
+        const p = meetingProgress(m);
+        const docs = p.preTotal + m.attachments.length;
+        return {
+          key: `g|${m.source_id}|${m.event_key}`, start: m.starts_at, time: m.all_day ? 'Cả ngày' : fmtTime(m.starts_at), title: m.title,
+          location: m.location, source: m.source_label, href: `/hop#${meetingAnchor(m.source_id, m.event_key)}`,
+          chip: docs ? (p.preTotal ? `Tài liệu ${p.preDone}/${p.preTotal} bên` : `${m.attachments.length} tài liệu`) + (p.minutesDone ? ' · có biên bản' : '') : 'Chưa có tài liệu',
+          warn: p.preDone < p.preTotal,
+        };
+      }),
+    ...(!filter || filter === 'nhom' ? myEvents : [])
+      .filter((e) => e.starts_at < tomorrowIso && e.ends_at >= dayStartIso(today))
+      .filter((e) => !googleSeen.has(`${new Date(e.starts_at).getTime()}|${norm(e.title)}`))
+      .map((e) => ({
+        key: `e|${e.id}`, start: e.starts_at, time: fmtTime(e.starts_at), title: e.title, location: e.location,
+        source: groupName.get(e.group_id) ?? 'Lịch nhóm', href: `/lich?xem=ngay&ngay=${today}`,
+      })),
+  ].sort((a, b) => a.start.localeCompare(b.start));
+
   const stats = [
     { label: 'Việc đang mở', value: openTasks.length, foot: overdue ? `${overdue} việc quá hạn` : 'không có việc quá hạn', href: '/viec', alert: overdue > 0 },
     { label: 'Lịch 7 ngày tới', value: myEvents.length, foot: 'của các nhóm tôi tham gia', href: '/lich' },
@@ -52,36 +89,41 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      {meetings.length > 0 && (
-        <section className="card mt-4">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="font-semibold">Họp hôm nay</h2>
-            <Link href="/hop" className="text-sm text-brand-600 hover:underline dark:text-brand-100">Hồ sơ cuộc họp</Link>
+      <section className="card mt-4">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">Họp hôm nay</h2>
+          <div className="flex gap-3 text-sm">
+            <Link href="/lich?xem=ngay" className="text-brand-600 hover:underline dark:text-brand-100">Mở lịch</Link>
+            {meetings.length > 0 && <Link href="/hop" className="text-brand-600 hover:underline dark:text-brand-100">Hồ sơ cuộc họp</Link>}
           </div>
+        </div>
+        {filters.length > 2 && (
+          <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="Lọc theo lịch">
+            {filters.map((f) => (
+              <Link key={f.key} href={f.key ? `/?lich=${encodeURIComponent(f.key)}` : '/'} aria-current={filter === f.key ? 'true' : undefined}
+                className={`rounded-full px-2.5 py-1 text-xs ${filter === f.key ? 'bg-brand-600 font-medium text-white' : 'border border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}>
+                {f.label}
+              </Link>
+            ))}
+          </div>
+        )}
+        {todayItems.length ? (
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-            {meetings.map((m) => {
-              const p = meetingProgress(m);
-              return (
-                <li key={`${m.source_id}|${m.event_key}`}>
-                  <Link href={`/hop#${meetingAnchor(m.source_id, m.event_key)}`} className="flex flex-wrap items-start gap-x-3 gap-y-1 py-2 hover:text-brand-600">
-                    <span className="w-12 shrink-0 text-sm font-semibold">{m.all_day ? 'Cả ngày' : fmtTime(m.starts_at)}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-medium">{m.title}</span>
-                      {m.location && <span className="block text-xs muted">{m.location}</span>}
-                    </span>
-                    <span className="flex flex-wrap gap-1.5 text-xs">
-                      {p.preTotal + m.attachments.length > 0
-                        ? <span className={`chip ${p.preDone < p.preTotal ? 'border-amber-300 text-amber-800 dark:border-amber-700 dark:text-amber-300' : ''}`}>{p.preTotal ? `Tài liệu ${p.preDone}/${p.preTotal} bên` : `${m.attachments.length} tài liệu`}</span>
-                        : <span className="chip">Chưa có tài liệu</span>}
-                      {p.minutesDone && <span className="chip">Có biên bản</span>}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
+            {todayItems.map((it) => (
+              <li key={it.key}>
+                <Link href={it.href} className="flex flex-wrap items-start gap-x-3 gap-y-1 py-2 hover:text-brand-600">
+                  <span className="w-12 shrink-0 text-sm font-semibold">{it.time}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{it.title}</span>
+                    <span className="block text-xs muted">{[it.location, it.source].filter(Boolean).join(' · ')}</span>
+                  </span>
+                  {it.chip && <span className={`chip text-xs ${it.warn ? 'border-amber-300 text-amber-800 dark:border-amber-700 dark:text-amber-300' : ''}`}>{it.chip}</span>}
+                </Link>
+              </li>
+            ))}
           </ul>
-        </section>
-      )}
+        ) : <p className="text-sm muted">Hôm nay không có buổi họp nào{filter ? ' trong lịch đã chọn' : ''}.</p>}
+      </section>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[3fr_2fr]">
         <section className="card">
