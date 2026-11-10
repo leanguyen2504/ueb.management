@@ -35,6 +35,7 @@ const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/
 export function GroupTable({ rows }: { rows: GroupRow[] }) {
   const [hidden, setHidden] = useState<ColKey[]>([]);
   const [f, setF] = useState<Record<ColKey, string>>({ name: '', kind: '', openTasks: '', members: '', role: '', updatedAt: '' });
+  const [showFilters, setShowFilters] = useState(false);
   const [sort, setSort] = useState<{ key: ColKey; dir: 1 | -1 }>({ key: 'name', dir: 1 });
 
   useEffect(() => {
@@ -85,16 +86,20 @@ export function GroupTable({ rows }: { rows: GroupRow[] }) {
 
   return (
     <section className="card p-0">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 text-sm md:px-4 dark:border-slate-800">
+        <input value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Tìm theo tên…" className="input max-w-64 py-1.5" aria-label="Tìm nhóm theo tên" />
+        <span className="flex-1" />
         <span className="muted">
           {shown.length} / {rows.length} nhóm
           {active && (
-            <button type="button" className="ml-3 text-brand-600 hover:underline dark:text-brand-100"
+            <button type="button" className="ml-3 text-brand-600 hover:underline dark:text-brand-300"
               onClick={() => setF({ name: '', kind: '', openTasks: '', members: '', role: '', updatedAt: '' })}>
               Xóa bộ lọc
             </button>
           )}
         </span>
+        <button type="button" onClick={() => setShowFilters((v) => !v)} aria-expanded={showFilters || active}
+          className={`btn-secondary px-3 py-1 ${showFilters || active ? 'border-brand-600 text-brand-600 dark:border-brand-300 dark:text-brand-300' : ''}`}>Bộ lọc</button>
         <details className="relative">
           <summary className="btn-secondary cursor-pointer list-none px-3 py-1">Cột hiển thị</summary>
           <div className="absolute right-0 z-10 mt-1 w-52 space-y-1 rounded-lg border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
@@ -113,7 +118,7 @@ export function GroupTable({ rows }: { rows: GroupRow[] }) {
             <tr>
               {cols.map((c) => (
                 <th key={c.key} className="whitespace-nowrap">
-                  <button type="button" className="uppercase hover:text-slate-900 dark:hover:text-white"
+                  <button type="button" className="hover:text-slate-900 dark:hover:text-white"
                     onClick={() => setSort((s) => ({ key: c.key, dir: s.key === c.key ? (s.dir === 1 ? -1 : 1) : 1 }))}
                     aria-label={`Sắp xếp theo ${c.label}`}>
                     {c.label} {sort.key === c.key ? (sort.dir === 1 ? '▲' : '▼') : ''}
@@ -121,7 +126,7 @@ export function GroupTable({ rows }: { rows: GroupRow[] }) {
                 </th>
               ))}
             </tr>
-            <tr>
+            {(showFilters || active) && <tr>
               {cols.map((c) => (
                 <th key={c.key} className="py-1 font-normal normal-case tracking-normal">
                   {c.filter === 'text' && (
@@ -141,7 +146,7 @@ export function GroupTable({ rows }: { rows: GroupRow[] }) {
                   )}
                 </th>
               ))}
-            </tr>
+            </tr>}
           </thead>
           <tbody>
             {shown.map((r) => (
@@ -151,7 +156,7 @@ export function GroupTable({ rows }: { rows: GroupRow[] }) {
                     case 'name':
                       return (
                         <td key={c.key}>
-                          <Link href={`/nhom/${r.id}`} className="font-medium text-brand-600 hover:underline dark:text-brand-100">{r.name}</Link>
+                          <Link href={`/nhom/${r.id}`} className="font-medium text-brand-600 hover:underline dark:text-brand-300">{r.name}</Link>
                           {r.parent && <div className="text-xs muted">{r.parent}</div>}
                         </td>
                       );

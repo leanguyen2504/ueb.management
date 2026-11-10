@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { SectionTabs } from '@/components/PageHead';
 import { cookies } from 'next/headers';
 import { requireSession } from '@/lib/session';
 import { EventForm } from '@/components/WorkForms';
@@ -100,7 +101,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const creatable = (groups ?? []).filter((g) => ctx.is_admin || ctx.role === 'principal' || ctx.all_groups_secretary || (mine ?? []).some((m) => m.group_id === g.id && m.can_create));
   const extraQuery = all ? '&tat_ca=1' : '';
 
+  const { count: pendingCount } = await supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('host_id', userId).eq('status', 'pending');
+
   return (
+    <>
+    <SectionTabs current="lich" tabs={[{ key: 'lich', href: '/lich', label: 'Lịch của tôi' }, { key: 'dat', href: '/dat-lich', label: 'Trang đặt lịch', count: pendingCount ?? 0 }]} />
     <CalendarView
       view={view}
       anchor={anchor}
@@ -120,5 +125,6 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         </div>
       }
     />
+    </>
   );
 }

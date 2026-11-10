@@ -23,7 +23,7 @@ export function rankMember(m: StripMember): number {
   return 4;
 }
 
-const COLORS = ['bg-brand-600', 'bg-emerald-600', 'bg-amber-600', 'bg-sky-600', 'bg-rose-600', 'bg-violet-600'];
+const COLORS = ['bg-brand-600', 'bg-teal-600', 'bg-gold-500', 'bg-sky-700', 'bg-orange-700', 'bg-violet-700'];
 
 function badge(m: StripMember) {
   if (m.is_manager) return { text: 'Trưởng nhóm', cls: 'bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-100' };
@@ -69,5 +69,28 @@ export function MemberStrip({ members, max = 8, allHref }: { members: StripMembe
         })}
       </ul>
     </section>
+  );
+}
+
+// Dải ảnh gọn ở đầu trang nhóm: ảnh chồng nhau theo thứ tự ưu tiên, bấm để mở thẻ Thành viên.
+export function MemberAvatars({ members, max = 6, href }: { members: StripMember[]; max?: number; href: string }) {
+  const active = members.filter((m) => m.profile?.is_active !== false).sort((a, b) => rankMember(a) - rankMember(b));
+  if (!active.length) return null;
+  const shown = active.slice(0, max);
+  return (
+    <Link href={href} className="group flex items-center gap-3" aria-label={`Xem ${active.length} thành viên`}>
+      <span className="flex">
+        {shown.map((m, i) => {
+          const name = m.profile?.full_name || m.profile?.email || 'Người dùng';
+          return (
+            <span key={m.user_id} title={name} className={`rounded-full ring-2 ring-white dark:ring-slate-950 ${i ? '-ml-2.5' : ''}`}>
+              <Avatar name={name} url={m.avatarUrl} size={36} className={COLORS[i % COLORS.length]} />
+            </span>
+          );
+        })}
+        {active.length > max && <span className="-ml-2.5 flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold ring-2 ring-white dark:bg-slate-800 dark:ring-slate-950">+{active.length - max}</span>}
+      </span>
+      <span className="text-sm muted group-hover:text-brand-600 dark:group-hover:text-brand-300">{active.length} thành viên</span>
+    </Link>
   );
 }

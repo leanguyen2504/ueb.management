@@ -99,6 +99,8 @@ export function CalendarView(props: Props) {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<{ it: CalItem; x: number; y: number } | null>(null);
   const [creating, setCreating] = useState(false);
+  // Mở sẵn hộp thoại thêm lịch khi đến từ nút Tạo mới (/lich?them=1).
+  useEffect(() => { if (createForm && new URLSearchParams(window.location.search).get('them') === '1') setCreating(true); }, []); // chỉ khi mở trang
 
   useEffect(() => {
     try {

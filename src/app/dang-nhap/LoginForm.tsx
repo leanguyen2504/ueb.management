@@ -16,7 +16,7 @@ export function LoginForm() {
           <label htmlFor="email" className="label">Email trường</label>
           <input id="email" name="email" type="email" required autoComplete="email" defaultValue={reqState.email} placeholder="ten@vnu.edu.vn" className="input" />
         </div>
-        {reqState.error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{reqState.error}</p>}
+        {reqState.error && <p role="alert" className="text-sm text-orange-600 dark:text-orange-400">{reqState.error}</p>}
         <SubmitButton className="btn w-full" pendingText="Đang gửi mã…">Gửi mã đăng nhập</SubmitButton>
       </form>
     );
@@ -30,7 +30,7 @@ export function LoginForm() {
         <label htmlFor="code" className="label">Mã đăng nhập (nếu thư có mã)</label>
         <input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" required maxLength={10} className="input tracking-widest" autoFocus />
       </div>
-      {verState.error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{verState.error}</p>}
+      {verState.error && <p role="alert" className="text-sm text-orange-600 dark:text-orange-400">{verState.error}</p>}
       <SubmitButton className="btn w-full" pendingText="Đang kiểm tra…">Đăng nhập</SubmitButton>
       <p className="text-xs muted">Email cũng có liên kết đăng nhập; bấm liên kết đó trên thiết bị này cũng được.</p>
     </form>

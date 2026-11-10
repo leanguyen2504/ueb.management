@@ -72,7 +72,7 @@ export default async function GoogleCalendarAdminPage() {
             </div>
             <p className="text-sm">
               {s.last_error
-                ? <span className="text-red-700 dark:text-red-400">Lỗi lần tải gần nhất: {s.last_error}</span>
+                ? <span className="text-orange-700 dark:text-orange-400">Lỗi lần tải gần nhất: {s.last_error}</span>
                 : s.last_synced_at
                   ? <>Đã tải {s.event_count} buổi họp lúc {fmtDateTime(s.last_synced_at)}.</>
                   : <span className="muted">Chưa tải lần nào.</span>}

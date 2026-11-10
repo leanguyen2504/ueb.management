@@ -7,7 +7,7 @@ import { GroupTable } from './GroupTable';
 import { KIND_LABEL, type Group } from '@/lib/types';
 import { fmtDateTime } from '@/lib/format';
 
-export const metadata: Metadata = { title: 'Khám phá dự án' };
+export const metadata: Metadata = { title: 'Dự án' };
 
 export default async function GroupsPage({ searchParams }: { searchParams: Promise<{ luu_tru?: string; loai?: string }> }) {
   const { luu_tru, loai = '' } = await searchParams;
@@ -31,18 +31,20 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
 
   return (
     <>
-      <PageHead title="Khám phá dự án" sub="Đơn vị, dự án và sự kiện bạn xem được. Mở từng mục để xem đầu việc, lịch và thành viên." />
-      <nav className="mb-3 flex flex-wrap gap-2" aria-label="Lọc theo loại">
+      <PageHead title="Dự án" sub="Đơn vị, dự án và sự kiện bạn xem được. Mở từng mục để xem đầu việc, lịch và thành viên." />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <nav className="seg" aria-label="Lọc theo loại">
         {[['', 'Tất cả'], ...Object.entries(KIND_LABEL)].map(([k, label]) => (
           <Link key={k} href={`/nhom?${new URLSearchParams({ ...(k ? { loai: k } : {}), ...(luu_tru ? { luu_tru } : {}) })}`}
-            aria-current={loai === k ? 'page' : undefined} className={loai === k ? 'btn px-3 py-1' : 'btn-secondary px-3 py-1'}>{label}</Link>
+            aria-current={loai === k ? 'page' : undefined}>{label}</Link>
         ))}
       </nav>
-      <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
-        <Link href={`/nhom?${new URLSearchParams({ ...(loai ? { loai } : {}), ...(luu_tru ? {} : { luu_tru: '1' }) })}`} className="btn-secondary px-3 py-1">
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <Link href={`/nhom?${new URLSearchParams({ ...(loai ? { loai } : {}), ...(luu_tru ? {} : { luu_tru: '1' }) })}`} className="link">
           {luu_tru ? 'Quay lại nhóm đang hoạt động' : 'Xem nhóm đã lưu trữ'}
         </Link>
         {luu_tru && <span className="muted">Đang xem nhóm đã lưu trữ.</span>}
+      </div>
       </div>
       <div className="space-y-4">
         {ctx.can_create_group && !luu_tru && <CreateGroupForm />}

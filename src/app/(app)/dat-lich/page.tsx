@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { requireSession } from '@/lib/session';
-import { PageHead } from '@/components/PageHead';
+import { PageHead, SectionTabs } from '@/components/PageHead';
 import { BookingSettingsForm, CopyLink } from '@/components/BookingForms';
 import { respondBooking, setBookingOpen } from '@/lib/work';
 import { loadPeople } from '@/lib/people';
@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: 'Trang đặt lịch' };
 const STATUS_CLASS: Record<Booking['status'], string> = {
   pending: 'border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300',
   accepted: 'border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300',
-  declined: 'border-red-300 text-red-700 dark:border-red-700 dark:text-red-300',
+  declined: 'border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300',
   cancelled: '',
 };
 const slotText = (iso: string, end: string) => `${weekdayShort(vnDay(iso))}, ${vnDay(iso).slice(8)}/${vnDay(iso).slice(5, 7)} · ${fmtTime(iso)} – ${fmtTime(end)}`;
@@ -54,12 +54,12 @@ export default async function BookingOwnerPage({ searchParams }: { searchParams:
 
   return (
     <>
+      <SectionTabs current="dat" tabs={[{ key: 'lich', href: '/lich', label: 'Lịch của tôi' }, { key: 'dat', href: '/dat-lich', label: 'Trang đặt lịch', count: pending.length }]} />
       <PageHead
         title="Trang đặt lịch"
         sub="Gửi link để người khác chọn giờ trống và đặt lịch họp với bạn. Cuộc họp chỉ vào Lịch của tôi khi bạn xác nhận."
-        actions={<Link href="/lich" className="btn-secondary">Lịch của tôi</Link>}
       />
-      {loi && <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{loi}</p>}
+      {loi && <p role="alert" className="mb-4 rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-700 dark:bg-orange-950 dark:text-orange-300">{loi}</p>}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_420px]">
         <div className="space-y-4">
@@ -148,7 +148,7 @@ export default async function BookingOwnerPage({ searchParams }: { searchParams:
                     </div>
                     <form action={respondBooking}>
                       <input type="hidden" name="id" value={b.id} />
-                      <button name="status" value="cancelled" className="px-2 py-1 text-xs text-red-600 hover:underline dark:text-red-400">Hủy lịch</button>
+                      <button name="status" value="cancelled" className="px-2 py-1 text-xs text-orange-600 hover:underline dark:text-orange-400">Hủy lịch</button>
                     </form>
                   </li>
                 ))}
@@ -175,7 +175,7 @@ export default async function BookingOwnerPage({ searchParams }: { searchParams:
                       {(b.status === 'pending' || b.status === 'accepted') && b.ends_at > nowIso && (
                         <form action={respondBooking}>
                           <input type="hidden" name="id" value={b.id} />
-                          <button name="status" value="cancelled" className="px-2 py-1 text-xs text-red-600 hover:underline dark:text-red-400">Hủy</button>
+                          <button name="status" value="cancelled" className="px-2 py-1 text-xs text-orange-600 hover:underline dark:text-orange-400">Hủy</button>
                         </form>
                       )}
                     </li>

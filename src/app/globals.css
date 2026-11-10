@@ -3,29 +3,64 @@
 /* Chế độ tối theo lớp .dark trên <html>, do nút chuyển giao diện đặt. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Nhận diện UEB: đỏ đậm và trắng là màu chính, vàng của nền khiên làm điểm nhấn.
+   Thang slate được thay bằng xám ấm (ngả nhẹ về đỏ) để mọi trang cùng một tông. */
 @theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --color-brand-50: #eef5ff;
-  --color-brand-100: #d9e8ff;
-  --color-brand-600: #1d4f91;
-  --color-brand-700: #163f75;
-  --color-brand-800: #102a43;
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-display: var(--font-heading), var(--font-body), ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-50: #fbefef;
+  --color-brand-100: #f6dadb;
+  --color-brand-300: #ec9aa0;
+  --color-brand-600: #8b1c24;
+  --color-brand-700: #73161d;
+  --color-brand-800: #5c1218;
+  --color-brand-900: #3d0c10;
+
+  --color-gold-50: #fbf4e3;
+  --color-gold-100: #f6e8c4;
+  --color-gold-500: #b8902e;
+  --color-gold-600: #9a7622;
+
+  --color-slate-50: #f8f5f4;
+  --color-slate-100: #f2ecea;
+  --color-slate-200: #e7ddda;
+  --color-slate-300: #d5c7c4;
+  --color-slate-400: #a8968f;
+  --color-slate-500: #7a6763;
+  --color-slate-600: #5e4e4b;
+  --color-slate-700: #483b39;
+  --color-slate-800: #2c2223;
+  --color-slate-900: #201819;
+  --color-slate-950: #161011;
 }
 
 html { color-scheme: light; }
 html.dark { color-scheme: dark; }
-body { @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100; }
+body { @apply bg-slate-50 font-sans text-[15px] leading-relaxed text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100; }
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.01em; text-wrap: balance; }
+:focus-visible { outline-color: var(--color-gold-500); }
 
 @layer components {
-  .card { @apply rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900; }
-  .btn { @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600; }
-  .btn-secondary { @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800; }
-  .btn-danger { @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50; }
-  .input { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-brand-800; }
+  .card { @apply rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(42,27,28,.04),0_4px_16px_rgba(42,27,28,.04)] md:p-5 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none; }
+  .btn { @apply inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 dark:bg-brand-300 dark:text-brand-900 dark:hover:bg-brand-100; }
+  .btn-secondary { @apply inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:border-brand-600 hover:text-brand-600 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-brand-300 dark:hover:text-brand-300; }
+  .btn-danger { @apply inline-flex items-center justify-center gap-1.5 rounded-xl bg-orange-700 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-800 disabled:opacity-50; }
+  .input { @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-brand-300 dark:focus:ring-brand-900; }
   .label { @apply mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300; }
   .muted { @apply text-slate-500 dark:text-slate-400; }
-  .chip { @apply inline-flex items-center rounded-full border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700 dark:border-slate-700 dark:text-slate-300; }
+  .chip { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-transparent bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300; }
   .table { @apply w-full text-left text-sm; }
-  .table th { @apply border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400; }
-  .table td { @apply border-b border-slate-100 px-3 py-2 align-top dark:border-slate-800; }
+  .table th { @apply border-b border-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400; }
+  .table td { @apply border-b border-slate-100 px-3 py-2.5 align-top dark:border-slate-800; }
+  .link { @apply font-medium text-brand-600 hover:underline dark:text-brand-300; }
+  /* Nút chuyển dạng viên thuốc (Ngày/Tuần, Tất cả/Của tôi...). */
+  .seg { @apply inline-flex flex-wrap gap-0.5 rounded-xl bg-slate-100 p-1 dark:bg-slate-800; }
+  .seg > * { @apply rounded-lg px-3 py-1 text-sm font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white; }
+  .seg > [aria-current] { @apply bg-white font-semibold text-slate-900 shadow-sm dark:bg-slate-950 dark:text-white; }
+  .menu { @apply absolute right-0 z-30 mt-2 min-w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-900; }
+  .menu-item { @apply flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800; }
 }
+
+/* Thẻ <details> dùng làm nút mở menu: bỏ tam giác mặc định. */
+summary.list-none::-webkit-details-marker { display: none; }

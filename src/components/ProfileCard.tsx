@@ -30,7 +30,7 @@ export function ProfileCard({ profile, isAdmin, groups, bookingSlug, isMe, avata
           <div className="mt-1 flex flex-wrap gap-1.5">
             <span className="chip">{ROLE_LABEL[profile.system_role]}</span>
             {isAdmin && <span className="chip">Quản trị hệ thống</span>}
-            {!profile.is_active && <span className="chip border-red-300 text-red-700">Đã khóa</span>}
+            {!profile.is_active && <span className="chip border-orange-300 text-orange-700">Đã khóa</span>}
           </div>
         </div>
         {bookingSlug && !isMe && <a href={`/hen/${bookingSlug}`} className="btn">Đặt lịch hẹn</a>}

@@ -109,7 +109,7 @@ export async function updateMember(form: FormData) {
   const supabase = await createClient();
   const { error } = await supabase.from('group_members').update(row).eq('group_id', groupId).eq('user_id', userId);
   revalidatePath(`/nhom/${groupId}`);
-  if (error) redirect(`/nhom/${groupId}?loi=${encodeURIComponent(errText(error))}`);
+  if (error) redirect(`/nhom/${groupId}?tab=thanh-vien&loi=${encodeURIComponent(errText(error))}`);
 }
 
 export async function removeMember(form: FormData) {
@@ -118,7 +118,7 @@ export async function removeMember(form: FormData) {
   const supabase = await createClient();
   const { error } = await supabase.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId);
   revalidatePath(`/nhom/${groupId}`);
-  if (error) redirect(`/nhom/${groupId}?loi=${encodeURIComponent(errText(error))}`);
+  if (error) redirect(`/nhom/${groupId}?tab=thanh-vien&loi=${encodeURIComponent(errText(error))}`);
 }
 
 export async function cancelInvitation(form: FormData) {

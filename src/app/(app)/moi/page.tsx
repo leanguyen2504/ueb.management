@@ -32,7 +32,7 @@ export default async function InvitePage() {
               {invites.map((i) => (
                 <li key={i.id} className="flex items-start justify-between gap-2 py-2">
                   <span>{i.email}<br /><span className="text-xs muted">{i.group_id ? `Nhóm: ${byId.get(i.group_id) ?? '—'} · ` : ''}hết hạn {fmtDateTime(i.expires_at)}</span></span>
-                  <form action={cancelInvite}><input type="hidden" name="id" value={i.id} /><button className="text-xs text-red-600 hover:underline dark:text-red-400">Hủy</button></form>
+                  <form action={cancelInvite}><input type="hidden" name="id" value={i.id} /><button className="text-xs text-orange-600 hover:underline dark:text-orange-400">Hủy</button></form>
                 </li>
               ))}
             </ul>
