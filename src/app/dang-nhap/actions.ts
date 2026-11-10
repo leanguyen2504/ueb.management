@@ -48,8 +48,15 @@ export async function requestCode(_prev: LoginState, form: FormData): Promise<Lo
     options: { shouldCreateUser: true, emailRedirectTo: `${await currentOrigin()}/auth/confirm` },
   });
   if (error) {
-    const wait = /rate limit|security purposes/i.test(error.message);
-    return { step: 'email', email, error: wait ? 'Bạn vừa yêu cầu mã. Hãy đợi khoảng một phút rồi thử lại.' : 'Không gửi được mã đăng nhập. Hãy thử lại sau.' };
+    // "For security purposes...": cùng một email gửi lại quá nhanh (khoảng 1 phút).
+    // "email rate limit exceeded": hết hạn mức gửi thư của cả hệ thống (máy gửi mặc định: vài thư mỗi giờ).
+    const message =
+      /security purposes/i.test(error.message)
+        ? 'Bạn vừa yêu cầu mã. Hãy đợi khoảng một phút rồi thử lại.'
+        : /email rate limit/i.test(error.message)
+          ? 'Hệ thống đã gửi hết số thư cho phép trong giờ này. Hãy thử lại sau khoảng một giờ, hoặc báo quản trị hệ thống cấu hình hộp thư gửi riêng (SMTP).'
+          : 'Không gửi được thư đăng nhập. Hãy thử lại sau.';
+    return { step: 'email', email, error: message };
   }
   return { step: 'code', email, info: `Đã gửi thư đăng nhập tới ${email} (kiểm tra cả thư mục Spam). Bấm liên kết trong thư trên chính trình duyệt này, hoặc nhập mã nếu thư có mã.` };
 }
