@@ -52,26 +52,54 @@ export function groupWorklogs(rows: Worklog[], by: 'tuan' | 'thang', count: numb
 export const hours = (seconds: number) => Math.round((seconds / 3600) * 100) / 100;
 export const fmtHours = (h: number) => h.toLocaleString('vi-VN', { maximumFractionDigits: 2 });
 
-// Trường "giờ quy đổi": theo biến JIRA_CONVERTED_HOURS_FIELD nếu có, không thì tìm tên trường có chữ "quy đổi".
+// Việc "của tôi": được giao cho tôi, hoặc tôi có log work. Trên Jira của trường, việc thường được giao
+// (assignee) cho người duyệt, còn người làm là người log work, nên chỉ xét assignee sẽ bỏ sót.
+export const isMine = (i: JiraIssueRow) => i.is_assignee || i.has_my_worklog;
+
+// Trường "giờ quy đổi": theo biến JIRA_CONVERTED_HOURS_FIELD nếu có; không thì trường có chữ "quy đổi";
+// không có thì trường "Sản phẩm" (giá trị dạng "5-Biên bản loại 1-1h", giờ quy đổi là số trước chữ h ở cuối).
 export function pickConvertedField(names: string[], configured?: string | null) {
   if (configured) {
     const hit = names.find((n) => n.toLowerCase() === configured.toLowerCase());
     return hit ?? configured;
   }
-  const norm = (s: string) => s.normalize('NFC').toLowerCase();
-  return names.find((n) => /quy\s*đổi|quy\s*doi/.test(norm(n))) ?? null;
+  const norm = (s: string) => s.normalize('NFC').trim().toLowerCase();
+  return names.find((n) => /quy\s*đổi|quy\s*doi/.test(norm(n))) ?? names.find((n) => norm(n) === 'sản phẩm') ?? null;
 }
 
+// Số giờ từ giá trị trường: số, chuỗi số, hoặc chuỗi kết thúc bằng "<số>h" ("5-Biên bản loại 1-1h" → 1).
 export function numberOf(v: unknown): number | null {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null;
   if (typeof v === 'string') {
-    const n = Number(v.trim().replace(/\s/g, '').replace(',', '.'));
-    return Number.isFinite(n) && v.trim() !== '' ? n : null;
+    const t = v.trim();
+    const n = Number(t.replace(/\s/g, '').replace(',', '.'));
+    if (Number.isFinite(n) && t !== '') return n;
+    const m = t.match(/(\d+(?:[.,]\d+)?)\s*(?:h|giờ)\s*$/i);
+    return m ? Number(m[1].replace(',', '.')) : null;
   }
   return null;
 }
 
-// Sản phẩm đã nộp: mã việc mình được giao và đã sang nhóm trạng thái "Xong", theo tháng hoàn thành.
+// Loại sản phẩm để gom nhóm: bỏ số thứ tự đầu và số giờ cuối ("5-Biên bản loại 1-1h" → "Biên bản loại 1").
+export function productLabel(v: unknown): string | null {
+  if (typeof v !== 'string' || !v.trim()) return null;
+  return v.trim().replace(/^\d+\s*-\s*/, '').replace(/\s*-\s*\d+(?:[.,]\d+)?\s*(?:h|giờ)\s*$/i, '') || v.trim();
+}
+
+// Sản phẩm đã nộp theo loại (trong các tháng đang xem).
+export function byProductType(items: JiraIssueRow[], field: string | null) {
+  const map = new Map<string, { label: string; count: number; converted: number }>();
+  for (const i of items) {
+    const label = (field && productLabel(i.custom?.[field])) || i.issue_type || 'Khác';
+    const row = map.get(label) ?? { label, count: 0, converted: 0 };
+    row.count += 1;
+    row.converted += field ? numberOf(i.custom?.[field]) ?? 0 : 0;
+    map.set(label, row);
+  }
+  return [...map.values()].sort((a, b) => b.converted - a.converted || b.count - a.count);
+}
+
+// Sản phẩm đã nộp: việc của tôi (được giao hoặc có log work) đã sang nhóm trạng thái "Xong", theo tháng hoàn thành.
 export function submittedByMonth(issues: JiraIssueRow[], field: string | null, months: number, now = new Date()) {
   const out: { key: string; label: string; count: number; converted: number; items: JiraIssueRow[] }[] = [];
   let k = vnDay(now).slice(0, 7);
@@ -82,7 +110,7 @@ export function submittedByMonth(issues: JiraIssueRow[], field: string | null, m
   }
   const byKey = new Map(out.map((r) => [r.key, r]));
   for (const it of issues) {
-    if (!it.is_assignee || it.status_category !== 'done' || !it.resolved_at) continue;
+    if (!isMine(it) || it.status_category !== 'done' || !it.resolved_at) continue;
     const row = byKey.get(vnDay(it.resolved_at).slice(0, 7));
     if (!row) continue;
     row.count += 1;
@@ -94,6 +122,7 @@ export function submittedByMonth(issues: JiraIssueRow[], field: string | null, m
 
 export const ROLE_FILTERS = {
   'tat-ca': { label: 'Tất cả', test: () => true },
+  'cua-toi': { label: 'Việc của tôi', test: isMine },
   giao: { label: 'Được giao', test: (i: JiraIssueRow) => i.is_assignee },
   tao: { label: 'Tôi tạo', test: (i: JiraIssueRow) => i.is_reporter },
   'theo-doi': { label: 'Đang theo dõi', test: (i: JiraIssueRow) => i.is_watcher },
@@ -135,7 +164,7 @@ export function dueState(i: JiraIssueRow, today: string): DueState {
 // Cần làm: việc được giao chưa xong, theo hạn (quá hạn trước), rồi độ ưu tiên.
 export function todoList(issues: JiraIssueRow[]) {
   return issues
-    .filter((i) => i.is_assignee && notDone(i))
+    .filter((i) => isMine(i) && notDone(i))
     .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999') || (a.priority_rank ?? 99) - (b.priority_rank ?? 99));
 }
 
@@ -143,22 +172,22 @@ export function todoList(issues: JiraIssueRow[]) {
 export function inProgressNoLog(issues: JiraIssueRow[], worklogs: Worklog[], now = new Date()) {
   const wk = weekStart(vnDay(now));
   const logged = new Set(worklogs.filter((w) => vnDay(w.started_at) >= wk).map((w) => w.issue_key));
-  return issues.filter((i) => i.is_assignee && i.status_category === 'indeterminate' && !logged.has(i.issue_key));
+  return issues.filter((i) => isMine(i) && i.status_category === 'indeterminate' && !logged.has(i.issue_key));
 }
 
 // Đang chờ tôi: comment nhắc tên chưa trả lời; việc của tôi đang chặn việc khác.
 export function waitingOnMe(issues: JiraIssueRow[], mentions: JiraMentionRow[]) {
   return {
     mentions: mentions.filter((m) => !m.answered),
-    blockingOthers: issues.filter((i) => i.is_assignee && notDone(i) && blocking(i).length > 0),
+    blockingOthers: issues.filter((i) => isMine(i) && notDone(i) && blocking(i).length > 0),
   };
 }
 
 // Đang chờ người khác: việc tôi tạo/theo dõi mà người khác làm; việc của tôi bị việc khác chặn.
 export function waitingOnOthers(issues: JiraIssueRow[]) {
   return {
-    delegated: issues.filter((i) => !i.is_assignee && (i.is_reporter || i.is_watcher) && notDone(i)),
-    blocked: issues.filter((i) => i.is_assignee && notDone(i) && blockedBy(i).length > 0),
+    delegated: issues.filter((i) => !isMine(i) && (i.is_reporter || i.is_watcher) && notDone(i)),
+    blocked: issues.filter((i) => isMine(i) && notDone(i) && blockedBy(i).length > 0),
   };
 }
 
