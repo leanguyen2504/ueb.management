@@ -11,8 +11,8 @@ import { TASK_STATUS_LABEL, type Group, type Task, type TaskStatus } from '@/lib
 export const metadata: Metadata = { title: 'Việc của tôi' };
 
 const TABS = [
-  ['', 'Tôi thực hiện'],
   ['tien-do', 'Tiến độ'],
+  ['', 'Tôi thực hiện'],
   ['da-giao', 'Tôi đã giao'],
   ['xong', 'Đã hoàn thành'],
 ] as const;
