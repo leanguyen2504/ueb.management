@@ -1,6 +1,6 @@
 // Tổng hợp dữ liệu Jira cá nhân cho trang "Jira của tôi" (hàm thuần, không gọi mạng).
 import { vnDay, addDays } from '@/lib/format';
-import type { JiraIssueRow } from './types';
+import type { JiraIssueRow, JiraLink, JiraMentionRow } from './types';
 
 export type Worklog = { worklog_id: string; issue_key: string; started_at: string; seconds: number; comment: string | null };
 export type Period = { key: string; label: string; seconds: number; issues: number; items: Worklog[] };
@@ -111,3 +111,55 @@ export function roleChips(i: JiraIssueRow) {
     i.mentions_me && 'Nhắc tên',
   ].filter(Boolean) as string[];
 }
+
+// ---- Quản lý đầu việc: Cần làm / Đang chờ tôi / Đang chờ người khác ----
+
+const notDone = (i: JiraIssueRow) => i.status_category !== 'done';
+const isBlockLink = (l: JiraLink) => /block|chặn/i.test(`${l.type ?? ''} ${l.rel ?? ''}`);
+// Mã việc khác đang chặn mã này (chưa xong).
+export const blockedBy = (i: JiraIssueRow) => (i.links ?? []).filter((l) => isBlockLink(l) && l.dir === 'inward' && l.statusCategory !== 'done');
+// Mã việc khác đang chờ mã này.
+export const blocking = (i: JiraIssueRow) => (i.links ?? []).filter((l) => isBlockLink(l) && l.dir === 'outward' && l.statusCategory !== 'done');
+
+export function daysBetween(fromDay: string, toDay: string) {
+  return Math.round((Date.parse(`${toDay}T00:00:00Z`) - Date.parse(`${fromDay}T00:00:00Z`)) / 86400000);
+}
+
+export type DueState = 'overdue' | 'soon' | 'later' | 'none';
+export function dueState(i: JiraIssueRow, today: string): DueState {
+  if (!i.due_date) return 'none';
+  const d = daysBetween(today, i.due_date);
+  return d < 0 ? 'overdue' : d <= 7 ? 'soon' : 'later';
+}
+
+// Cần làm: việc được giao chưa xong, theo hạn (quá hạn trước), rồi độ ưu tiên.
+export function todoList(issues: JiraIssueRow[]) {
+  return issues
+    .filter((i) => i.is_assignee && notDone(i))
+    .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999') || (a.priority_rank ?? 99) - (b.priority_rank ?? 99));
+}
+
+// Đang làm nhưng tuần này chưa log work.
+export function inProgressNoLog(issues: JiraIssueRow[], worklogs: Worklog[], now = new Date()) {
+  const wk = weekStart(vnDay(now));
+  const logged = new Set(worklogs.filter((w) => vnDay(w.started_at) >= wk).map((w) => w.issue_key));
+  return issues.filter((i) => i.is_assignee && i.status_category === 'indeterminate' && !logged.has(i.issue_key));
+}
+
+// Đang chờ tôi: comment nhắc tên chưa trả lời; việc của tôi đang chặn việc khác.
+export function waitingOnMe(issues: JiraIssueRow[], mentions: JiraMentionRow[]) {
+  return {
+    mentions: mentions.filter((m) => !m.answered),
+    blockingOthers: issues.filter((i) => i.is_assignee && notDone(i) && blocking(i).length > 0),
+  };
+}
+
+// Đang chờ người khác: việc tôi tạo/theo dõi mà người khác làm; việc của tôi bị việc khác chặn.
+export function waitingOnOthers(issues: JiraIssueRow[]) {
+  return {
+    delegated: issues.filter((i) => !i.is_assignee && (i.is_reporter || i.is_watcher) && notDone(i)),
+    blocked: issues.filter((i) => i.is_assignee && notDone(i) && blockedBy(i).length > 0),
+  };
+}
+
+export const fmtDuration = (sec: number | null | undefined) => (sec == null ? '' : `${fmtHours(hours(sec))} giờ`);

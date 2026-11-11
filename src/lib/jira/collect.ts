@@ -91,11 +91,20 @@ export async function collectMyJira(
   const tail = ' OR (assignee = currentUser() AND resolution = Unresolved) ORDER BY updated DESC';
   let main;
   try {
-    main = await search(`((${mine} OR comment ~ ${quoted}) AND ${recent})${tail}`, '*all', 'names');
+    main = await search(`((${mine} OR comment ~ ${quoted}) AND ${recent})${tail}`, '*all', 'names,changelog');
   } catch (e: any) {
     // Một số Jira không cho tìm chữ trong comment: bỏ điều kiện đó.
-    if (e && e.status === 400) main = await search(`((${mine}) AND ${recent})${tail}`, '*all', 'names');
+    if (e && e.status === 400) main = await search(`((${mine}) AND ${recent})${tail}`, '*all', 'names,changelog');
     else throw e;
+  }
+  // Nhóm trạng thái (Cần làm / Đang làm / Xong) của mọi trạng thái, để đọc lịch sử chuyển trạng thái.
+  const statusCat: Record<string, string> = {};
+  try {
+    for (const st of (await get('/rest/api/2/status')) || []) {
+      if (st && st.name && st.statusCategory) statusCat[String(st.name).toLowerCase()] = st.statusCategory.key;
+    }
+  } catch {
+    // Không đọc được danh sách trạng thái: bỏ qua phần đếm số lần bị trả lại.
   }
   say('Đang tìm các mã việc có worklog của bạn…');
   const wlKeys = new Set((await search(`worklogAuthor = currentUser() AND ${recent}`, 'key')).issues.map((i) => i.key));
@@ -105,6 +114,18 @@ export async function collectMyJira(
   const worklogs: JiraSnapshot['worklogs'] = [];
   const mentions: JiraSnapshot['mentions'] = [];
   const mentionTags = [`[~${me.name}]`.toLowerCase(), `[~${me.key}]`.toLowerCase()];
+  const fieldName = (id: string) => (main.names && main.names[id]) || id;
+  const isField = (id: string, re: RegExp) => re.test(fieldName(id).normalize('NFC').toLowerCase());
+  const day = (v: any) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
+  const num = (v: any) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null);
+  // Tên sprint: Jira Server trả dạng "com.atlassian.greenhopper…[id=1,name=Đợt 3,…]" hoặc đối tượng {name}.
+  function sprintName(v: any): string | null {
+    const arr = Array.isArray(v) ? v : v ? [v] : [];
+    const names = arr
+      .map((x: any) => (typeof x === 'string' ? (x.match(/name=([^,\]]*)/) || [])[1] : x && x.name))
+      .filter(Boolean);
+    return names.length ? String(names[names.length - 1]) : null;
+  }
 
   for (const it of main.issues) {
     const f = it.fields || {};
@@ -129,21 +150,61 @@ export async function collectMyJira(
     }
     let mentionsMe = false;
     const comments: any[] = (f.comment && f.comment.comments) || [];
+    let myLastCommentAt: string | null = null;
+    for (const c of comments) if (same(c.author, me) && (!myLastCommentAt || c.created > myLastCommentAt)) myLastCommentAt = c.created;
     for (const c of comments) {
       const body = String(c.body || '');
       if (same(c.author, me) || !mentionTags.some((t) => body.toLowerCase().includes(t))) continue;
       mentionsMe = true;
-      mentions.push({ id: String(c.id), issueKey: it.key, author: str(c.author && c.author.displayName), body: body.slice(0, 2000), created: c.created });
+      mentions.push({
+        id: String(c.id), issueKey: it.key, author: str(c.author && c.author.displayName), body: body.slice(0, 2000), created: c.created,
+        answered: Boolean(myLastCommentAt && myLastCommentAt > c.created),
+      });
     }
+    const lc = comments.length ? comments[comments.length - 1] : null;
     const custom: Record<string, any> = {};
+    let startDate: string | null = null;
+    let epicKey: string | null = null;
+    let sprint: string | null = null;
     for (const [id, v] of Object.entries(f)) {
       if (!id.startsWith('customfield_')) continue;
+      if (isField(id, /^sprint$/)) sprint = sprintName(v);
+      else if (isField(id, /^epic link$|^liên kết epic$/)) epicKey = str(typeof v === 'string' ? v : v && (v as any).key);
+      else if (!startDate && isField(id, /start date|ngày bắt đầu|begin date/)) startDate = day(v);
       const val = simpleValue(v);
       if (val === undefined) continue;
-      const name = (main.names && main.names[id]) || id;
+      const name = fieldName(id);
       custom[name] = val;
       customNames.add(name);
     }
+    // Liên kết giữa các mã việc (chặn, liên quan…).
+    const links = ((f.issuelinks as any[]) || []).slice(0, 50).map((l: any) => {
+      const other = l.inwardIssue || l.outwardIssue || {};
+      const of = other.fields || {};
+      return {
+        type: str(l.type && l.type.name),
+        dir: (l.inwardIssue ? 'inward' : 'outward') as 'inward' | 'outward',
+        rel: str(l.type && (l.inwardIssue ? l.type.inward : l.type.outward)),
+        key: str(other.key),
+        summary: str(of.summary),
+        statusCategory: str(of.status && of.status.statusCategory && of.status.statusCategory.key),
+      };
+    });
+    // Lịch sử chuyển trạng thái (cũ trước).
+    const histories: any[] = (it.changelog && it.changelog.histories) || [];
+    const transitions: { at: string; from: string | null; to: string | null; by: string | null }[] = [];
+    for (const h of histories) {
+      for (const item of h.items || []) {
+        if (item.field !== 'status') continue;
+        transitions.push({ at: h.created, from: str(item.fromString), to: str(item.toString), by: str(h.author && h.author.displayName) });
+      }
+    }
+    transitions.sort((a, b) => (a.at < b.at ? -1 : 1));
+    const reopenCount = transitions.filter(
+      (t) => t.from && t.to && statusCat[t.from.toLowerCase()] === 'done' && statusCat[t.to.toLowerCase()] !== 'done',
+    ).length;
+    const subtasks: any[] = f.subtasks || [];
+    const tt = f.timetracking || {};
     issues.push({
       key: it.key,
       summary: String(f.summary || ''),
@@ -166,6 +227,26 @@ export async function collectMyJira(
       due: str(f.duedate),
       mySeconds,
       custom,
+      priorityRank: f.priority && f.priority.id ? Number(f.priority.id) || null : null,
+      startDate,
+      originalEstimate: num(f.timeoriginalestimate ?? tt.originalEstimateSeconds),
+      remainingEstimate: num(f.timeestimate ?? tt.remainingEstimateSeconds),
+      timeSpent: num(f.timespent ?? tt.timeSpentSeconds),
+      parentKey: str(f.parent && f.parent.key),
+      parentSummary: str(f.parent && f.parent.fields && f.parent.fields.summary),
+      epicKey,
+      subtaskTotal: subtasks.length,
+      subtaskDone: subtasks.filter((x) => x.fields && x.fields.status && x.fields.status.statusCategory && x.fields.status.statusCategory.key === 'done').length,
+      links,
+      transitions: transitions.slice(-30),
+      statusSince: transitions.length ? transitions[transitions.length - 1].at : str(f.created),
+      reopenCount,
+      sprint,
+      fixVersions: ((f.fixVersions as any[]) || []).map((v) => String(v.name)).slice(0, 10),
+      labels: ((f.labels as any[]) || []).map(String).slice(0, 20),
+      components: ((f.components as any[]) || []).map((c) => String(c.name)).slice(0, 10),
+      lastComment: lc ? { author: str(lc.author && lc.author.displayName), isMe: same(lc.author, me), created: lc.created, body: String(lc.body || '').slice(0, 300) } : null,
+      myLastCommentAt,
     });
   }
   say(`Xong: ${issues.length} mã việc, ${worklogs.length} worklog, ${mentions.length} comment nhắc tên bạn.`);

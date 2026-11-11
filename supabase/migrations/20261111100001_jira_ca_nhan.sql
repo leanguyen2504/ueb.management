@@ -57,6 +57,31 @@ create table public.jira_issues (
   due_date date,
   -- Tổng giờ chính mình log vào mã này (giây).
   my_seconds int not null default 0,
+  priority_rank int,
+  start_date date,
+  -- Ước tính ban đầu, thời gian còn lại, tổng thời gian đã log (mọi người), giây.
+  original_estimate int,
+  remaining_estimate int,
+  time_spent int,
+  parent_key text,
+  parent_summary text,
+  epic_key text,
+  subtask_total int not null default 0,
+  subtask_done int not null default 0,
+  -- Liên kết: [{"type": "Blocks", "dir": "inward"|"outward", "rel": "is blocked by", "key", "summary", "statusCategory"}]
+  links jsonb not null default '[]',
+  -- Lịch sử chuyển trạng thái: [{"at", "from", "to", "by"}], cũ trước.
+  transitions jsonb not null default '[]',
+  -- Thời điểm chuyển vào trạng thái hiện tại; số lần bị trả lại (từ Xong về chưa xong).
+  status_since timestamptz,
+  reopen_count int not null default 0,
+  sprint text,
+  fix_versions text[] not null default '{}',
+  labels text[] not null default '{}',
+  components text[] not null default '{}',
+  -- Comment mới nhất: {"author", "isMe", "created", "body"}
+  last_comment jsonb,
+  my_last_comment_at timestamptz,
   -- Các trường tùy chỉnh dạng đơn giản: {"Tên trường": giá trị}
   custom jsonb not null default '{}',
   primary key (user_id, issue_key)
@@ -81,6 +106,8 @@ create table public.jira_mentions (
   author_name text,
   body text not null default '',
   created_at timestamptz not null,
+  -- Mình đã comment trên mã việc đó sau lời nhắc này.
+  answered boolean not null default false,
   primary key (user_id, comment_id)
 );
 create index jira_mentions_created_idx on public.jira_mentions (user_id, created_at desc);
@@ -131,17 +158,32 @@ begin
 
   insert into public.jira_issues (user_id, issue_key, summary, status, status_category, issue_type, project_key,
     project_name, priority, assignee_name, reporter_name, is_assignee, is_reporter, is_watcher, has_my_worklog,
-    mentions_me, created_at_jira, updated_at_jira, resolved_at, due_date, my_seconds, custom)
+    mentions_me, created_at_jira, updated_at_jira, resolved_at, due_date, my_seconds, custom,
+    priority_rank, start_date, original_estimate, remaining_estimate, time_spent, parent_key, parent_summary, epic_key,
+    subtask_total, subtask_done, links, transitions, status_since, reopen_count, sprint, fix_versions, labels, components,
+    last_comment, my_last_comment_at)
   select distinct on (i.key) p_user, left(i.key, 40), left(coalesce(i.summary, ''), 500), left(i.status, 80), left(i."statusCategory", 20),
     left(i."issueType", 80), left(i."projectKey", 40), left(i."projectName", 200), left(i.priority, 40),
     left(i.assignee, 200), left(i.reporter, 200), coalesce(i."isAssignee", false), coalesce(i."isReporter", false),
     coalesce(i."isWatcher", false), coalesce(i."hasMyWorklog", false), coalesce(i."mentionsMe", false),
-    i.created, i.updated, i.resolved, i.due, greatest(coalesce(i."mySeconds", 0), 0), coalesce(i.custom, '{}')
+    i.created, i.updated, i.resolved, i.due, greatest(coalesce(i."mySeconds", 0), 0), coalesce(i.custom, '{}'),
+    i."priorityRank", i."startDate", i."originalEstimate", i."remainingEstimate", i."timeSpent", left(i."parentKey", 40),
+    left(i."parentSummary", 500), left(i."epicKey", 40), coalesce(i."subtaskTotal", 0), coalesce(i."subtaskDone", 0),
+    case when jsonb_typeof(i.links) = 'array' then i.links else '[]' end,
+    case when jsonb_typeof(i.transitions) = 'array' then i.transitions else '[]' end,
+    i."statusSince", coalesce(i."reopenCount", 0), left(i.sprint, 200),
+    coalesce((select array_agg(left(x, 100)) from jsonb_array_elements_text(case when jsonb_typeof(i."fixVersions") = 'array' then i."fixVersions" else '[]' end) x), '{}'),
+    coalesce((select array_agg(left(x, 100)) from jsonb_array_elements_text(case when jsonb_typeof(i.labels) = 'array' then i.labels else '[]' end) x), '{}'),
+    coalesce((select array_agg(left(x, 100)) from jsonb_array_elements_text(case when jsonb_typeof(i.components) = 'array' then i.components else '[]' end) x), '{}'),
+    case when jsonb_typeof(i."lastComment") = 'object' then i."lastComment" end, i."myLastCommentAt"
   from jsonb_to_recordset(coalesce(p_snap -> 'issues', '[]')) as i(
     key text, summary text, status text, "statusCategory" text, "issueType" text, "projectKey" text, "projectName" text,
     priority text, assignee text, reporter text, "isAssignee" boolean, "isReporter" boolean, "isWatcher" boolean,
     "hasMyWorklog" boolean, "mentionsMe" boolean, created timestamptz, updated timestamptz, resolved timestamptz,
-    due date, "mySeconds" int, custom jsonb)
+    due date, "mySeconds" int, custom jsonb, "priorityRank" int, "startDate" date, "originalEstimate" int,
+    "remainingEstimate" int, "timeSpent" int, "parentKey" text, "parentSummary" text, "epicKey" text, "subtaskTotal" int,
+    "subtaskDone" int, links jsonb, transitions jsonb, "statusSince" timestamptz, "reopenCount" int, sprint text,
+    "fixVersions" jsonb, labels jsonb, components jsonb, "lastComment" jsonb, "myLastCommentAt" timestamptz)
   where i.key is not null;
 
   insert into public.jira_worklogs (user_id, worklog_id, issue_key, started_at, seconds, comment)
@@ -149,9 +191,10 @@ begin
   from jsonb_to_recordset(coalesce(p_snap -> 'worklogs', '[]')) as w(id text, "issueKey" text, started timestamptz, seconds int, comment text)
   where w.id is not null and w.started is not null;
 
-  insert into public.jira_mentions (user_id, comment_id, issue_key, author_name, body, created_at)
-  select distinct on (m.id) p_user, left(m.id, 40), left(m."issueKey", 40), left(m.author, 200), left(coalesce(m.body, ''), 2000), m.created
-  from jsonb_to_recordset(coalesce(p_snap -> 'mentions', '[]')) as m(id text, "issueKey" text, author text, body text, created timestamptz)
+  insert into public.jira_mentions (user_id, comment_id, issue_key, author_name, body, created_at, answered)
+  select distinct on (m.id) p_user, left(m.id, 40), left(m."issueKey", 40), left(m.author, 200), left(coalesce(m.body, ''), 2000), m.created,
+    coalesce(m.answered, false)
+  from jsonb_to_recordset(coalesce(p_snap -> 'mentions', '[]')) as m(id text, "issueKey" text, author text, body text, created timestamptz, answered boolean)
   where m.id is not null and m.created is not null;
 
   insert into public.jira_accounts as a (user_id, jira_username, jira_display_name, last_synced_at, last_source, last_error,

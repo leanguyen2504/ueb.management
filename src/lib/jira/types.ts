@@ -23,12 +23,36 @@ export type JiraSnapshot = {
     due: string | null;
     mySeconds: number;
     custom: Record<string, string | number | boolean>;
+    priorityRank: number | null;
+    startDate: string | null;
+    originalEstimate: number | null;
+    remainingEstimate: number | null;
+    timeSpent: number | null;
+    parentKey: string | null;
+    parentSummary: string | null;
+    epicKey: string | null;
+    subtaskTotal: number;
+    subtaskDone: number;
+    links: JiraLink[];
+    transitions: JiraTransition[];
+    statusSince: string | null;
+    reopenCount: number;
+    sprint: string | null;
+    fixVersions: string[];
+    labels: string[];
+    components: string[];
+    lastComment: JiraLastComment | null;
+    myLastCommentAt: string | null;
   }[];
   worklogs: { id: string; issueKey: string; started: string; seconds: number; comment: string | null }[];
-  mentions: { id: string; issueKey: string; author: string | null; body: string; created: string }[];
+  mentions: { id: string; issueKey: string; author: string | null; body: string; created: string; answered: boolean }[];
   customFieldNames: string[];
   fetchedAt: string;
 };
+
+export type JiraLink = { type: string | null; dir: 'inward' | 'outward'; rel: string | null; key: string | null; summary: string | null; statusCategory: string | null };
+export type JiraTransition = { at: string; from: string | null; to: string | null; by: string | null };
+export type JiraLastComment = { author: string | null; isMe: boolean; created: string; body: string };
 
 export type JiraAccount = {
   user_id: string;
@@ -65,4 +89,27 @@ export type JiraIssueRow = {
   due_date: string | null;
   my_seconds: number;
   custom: Record<string, string | number | boolean>;
+  priority: string | null;
+  priority_rank: number | null;
+  start_date: string | null;
+  original_estimate: number | null;
+  remaining_estimate: number | null;
+  time_spent: number | null;
+  parent_key: string | null;
+  parent_summary: string | null;
+  epic_key: string | null;
+  subtask_total: number;
+  subtask_done: number;
+  links: JiraLink[];
+  transitions: JiraTransition[];
+  status_since: string | null;
+  reopen_count: number;
+  sprint: string | null;
+  fix_versions: string[];
+  labels: string[];
+  components: string[];
+  last_comment: JiraLastComment | null;
+  my_last_comment_at: string | null;
 };
+
+export type JiraMentionRow = { comment_id: string; issue_key: string; author_name: string | null; body: string; created_at: string; answered: boolean };
