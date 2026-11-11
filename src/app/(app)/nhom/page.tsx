@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { groupDirectory } from '@/lib/directory';
 import Link from 'next/link';
 import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
@@ -24,7 +25,7 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
     supabase.from('group_members').select('group_id'),
     supabase.from('groups').select('id, name'),
     // Danh bạ: mọi nhóm đang hoạt động, kể cả nhóm mình chưa tham gia (chỉ tên, mô tả, đơn vị quản lý, số liệu).
-    luu_tru ? Promise.resolve({ data: [] as DirRow[] }) : supabase.rpc('group_directory'),
+    luu_tru ? Promise.resolve({ data: [] as DirRow[] }) : groupDirectory(supabase),
     supabase.from('join_requests').select('group_id').eq('requester_id', userId).eq('status', 'pending').is('task_id', null),
   ]);
   const pending = new Set((myRequests ?? []).map((r) => r.group_id));

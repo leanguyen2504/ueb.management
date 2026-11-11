@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { groupDirectory } from '@/lib/directory';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireSession } from '@/lib/session';
@@ -30,7 +31,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     // Chưa tham gia: hiện trang công khai (lãnh đạo, đầu mối, tên việc) để xin tham gia.
     if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
     const [{ data: dir }, { data: contacts }, { data: open }, { data: reqs }, { data: tagRows }] = await Promise.all([
-      supabase.rpc('group_directory'),
+      groupDirectory(supabase),
       supabase.rpc('group_contacts', { p_group: id }),
       supabase.rpc('group_open_task_titles', { p_group: id }),
       supabase.from('join_requests').select('id, task_id, created_at').eq('group_id', id).eq('requester_id', userId).eq('status', 'pending'),
@@ -62,7 +63,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   ]);
   // Danh bạ để hiện tên đơn vị quản lý, đơn vị cùng làm và dự án liên đơn vị, kể cả nhóm mình chưa tham gia.
   const [{ data: dirData }, { data: tagRows }] = await Promise.all([
-    supabase.rpc('group_directory'),
+    groupDirectory(supabase),
     supabase.from('group_units').select('group_id, unit_id').or(`group_id.eq.${id},unit_id.eq.${id}`),
   ]);
   const dirAll = (dirData ?? []) as (DirGroup & { can_view: boolean })[];

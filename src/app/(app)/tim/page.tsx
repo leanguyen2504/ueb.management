@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { groupDirectory } from '@/lib/directory';
 import Link from 'next/link';
 import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
@@ -38,7 +39,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     supabase.from('profiles').select('id, full_name, email, position').eq('is_active', true).or(or('full_name', 'email', 'position')).order('full_name').limit(20),
     supabase.from('calendar_sources').select('id, label'),
     // Danh bạ nhóm: cả nhóm chưa tham gia, để xin tham gia.
-    supabase.rpc('group_directory'),
+    groupDirectory(supabase),
   ]);
   const fold = (x: string) => x.normalize('NFC').toLowerCase();
   const seen = new Set((groupsRls.data ?? []).map((g) => g.id));
