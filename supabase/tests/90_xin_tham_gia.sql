@@ -85,3 +85,11 @@ select t.denied(format($$delete from public.group_units where group_id = %L$$, :
 select t.denied(format($$insert into public.group_units (group_id, unit_id) values (%L, '10000000-0000-0000-0000-000000000002')$$, :g9), 'người không sửa được dự án gắn đơn vị');
 reset role;
 select 'OK: dự án liên đơn vị' as ket_qua;
+
+-- 7. Phân loại đơn vị.
+set role authenticated;
+select set_config('request.jwt.claim.sub', :thuky, false);
+update public.groups set unit_category = 'dao_tao' where id = '10000000-0000-0000-0000-000000000001';
+select t.ok((select unit_category from public.group_directory() where id = '10000000-0000-0000-0000-000000000001') = 'dao_tao', 'danh bạ trả phân loại đơn vị');
+select t.denied($$update public.groups set unit_category = 'la' where id = '10000000-0000-0000-0000-000000000001'$$, 'phân loại không hợp lệ');
+reset role;

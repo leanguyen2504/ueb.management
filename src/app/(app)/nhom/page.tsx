@@ -4,11 +4,11 @@ import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
 import { CreateGroupForm } from './GroupForms';
 import { GroupTable } from './GroupTable';
-import { KIND_LABEL, type Group } from '@/lib/types';
+import { KIND_LABEL, groupTypeLabel, type Group } from '@/lib/types';
 import { fmtDateTime } from '@/lib/format';
 import { requestJoin } from './actions';
 
-type DirRow = { id: string; name: string; description: string | null; kind: string; parent_id: string | null; parent_name: string | null; member_count: number; open_tasks: number; is_member: boolean; can_view: boolean };
+type DirRow = { id: string; name: string; description: string | null; kind: string; unit_category: string | null; parent_id: string | null; parent_name: string | null; member_count: number; open_tasks: number; is_member: boolean; can_view: boolean };
 
 export const metadata: Metadata = { title: 'Dự án' };
 
@@ -63,8 +63,8 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
             id: g.id,
             name: g.name,
             parent: (g.parent_id && parentName.get(g.parent_id)) || '',
-            kind: g.kind,
-            kindLabel: KIND_LABEL[g.kind],
+            kind: g.kind === 'unit' && g.unit_category ? `unit:${g.unit_category}` : g.kind,
+            kindLabel: groupTypeLabel(g),
             openTasks: openTasks.get(g.id) ?? 0,
             members: memberCount.get(g.id) ?? 0,
             role: role.get(g.id) ?? '',
@@ -84,7 +84,7 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
                   <div className="min-w-0 flex-1">
                     <Link href={`/nhom/${g.id}`} className="font-semibold hover:text-brand-600 dark:hover:text-brand-300">{g.name}</Link>
                     <div className="text-xs muted">
-                      {KIND_LABEL[g.kind as keyof typeof KIND_LABEL] ?? g.kind}
+                      {groupTypeLabel(g)}
                       {g.parent_id && <> · thuộc <Link href={`/nhom/${g.parent_id}`} className="link">{g.parent_name}</Link></>}
                       {` · ${g.member_count} thành viên · ${g.open_tasks} việc đang mở`}
                     </div>

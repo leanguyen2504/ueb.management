@@ -4,7 +4,7 @@ import { useActionState, useState } from 'react';
 import { addMember, createGroup, setGroupUnits, updateGroup } from './actions';
 import { FormMessage } from '@/components/FormMessage';
 import { SubmitButton } from '@/components/SubmitButton';
-import { KIND_LABEL, type Group } from '@/lib/types';
+import { KIND_LABEL, UNIT_CATEGORY_LABEL, type Group } from '@/lib/types';
 
 export type UnitOption = { id: string; name: string };
 
@@ -24,6 +24,19 @@ function UnitPicker({ units, selected = [] }: { units: UnitOption[]; selected?: 
         ))}
         {!shown.length && <p className="muted">Không có đơn vị khớp.</p>}
       </div>
+    </div>
+  );
+}
+
+// Phân loại đơn vị, chỉ hiện khi Loại là Đơn vị.
+function CategorySelect({ value, id }: { value?: string | null; id: string }) {
+  return (
+    <div>
+      <label className="label" htmlFor={id}>Phân loại đơn vị</label>
+      <select id={id} name="unit_category" defaultValue={value ?? ''} className="input">
+        <option value="">Chưa phân loại</option>
+        {Object.entries(UNIT_CATEGORY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      </select>
     </div>
   );
 }
@@ -51,6 +64,7 @@ export function CreateGroupForm({ units = [] }: { units?: UnitOption[] }) {
           <div><label className="label" htmlFor="g-kind">Loại</label><KindSelect onChange={setKind} /></div>
           <div><label className="label" htmlFor="g-desc">Mô tả</label><input id="g-desc" name="description" maxLength={2000} className="input" /></div>
         </div>
+        {kind === 'unit' && <div className="md:w-1/3"><CategorySelect id="g-cat" /></div>}
         {kind !== 'unit' && units.length > 0 && (
           <fieldset>
             <legend className="label">Các đơn vị/tổ cùng làm (không bắt buộc)</legend>
@@ -70,6 +84,7 @@ export function CreateGroupForm({ units = [] }: { units?: UnitOption[] }) {
 
 export function EditGroupForm({ group }: { group: Group }) {
   const [state, action] = useActionState(updateGroup, null);
+  const [kind, setKind] = useState<string>(group.kind);
   const defaults: [keyof Group, string][] = [
     ['default_can_view', 'Xem'],
     ['default_can_create', 'Tạo'],
@@ -82,8 +97,9 @@ export function EditGroupForm({ group }: { group: Group }) {
       <input type="hidden" name="id" value={group.id} />
       <div className="grid gap-3 md:grid-cols-[2fr_1fr]">
         <div><label className="label" htmlFor="e-name">Tên nhóm</label><input id="e-name" name="name" required maxLength={200} defaultValue={group.name} className="input" /></div>
-        <div><label className="label" htmlFor="e-kind">Loại</label><KindSelect value={group.kind} /></div>
+        <div><label className="label" htmlFor="e-kind">Loại</label><KindSelect value={group.kind} onChange={setKind} /></div>
       </div>
+      {kind === 'unit' && <CategorySelect id="e-cat" value={group.unit_category} />}
       <div><label className="label" htmlFor="e-desc">Mô tả</label><textarea id="e-desc" name="description" rows={2} defaultValue={group.description ?? ''} className="input" /></div>
       <fieldset>
         <legend className="label">Quyền mặc định cho thành viên mới</legend>

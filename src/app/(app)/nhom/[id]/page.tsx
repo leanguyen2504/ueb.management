@@ -6,7 +6,7 @@ import { AddMemberForm, EditGroupForm, GroupUnitsForm } from '../GroupForms';
 import { cancelInvitation, decideJoin, removeMember, setArchived, updateMember } from '../actions';
 import { PublicGroup, type DirGroup } from './PublicGroup';
 import { OpenFromHash } from '@/components/OpenFromHash';
-import { KIND_LABEL, PERMS, ROLE_LABEL, type Group, type GroupMember, type Profile } from '@/lib/types';
+import { KIND_LABEL, PERMS, groupTypeLabel, ROLE_LABEL, type Group, type GroupMember, type Profile } from '@/lib/types';
 import { fmtDateTime, fmtTime } from '@/lib/format';
 import { TaskList } from '@/components/TaskList';
 import { MemberAvatars, rankMember } from '@/components/MemberStrip';
@@ -148,7 +148,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                 {!p.can_view && <span className="chip">Chưa tham gia</span>}
               </div>
               {p.description && <p className="truncate text-xs muted">{p.description}</p>}
-              <p className="mt-1.5 text-xs muted">{KIND_LABEL[p.kind as keyof typeof KIND_LABEL] ?? p.kind} · {p.member_count} thành viên · {p.open_tasks} việc đang mở</p>
+              <p className="mt-1.5 text-xs muted">{groupTypeLabel(p)} · {p.member_count} thành viên · {p.open_tasks} việc đang mở</p>
             </Link>
           </li>
         ))}
@@ -185,7 +185,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
           </nav>
           <h1 className="text-2xl font-semibold md:text-[28px] md:leading-tight">{group.name}</h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
-            <span className="chip bg-gold-50 text-gold-600 dark:bg-gold-600/15 dark:text-gold-500">{KIND_LABEL[group.kind]}</span>
+            <span className="chip bg-gold-50 text-gold-600 dark:bg-gold-600/15 dark:text-gold-500">{groupTypeLabel(group)}</span>
             {group.archived_at && <span className="chip">Đã lưu trữ</span>}
             {myUnits.length > 0 && <span className="muted">Cùng làm:</span>}
             {myUnits.map((u) => <Link key={u.id} href={`/nhom/${u.id}`} className="chip hover:text-brand-600 dark:hover:text-brand-300">{u.name}</Link>)}

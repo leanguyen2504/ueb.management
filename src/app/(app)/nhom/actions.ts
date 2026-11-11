@@ -9,6 +9,12 @@ import { PERMS, type GroupKind } from '@/lib/types';
 
 const KINDS: GroupKind[] = ['unit', 'project', 'event', 'other'];
 const bool = (f: FormData, k: string) => f.get(k) === 'on';
+const CATEGORIES = ['chuc_nang', 'dao_tao', 'nghien_cuu'];
+// Phân loại chỉ áp cho Đơn vị; để trống hoặc loại khác thì bỏ phân loại.
+const category = (f: FormData, kind: string) => {
+  const c = String(f.get('unit_category') || '');
+  return kind === 'unit' && CATEGORIES.includes(c) ? c : null;
+};
 
 export async function createGroup(_prev: FormState, form: FormData): Promise<FormState> {
   const name = String(form.get('name') || '').trim();
@@ -18,7 +24,7 @@ export async function createGroup(_prev: FormState, form: FormData): Promise<For
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('groups')
-    .insert({ name, kind, description: String(form.get('description') || '').trim() || null })
+    .insert({ name, kind, unit_category: category(form, kind), description: String(form.get('description') || '').trim() || null })
     .select('id')
     .single();
   if (error) return { error: errText(error) };
@@ -41,6 +47,7 @@ export async function updateGroup(_prev: FormState, form: FormData): Promise<For
     .update({
       name,
       kind,
+      unit_category: category(form, kind),
       description: String(form.get('description') || '').trim() || null,
       default_can_view: bool(form, 'default_can_view'),
       default_can_create: bool(form, 'default_can_create'),

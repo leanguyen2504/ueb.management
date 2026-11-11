@@ -9,7 +9,7 @@ import { addDays, dayStartIso, fmtDate, fmtDateTime, fmtTime, greeting, todayLab
 import { isGoogleCalendarEnabled } from '@/lib/google-calendar';
 import { loadMeetings, meetingProgress } from '@/lib/meetings';
 import { meetingAnchor } from '@/lib/meeting-anchor';
-import { KIND_LABEL, type Booking, type CalEvent, type Group, type Task } from '@/lib/types';
+import { KIND_LABEL, groupTypeLabel, type Booking, type CalEvent, type Group, type Task } from '@/lib/types';
 
 type SP = { lich?: string; khoang?: string; tu?: string; den?: string };
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -214,7 +214,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         <span className="block truncate font-medium group-hover:text-brand-600 dark:group-hover:text-brand-300">{g.name}</span>
                         {p.total > 0 && <span className="mt-1 flex items-center gap-2 text-xs muted"><ProgressBar pct={p.pct} className="h-1.5 w-24" />{p.pct}% · {p.total - p.done} việc mở</span>}
                       </span>
-                      <span className="chip">{mineIds.get(g.id) ? 'Trưởng nhóm' : KIND_LABEL[g.kind]}</span>
+                      <span className="chip">{mineIds.get(g.id) ? 'Trưởng nhóm' : groupTypeLabel(g)}</span>
                     </Link>
                   </li>
                 );

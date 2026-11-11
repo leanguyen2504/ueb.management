@@ -22,6 +22,7 @@ export type Group = {
   kind: GroupKind;
   parent_id: string | null;
   description: string | null;
+  unit_category: UnitCategory | null;
   default_can_view: boolean;
   default_can_create: boolean;
   default_can_edit: boolean;
@@ -67,6 +68,18 @@ export const KIND_LABEL: Record<GroupKind, string> = {
   event: 'Sự kiện',
   other: 'Khác',
 };
+
+// Phân loại đơn vị (cột Loại): thay cho 3 nhóm cha trước đây.
+export type UnitCategory = 'chuc_nang' | 'dao_tao' | 'nghien_cuu';
+export const UNIT_CATEGORY_LABEL: Record<UnitCategory, string> = {
+  chuc_nang: 'Đơn vị chức năng',
+  dao_tao: 'Đơn vị đào tạo (Khoa, Viện)',
+  nghien_cuu: 'Đơn vị nghiên cứu và dịch vụ',
+};
+export function groupTypeLabel(g: { kind: string; unit_category?: string | null }): string {
+  if (g.kind === 'unit' && g.unit_category && g.unit_category in UNIT_CATEGORY_LABEL) return UNIT_CATEGORY_LABEL[g.unit_category as UnitCategory];
+  return KIND_LABEL[g.kind as GroupKind] ?? g.kind;
+}
 
 export const PERMS = [
   ['can_view', 'Xem'],
