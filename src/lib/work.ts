@@ -237,6 +237,13 @@ export async function createSubgroup(_prev: FormState, form: FormData): Promise<
     p_member_ids: members,
   });
   if (error) return { error: errText(error) };
+  // Việc chung nhiều đơn vị: gắn đơn vị cha và các đơn vị cùng làm để không gian hiện ở mỗi đơn vị.
+  const units = form.getAll('unit_ids').map(String).filter((v) => uuidOrNull(v) && v !== parent);
+  if (units.length) {
+    const { data: p } = await supabase.from('groups').select('kind').eq('id', parent).single();
+    await supabase.from('group_units').insert([...(p?.kind === 'unit' ? [parent] : []), ...units].map((u) => ({ group_id: data, unit_id: u })));
+    units.forEach((u) => refresh(u));
+  }
   refresh(parent);
   redirect(`/nhom/${data}`);
 }

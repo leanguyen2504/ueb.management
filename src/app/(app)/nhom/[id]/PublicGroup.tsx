@@ -11,7 +11,7 @@ type MyRequest = { id: string; task_id: string | null; created_at: string };
 
 // Trang của nhóm với người chưa tham gia: chỉ thông tin chung, lãnh đạo, đầu mối liên hệ
 // và tên các việc đang mở. Tài liệu, mô tả việc, lịch, thành viên khác vẫn được RLS giữ kín.
-export function PublicGroup({ group, contacts, tasks, requests, tb, loi }: { group: DirGroup; contacts: Contact[]; tasks: OpenTask[]; requests: MyRequest[]; tb?: string; loi?: string }) {
+export function PublicGroup({ group, contacts, tasks, requests, units = [], projects = [], tb, loi }: { group: DirGroup; contacts: Contact[]; tasks: OpenTask[]; requests: MyRequest[]; units?: DirGroup[]; projects?: (DirGroup & { can_view: boolean })[]; tb?: string; loi?: string }) {
   const back = `/nhom/${group.id}`;
   const groupReq = requests.find((r) => !r.task_id);
   const taskReq = new Map(requests.filter((r) => r.task_id).map((r) => [r.task_id!, r]));
@@ -56,6 +56,8 @@ export function PublicGroup({ group, contacts, tasks, requests, tb, loi }: { gro
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
           <span className="chip bg-gold-50 text-gold-600 dark:bg-gold-600/15 dark:text-gold-500">{KIND_LABEL[group.kind as keyof typeof KIND_LABEL] ?? group.kind}</span>
           <span className="muted">{group.member_count} thành viên · {group.open_tasks} việc đang mở</span>
+          {units.length > 0 && <span className="muted">· Cùng làm:</span>}
+          {units.map((u) => <Link key={u.id} href={`/nhom/${u.id}`} className="chip hover:text-brand-600 dark:hover:text-brand-300">{u.name}</Link>)}
         </div>
         {group.description && <p className="mt-2 max-w-3xl text-sm muted">{group.description}</p>}
       </div>
@@ -116,6 +118,16 @@ export function PublicGroup({ group, contacts, tasks, requests, tb, loi }: { gro
             <h2 className="mb-3 text-lg font-semibold">Đầu mối liên hệ</h2>
             <People list={clerks} empty={leaders.length ? 'Chưa có Văn thư. Liên hệ trực tiếp Trưởng nhóm.' : 'Chưa có đầu mối liên hệ.'} />
           </section>
+          {projects.length > 0 && (
+            <section className="card">
+              <h2 className="mb-3 text-lg font-semibold">Dự án liên đơn vị</h2>
+              <ul className="space-y-2 text-sm">
+                {projects.map((p) => (
+                  <li key={p.id}><Link href={`/nhom/${p.id}`} className="font-medium hover:text-brand-600 dark:hover:text-brand-300">{p.name}</Link> <span className="text-xs muted">· {p.open_tasks} việc đang mở{p.can_view ? '' : ' · chưa tham gia'}</span></li>
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
       </div>
     </>

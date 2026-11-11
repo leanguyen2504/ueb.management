@@ -57,7 +57,7 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
       </div>
       </div>
       <div className="space-y-4">
-        {ctx.can_create_group && !luu_tru && <CreateGroupForm />}
+        {ctx.can_create_group && !luu_tru && <CreateGroupForm units={((dir ?? []) as DirRow[]).filter((g) => g.kind === 'unit').map((g) => ({ id: g.id, name: g.name }))} />}
         {groups?.length ? (
           <GroupTable rows={groups.map((g) => ({
             id: g.id,

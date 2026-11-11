@@ -22,6 +22,9 @@ export async function createGroup(_prev: FormState, form: FormData): Promise<For
     .select('id')
     .single();
   if (error) return { error: errText(error) };
+  // Dự án liên đơn vị: gắn các đơn vị/tổ cùng làm ngay khi tạo.
+  const units = form.getAll('unit_ids').map(String).filter(Boolean);
+  if (units.length && kind !== 'unit') await supabase.from('group_units').insert(units.map((u) => ({ group_id: data.id, unit_id: u })));
   revalidatePath('/nhom');
   redirect(`/nhom/${data.id}`);
 }
@@ -161,4 +164,26 @@ export async function decideJoin(form: FormData) {
   const { error } = await supabase.rpc('decide_join_request', { p_id: id, p_accept: accept });
   revalidatePath(`/nhom/${groupId}`);
   if (error) redirect(`/nhom/${groupId}?tab=thanh-vien&loi=${encodeURIComponent(errText(error))}`);
+}
+
+// Gắn/gỡ các đơn vị cùng làm một dự án. Dự án tự hiện trong từng đơn vị được gắn.
+export async function setGroupUnits(_prev: FormState, form: FormData): Promise<FormState> {
+  const groupId = String(form.get('group_id'));
+  const want = new Set(form.getAll('unit_ids').map(String).filter(Boolean));
+  const supabase = await createClient();
+  const { data: cur } = await supabase.from('group_units').select('unit_id').eq('group_id', groupId);
+  const have = new Set((cur ?? []).map((r) => r.unit_id as string));
+  const add = [...want].filter((u) => !have.has(u));
+  const del = [...have].filter((u) => !want.has(u));
+  if (add.length) {
+    const { error } = await supabase.from('group_units').insert(add.map((u) => ({ group_id: groupId, unit_id: u })));
+    if (error) return { error: errText(error) };
+  }
+  if (del.length) {
+    const { error } = await supabase.from('group_units').delete().eq('group_id', groupId).in('unit_id', del);
+    if (error) return { error: errText(error) };
+  }
+  revalidatePath(`/nhom/${groupId}`);
+  [...add, ...del].forEach((u) => revalidatePath(`/nhom/${u}`));
+  return { ok: 'Đã lưu các đơn vị cùng làm.' };
 }

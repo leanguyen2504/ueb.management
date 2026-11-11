@@ -1,21 +1,44 @@
 'use client';
 
-import { useActionState } from 'react';
-import { addMember, createGroup, updateGroup } from './actions';
+import { useActionState, useState } from 'react';
+import { addMember, createGroup, setGroupUnits, updateGroup } from './actions';
 import { FormMessage } from '@/components/FormMessage';
 import { SubmitButton } from '@/components/SubmitButton';
 import { KIND_LABEL, type Group } from '@/lib/types';
 
-function KindSelect({ value }: { value?: string }) {
+export type UnitOption = { id: string; name: string };
+
+// Danh sách đơn vị/tổ có ô lọc theo tên, chọn nhiều.
+function UnitPicker({ units, selected = [] }: { units: UnitOption[]; selected?: string[] }) {
+  const [q, setQ] = useState('');
+  const fold = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase();
+  const shown = units.filter((u) => fold(u.name).includes(fold(q)));
   return (
-    <select name="kind" defaultValue={value ?? 'unit'} className="input">
+    <div>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Lọc đơn vị…" className="input mb-2 py-1.5 text-sm" aria-label="Lọc đơn vị" />
+      <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2 text-sm dark:border-slate-700">
+        {units.map((u) => (
+          <label key={u.id} className={`flex items-center gap-2 ${shown.includes(u) ? '' : 'hidden'}`}>
+            <input type="checkbox" name="unit_ids" value={u.id} defaultChecked={selected.includes(u.id)} /> {u.name}
+          </label>
+        ))}
+        {!shown.length && <p className="muted">Không có đơn vị khớp.</p>}
+      </div>
+    </div>
+  );
+}
+
+function KindSelect({ value, onChange }: { value?: string; onChange?: (v: string) => void }) {
+  return (
+    <select name="kind" defaultValue={value ?? 'unit'} onChange={(e) => onChange?.(e.target.value)} className="input">
       {Object.entries(KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
     </select>
   );
 }
 
-export function CreateGroupForm() {
+export function CreateGroupForm({ units = [] }: { units?: UnitOption[] }) {
   const [state, action] = useActionState(createGroup, null);
+  const [kind, setKind] = useState('unit');
   return (
     <details id="tao-nhom" ref={(el) => { if (el && window.location.hash === '#tao-nhom') el.open = true; }} className="card group scroll-mt-20 py-3" open={Boolean(state?.error) || undefined}>
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold">
@@ -25,9 +48,16 @@ export function CreateGroupForm() {
       <form action={action} className="mt-3 space-y-3">
         <div className="grid gap-3 md:grid-cols-[2fr_1fr_3fr]">
           <div><label className="label" htmlFor="g-name">Tên nhóm</label><input id="g-name" name="name" required maxLength={200} className="input" placeholder="Ví dụ: Phòng Hành chính" /></div>
-          <div><label className="label" htmlFor="g-kind">Loại</label><KindSelect /></div>
+          <div><label className="label" htmlFor="g-kind">Loại</label><KindSelect onChange={setKind} /></div>
           <div><label className="label" htmlFor="g-desc">Mô tả</label><input id="g-desc" name="description" maxLength={2000} className="input" /></div>
         </div>
+        {kind !== 'unit' && units.length > 0 && (
+          <fieldset>
+            <legend className="label">Các đơn vị/tổ cùng làm (không bắt buộc)</legend>
+            <p className="mb-2 text-xs muted">Dự án sẽ tự hiện trong mục &quot;Dự án liên đơn vị&quot; của từng đơn vị được chọn.</p>
+            <UnitPicker units={units} />
+          </fieldset>
+        )}
         <FormMessage state={state} />
         <div className="flex flex-wrap items-center gap-3">
           <SubmitButton pendingText="Đang tạo…">Tạo nhóm</SubmitButton>
@@ -89,6 +119,20 @@ export function AddMemberForm({ groupId, canAssignRole }: { groupId: string; can
         <SubmitButton pendingText="Đang thêm…">Thêm</SubmitButton>
       </div>
       <FormMessage state={state} />
+    </form>
+  );
+}
+
+export function GroupUnitsForm({ groupId, units, selected }: { groupId: string; units: UnitOption[]; selected: string[] }) {
+  const [state, action] = useActionState(setGroupUnits, null);
+  return (
+    <form action={action} className="card space-y-3">
+      <h2 className="font-semibold">Các đơn vị/tổ cùng làm</h2>
+      <p className="text-xs muted">Dự án tự hiện trong mục &quot;Dự án liên đơn vị&quot; của từng đơn vị được chọn. Người của đơn vị thấy tên, lãnh đạo, đầu mối và xin tham gia được; chi tiết vẫn chỉ thành viên dự án xem.</p>
+      <input type="hidden" name="group_id" value={groupId} />
+      <UnitPicker units={units} selected={selected} />
+      <FormMessage state={state} />
+      <SubmitButton>Lưu</SubmitButton>
     </form>
   );
 }
