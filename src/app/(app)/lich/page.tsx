@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { SectionTabs } from '@/components/PageHead';
 import { cookies } from 'next/headers';
 import { requireSession } from '@/lib/session';
 import { EventForm } from '@/components/WorkForms';
@@ -11,30 +10,13 @@ import { getGoogleCalendarEvents, isGoogleCalendarEnabled } from '@/lib/google-c
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { PALETTE, VIEW_LABEL, type CalItem, type CalSource, type CalView } from '@/components/calendar/types';
 import { meetingAnchor } from '@/lib/meeting-anchor';
-import { addDay, dayStart, monthGridStart, vnDayOf, weekStart } from '@/components/calendar/time';
+import { dayStart, vnDayOf } from '@/components/calendar/time';
+import { rangeOf } from '@/components/calendar/range';
+import { LichTabs } from './tabs';
 
-export const metadata: Metadata = { title: 'Lịch của tôi' };
+export const metadata: Metadata = { title: 'Lịch trường và nhóm' };
 
 const VIEWS = Object.keys(VIEW_LABEL) as CalView[];
-
-// Khoảng ngày [from, to) cần nạp cho mỗi kiểu xem, và tiêu đề hiện trên thanh công cụ.
-function rangeOf(view: CalView, anchor: string): { from: string; to: string; title: string } {
-  const [y, m] = anchor.split('-').map(Number);
-  if (view === 'ngay') return { from: anchor, to: addDay(anchor, 1), title: `${Number(anchor.slice(8))} tháng ${m}, ${y}` };
-  if (view === 'tuan') {
-    const s = weekStart(anchor);
-    const e = addDay(s, 6);
-    const [, m1] = s.split('-').map(Number);
-    const [y2, m2] = e.split('-').map(Number);
-    const title = m1 === m2 ? `Tháng ${m2}, ${y2}` : `Thg ${m1} – thg ${m2}, ${y2}`;
-    return { from: s, to: addDay(s, 7), title };
-  }
-  if (view === 'thang') {
-    const s = monthGridStart(anchor);
-    return { from: s, to: addDay(s, 42), title: `Tháng ${m}, ${y}` };
-  }
-  return { from: anchor, to: addDay(anchor, 30), title: `Từ ${Number(anchor.slice(8))}/${m}/${y}` };
-}
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ xem?: string; ngay?: string; thang?: string; tat_ca?: string }> }) {
   const sp = await searchParams;
@@ -105,7 +87,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-    <SectionTabs current="lich" tabs={[{ key: 'lich', href: '/lich', label: 'Lịch của tôi' }, { key: 'dat', href: '/dat-lich', label: 'Trang đặt lịch', count: pendingCount ?? 0 }]} />
+    <LichTabs current="lich" pendingBookings={pendingCount ?? 0} />
     <CalendarView
       view={view}
       anchor={anchor}

@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { requireSession } from '@/lib/session';
-import { PageHead, SectionTabs } from '@/components/PageHead';
+import { PageHead } from '@/components/PageHead';
+import { LichTabs } from '../lich/tabs';
 import { BookingSettingsForm, CopyLink } from '@/components/BookingForms';
 import { respondBooking, setBookingOpen } from '@/lib/work';
 import { loadPeople } from '@/lib/people';
@@ -54,7 +55,7 @@ export default async function BookingOwnerPage({ searchParams }: { searchParams:
 
   return (
     <>
-      <SectionTabs current="dat" tabs={[{ key: 'lich', href: '/lich', label: 'Lịch của tôi' }, { key: 'dat', href: '/dat-lich', label: 'Trang đặt lịch', count: pending.length }]} />
+      <LichTabs current="dat" pendingBookings={pending.length} />
       <PageHead
         title="Trang đặt lịch"
         sub="Gửi link để người khác chọn giờ trống và đặt lịch họp với bạn. Cuộc họp chỉ vào Lịch của tôi khi bạn xác nhận."
