@@ -46,8 +46,9 @@ OR worklogAuthor = currentUser() OR comment ~ "<tên đăng nhập>"
 ```
 
 - **Worklog**: chỉ các dòng có tác giả là mình.
-- **Sản phẩm đã nộp**: mã việc mình được giao, đã sang nhóm trạng thái "Xong" (statusCategory = done), tính theo tháng hoàn thành.
-- **Giờ quy đổi**: lấy từ trường tùy chỉnh có tên chứa "quy đổi". Nếu tên khác, đặt `JIRA_CONVERTED_HOURS_FIELD` bằng đúng tên trường. Trang hiện danh sách tên các trường tùy chỉnh đang có để dễ chọn.
+- **Việc của tôi**: được giao cho mình hoặc mình có log work (Jira của trường thường giao việc cho người duyệt, người làm là người log work).
+- **Sản phẩm đã nộp**: việc của tôi đã sang nhóm trạng thái "Xong" (statusCategory = done), tính theo tháng hoàn thành, kèm bảng theo loại sản phẩm.
+- **Giờ quy đổi**: lấy từ trường tùy chỉnh có tên chứa "quy đổi"; không có thì trường "Sản phẩm", đọc số giờ ở cuối giá trị (ví dụ "5-Biên bản loại 1-1h" là 1 giờ). Nếu tên khác, đặt `JIRA_CONVERTED_HOURS_FIELD` bằng đúng tên trường. Trang hiện danh sách tên các trường tùy chỉnh đang có để dễ chọn.
 - **Comment nhắc tên**: comment của người khác có `[~tên đăng nhập]`; "đã trả lời" khi mình có comment trên mã đó sau lời nhắc.
 - **Ngày bắt đầu**: trường tùy chỉnh có tên chứa "Start date" hoặc "Ngày bắt đầu". **Epic**: trường "Epic Link". **Sprint**: trường "Sprint" (lấy sprint cuối).
 - **Bị chặn / đang chặn**: liên kết loại "Blocks" (chỉ tính việc bên kia chưa xong).

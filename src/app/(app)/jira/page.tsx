@@ -6,7 +6,7 @@ import { features, publicEnv, serverEnv } from '@/lib/env';
 import { fmtDate, fmtDateTime, vnDay } from '@/lib/format';
 import {
   ROLE_FILTERS, blockedBy, blocking, daysBetween, dueState, fmtDuration, fmtHours, groupWorklogs, hours, inProgressNoLog,
-  numberOf, pickConvertedField, roleChips, submittedByMonth, todoList, waitingOnMe, waitingOnOthers,
+  byProductType, numberOf, pickConvertedField, productLabel, roleChips, submittedByMonth, todoList, waitingOnMe, waitingOnOthers,
   type RoleFilter, type Worklog,
 } from '@/lib/jira/report';
 import type { JiraAccount, JiraIssueRow, JiraMentionRow } from '@/lib/jira/types';
@@ -80,7 +80,7 @@ export default async function JiraPage({ searchParams }: { searchParams: Search 
             <Stat label="Đang chờ tôi" value={String(onMe.mentions.length + onMe.blockingOthers.length)} warn={onMe.mentions.length + onMe.blockingOthers.length > 0} />
             <Stat label="Giờ log tuần này" value={fmtHours(hours(totals.weekSec))} />
             <Stat label="Sản phẩm nộp tháng này" value={String(totals.submittedMonth)} />
-            <Stat label={field ? `${field} năm nay` : 'Giờ quy đổi năm nay'} value={field ? fmtHours(totals.convertedYear) : '—'} />
+            <Stat label="Giờ quy đổi năm nay" value={field ? fmtHours(totals.convertedYear) : '—'} />
           </div>
 
           <SectionTabs current={tab} tabs={[
@@ -94,7 +94,7 @@ export default async function JiraPage({ searchParams }: { searchParams: Search 
 
           {tab === 'can-lam' && (
             <>
-              <Section title="Việc được giao cho tôi, chưa xong" note="Xếp theo hạn: quá hạn tô đỏ, đến hạn trong 7 ngày tô vàng; cùng hạn thì việc ưu tiên cao lên trước.">
+              <Section title="Việc của tôi, chưa xong" note="Việc được giao cho bạn hoặc bạn đã log work. Xếp theo hạn: quá hạn tô đỏ, đến hạn trong 7 ngày tô vàng; cùng hạn thì việc ưu tiên cao lên trước.">
                 <IssueCards items={todo} ctx={ctx} empty="Không có việc nào đang mở. Tuyệt vời!" />
               </Section>
               <Section title="Đang làm nhưng tuần này chưa log work" note="Việc ở trạng thái đang làm mà từ thứ Hai tới nay bạn chưa ghi giờ.">
@@ -126,8 +126,10 @@ export default async function JiraPage({ searchParams }: { searchParams: Search 
           )}
 
           {tab === 'da-lam' && (
-            <Section title="Sản phẩm đã nộp và giờ quy đổi" note={<>Tính các mã việc bạn được giao đã chuyển sang trạng thái hoàn thành, theo tháng hoàn thành.{' '}
-              {field ? <>Giờ quy đổi lấy từ trường <b>{field}</b> trên Jira.</> : <>Chưa tìm thấy trường &quot;giờ quy đổi&quot;{acc!.custom_field_names.length ? <> (các trường đang có: {acc!.custom_field_names.slice(0, 15).join(', ')}{acc!.custom_field_names.length > 15 ? '…' : ''})</> : null}.</>}</>}>
+            <Section title="Sản phẩm đã nộp và giờ quy đổi" note={<>Tính các mã việc của bạn (được giao cho bạn hoặc bạn có log work) đã chuyển sang trạng thái hoàn thành, theo tháng hoàn thành.{' '}
+              {field ? <>Giờ quy đổi lấy từ trường <b>{field}</b> trên Jira (số giờ ghi ở cuối, ví dụ &quot;Biên bản loại 1-1h&quot; là 1 giờ).</> : <>Chưa tìm thấy trường &quot;giờ quy đổi&quot;{acc!.custom_field_names.length ? <> (các trường đang có: {acc!.custom_field_names.slice(0, 15).join(', ')}{acc!.custom_field_names.length > 15 ? '…' : ''})</> : null}.</>}</>}>
+              <TypeTable title="Theo loại sản phẩm, 12 tháng gần nhất" rows={byProductType(submitted.flatMap((s) => s.items), field)} field={field} />
+              <h3 className="mb-1 mt-5 text-sm font-semibold">Theo tháng</h3>
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {submitted.map((s) => (
                   <li key={s.key}>
@@ -139,12 +141,13 @@ export default async function JiraPage({ searchParams }: { searchParams: Search 
                       </summary>
                       {s.items.length > 0 && (
                         <table className="table mb-2">
-                          <thead><tr><th>Mã</th><th>Tóm tắt</th><th>Ngày nộp</th><th className="text-right">Giờ log</th>{field && <th className="text-right">Giờ quy đổi</th>}<th>Số lần bị trả lại</th></tr></thead>
+                          <thead><tr><th>Mã</th><th>Tóm tắt</th><th>Loại sản phẩm</th><th>Ngày nộp</th><th className="text-right">Giờ log</th>{field && <th className="text-right">Giờ quy đổi</th>}<th>Số lần bị trả lại</th></tr></thead>
                           <tbody>
                             {s.items.map((i) => (
                               <tr key={i.issue_key}>
                                 <td><IssueLink k={i.issue_key} href={browse(i.issue_key)} /></td>
                                 <td>{i.summary}</td>
+                                <td className="text-xs">{field ? productLabel(i.custom?.[field]) : i.issue_type}</td>
                                 <td className="whitespace-nowrap">{i.resolved_at ? fmtDate(vnDay(i.resolved_at)) : ''}</td>
                                 <td className="text-right tabular-nums">{i.my_seconds ? fmtHours(hours(i.my_seconds)) : ''}</td>
                                 {field && <td className="text-right tabular-nums">{numberOf(i.custom?.[field]) !== null ? fmtHours(numberOf(i.custom[field])!) : ''}</td>}
@@ -205,6 +208,24 @@ export default async function JiraPage({ searchParams }: { searchParams: Search 
           )}
         </div>
       </section>
+    </>
+  );
+}
+
+function TypeTable({ title, rows, field }: { title: string; rows: ReturnType<typeof byProductType>; field: string | null }) {
+  if (!rows.length) return <p className="text-sm muted">Chưa có sản phẩm nào hoàn thành trong 12 tháng gần nhất.</p>;
+  return (
+    <>
+      <h3 className="mb-1 text-sm font-semibold">{title}</h3>
+      <table className="table">
+        <thead><tr><th>Loại sản phẩm</th><th className="text-right">Số lượng</th>{field && <th className="text-right">Giờ quy đổi</th>}</tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label}><td>{r.label}</td><td className="text-right tabular-nums">{r.count}</td>{field && <td className="text-right tabular-nums">{fmtHours(r.converted)}</td>}</tr>
+          ))}
+          <tr className="font-semibold"><td>Tổng</td><td className="text-right tabular-nums">{rows.reduce((a, r) => a + r.count, 0)}</td>{field && <td className="text-right tabular-nums">{fmtHours(rows.reduce((a, r) => a + r.converted, 0))}</td>}</tr>
+        </tbody>
+      </table>
     </>
   );
 }
