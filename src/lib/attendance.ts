@@ -94,11 +94,11 @@ export function parseDay(v: unknown): string | null {
   return null;
 }
 
-// Trường "Số ngày nghỉ", "Từ ngày" có sẵn giá trị mặc định trên mọi mã việc của Jira trường, nên không dùng để nhận đơn nghỉ:
-// chỉ dựa vào loại mã việc (Chuyên viên/ Giảng viên nghỉ phép) hoặc trường "Loại nghỉ phép".
-export const isLeaveIssue = (i: JiraIssueRow) =>
-  LEAVE_RE.test(norm(i.issue_type)) || field(i, /^loại nghỉ phép$/) !== undefined;
-export const isOvertimeIssue = (i: JiraIssueRow) => !isLeaveIssue(i) && (OT_RE.test(norm(i.issue_type)) || OT_RE.test(norm(i.summary)));
+// Jira của trường gắn sẵn giá trị mặc định cho các trường của đơn nghỉ ("Loại nghỉ phép" = "Nghỉ phép năm",
+// "Số ngày nghỉ" = 1.0, "Từ ngày"…) trên MỌI mã việc, kể cả việc thường. Vì vậy chỉ nhận đơn nghỉ theo loại mã việc
+// (ví dụ "Chuyên viên/ Giảng viên nghỉ phép"), không dựa vào các trường đó.
+export const isLeaveIssue = (i: JiraIssueRow) => LEAVE_RE.test(norm(i.issue_type));
+export const isOvertimeIssue = (i: JiraIssueRow) => !isLeaveIssue(i) && (OT_RE.test(norm(i.issue_type)) || /^(đăng ký|đơn|xin) .*(ngoài giờ|làm thêm|tăng ca)/.test(norm(i.summary)));
 
 // Đơn của chính mình: trường "Người viết đơn" có tên đăng nhập hoặc tên hiển thị của mình; không có trường đó thì xét người tạo.
 export function isMyRequest(i: JiraIssueRow, me: { username: string | null; displayName: string | null }) {
