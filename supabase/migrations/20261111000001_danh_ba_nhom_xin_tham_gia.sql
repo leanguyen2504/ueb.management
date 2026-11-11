@@ -1,4 +1,4 @@
--- Mở cho mọi người có email @vnu.edu.vn (đã có từ migration mo_dang_nhap_ten_mien), thêm:
+-- Mở cho mọi người có email @vnu.edu.vn tự đăng nhập (trước đó chỉ người được mời), thêm:
 -- 1. Giới hạn số người truy cập cùng lúc (mặc định 200). Quản trị, Hiệu trưởng, thư ký luôn vào được.
 -- 2. Danh bạ nhóm: mọi người dùng đang hoạt động thấy tên, mô tả, đơn vị quản lý,
 --    lãnh đạo và đầu mối liên hệ của mọi nhóm, và tên các việc đang mở để xin tham gia.
