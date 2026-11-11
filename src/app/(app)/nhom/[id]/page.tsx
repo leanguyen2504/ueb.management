@@ -337,7 +337,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                 const display = p?.full_name || p?.email || 'Người dùng';
                 const granted = EDIT_PERMS.filter(([k]) => m[k]).map(([, l]) => l);
                 return (
-                  <li key={m.user_id} className="relative py-2.5">
+                  <li key={`${m.user_id}-${m.is_manager}-${m.is_clerk}-${EDIT_PERMS.map(([k]) => (m[k] ? 1 : 0)).join("")}`} className="relative py-2.5">
                     <div className="flex flex-wrap items-center gap-3">
                       <Avatar name={display} url={avatars.get(p?.avatar_path ?? '')} size={36} className={['bg-brand-600', 'bg-teal-600', 'bg-gold-500', 'bg-sky-700'][i % 4]} />
                       <div className="min-w-0 flex-1">

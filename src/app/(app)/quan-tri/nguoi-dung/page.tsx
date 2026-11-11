@@ -9,7 +9,8 @@ import { fmtDateTime } from '@/lib/format';
 
 export const metadata: Metadata = { title: 'Người dùng' };
 
-export default async function UsersPage() {
+export default async function UsersPage({ searchParams }: { searchParams: Promise<{ tb?: string; loi?: string }> }) {
+  const { tb, loi } = await searchParams;
   const { supabase, userId } = await requireAdmin();
   const [{ data: users }, { data: scopes }, { data: invites }, { data: groups }] = await Promise.all([
     supabase.from('profiles').select('*').order('full_name').returns<Profile[]>(),
@@ -27,6 +28,8 @@ export default async function UsersPage() {
   return (
     <>
       <PageHead title="Người dùng" sub="Chỉ quản trị hệ thống thấy trang này. Mọi thay đổi vai trò và khóa tài khoản đều được ghi nhật ký." />
+      {tb && <p role="status" className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{tb}</p>}
+      {loi && <p role="alert" className="mb-4 rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">{loi}</p>}
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <section className="card overflow-x-auto p-0">
           <table className="table">
@@ -35,11 +38,13 @@ export default async function UsersPage() {
               {(users ?? []).map((u) => {
                 const formId = `u-${u.id}`;
                 return (
-                  <tr key={u.id}>
+                  // Khóa gồm cả giá trị đã lưu: sau khi lưu, React đặt lại form về giá trị ban đầu,
+                  // nên cho dòng vẽ lại với giá trị mới từ cơ sở dữ liệu.
+                  <tr key={`${u.id}-${u.system_role}-${u.is_active}-${allScope.has(u.id)}`}>
                     <td>
                       <div className="font-medium">{u.full_name || '(chưa đặt tên)'}{u.id === userId && <span className="chip ml-2">Quản trị hệ thống</span>}</div>
                       <div className="text-xs muted">{u.email}{u.unit ? ` · ${u.unit}` : ''}</div>
-                      <form id={formId} action={setUser}><input type="hidden" name="user_id" value={u.id} /></form>
+                      <form id={formId} action={setUser}><input type="hidden" name="user_id" value={u.id} /><input type="hidden" name="email" value={u.email} /></form>
                     </td>
                     <td>
                       <select name="system_role" form={formId} defaultValue={u.system_role} className="input py-1" aria-label="Vai trò">
