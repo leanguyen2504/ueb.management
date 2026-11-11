@@ -1,11 +1,15 @@
 # Jira của tôi (dữ liệu Jira cá nhân, chỉ đọc)
 
-Trang `/jira` (menu tài khoản → **Jira của tôi**) cho mỗi người xem dữ liệu Jira **của chính mình**:
+Trang `/jira` (menu tài khoản → **Jira của tôi**) cho mỗi người quản lý đầu việc Jira **của chính mình**, chia thành các thẻ:
 
-- Worklog cá nhân theo tuần hoặc theo tháng (12 kỳ gần nhất, bấm vào từng kỳ để xem chi tiết).
-- Sản phẩm đã nộp và giờ quy đổi theo tháng.
-- Các mã Jira liên quan: được giao, tự tạo, đang theo dõi, có worklog của mình, có comment nhắc tên mình.
-- Comment nhắc tên mình (`@tên`).
+- **Cần làm**: việc được giao chưa xong, xếp theo hạn (quá hạn tô đỏ, đến hạn trong 7 ngày tô vàng) rồi độ ưu tiên; kèm mục "Đang làm nhưng tuần này chưa log work".
+- **Đang chờ tôi**: comment nhắc tên mình mà mình chưa comment lại; việc của mình đang chặn việc khác.
+- **Đang chờ người khác**: việc của mình bị việc khác chặn; việc mình tạo hoặc theo dõi mà người khác đang làm.
+- **Đã làm**: sản phẩm đã nộp và giờ quy đổi theo tháng, số lần bị trả lại.
+- **Worklog**: giờ log theo tuần hoặc theo tháng (12 kỳ gần nhất).
+- **Tất cả mã Jira**: lọc theo được giao, tự tạo, theo dõi, có worklog, nhắc tên.
+
+Mỗi đầu việc hiện: trạng thái và số ngày ở trạng thái đó, hạn, ưu tiên, ngày bắt đầu, thời gian còn lại/ước tính, giờ mình đã log, việc con xong/tổng, số lần bị trả lại, việc cha, epic, sprint, đợt (fix version), thành phần, nhãn, việc đang chờ/đang chặn, comment mới nhất.
 
 Không lấy worklog hay comment của đồng nghiệp, kể cả khi Jira cho phép người đó xem. Dữ liệu chỉ chủ tài khoản đọc được (RLS); quản trị, Hiệu trưởng và thư ký cũng không xem được. Hệ thống chỉ đọc Jira, không ghi gì lên Jira.
 
@@ -44,6 +48,9 @@ OR worklogAuthor = currentUser() OR comment ~ "<tên đăng nhập>"
 - **Worklog**: chỉ các dòng có tác giả là mình.
 - **Sản phẩm đã nộp**: mã việc mình được giao, đã sang nhóm trạng thái "Xong" (statusCategory = done), tính theo tháng hoàn thành.
 - **Giờ quy đổi**: lấy từ trường tùy chỉnh có tên chứa "quy đổi". Nếu tên khác, đặt `JIRA_CONVERTED_HOURS_FIELD` bằng đúng tên trường. Trang hiện danh sách tên các trường tùy chỉnh đang có để dễ chọn.
-- **Comment nhắc tên**: comment của người khác có `[~tên đăng nhập]`.
+- **Comment nhắc tên**: comment của người khác có `[~tên đăng nhập]`; "đã trả lời" khi mình có comment trên mã đó sau lời nhắc.
+- **Ngày bắt đầu**: trường tùy chỉnh có tên chứa "Start date" hoặc "Ngày bắt đầu". **Epic**: trường "Epic Link". **Sprint**: trường "Sprint" (lấy sprint cuối).
+- **Bị chặn / đang chặn**: liên kết loại "Blocks" (chỉ tính việc bên kia chưa xong).
+- **Lịch sử trạng thái**: lấy từ changelog (30 lần chuyển gần nhất). "Bị trả lại" là lần chuyển từ trạng thái nhóm Xong về trạng thái chưa xong.
 
 Mỗi người có thể bấm **Ngắt kết nối và xóa dữ liệu Jira đã lưu** để xóa token, mã đồng bộ và toàn bộ dữ liệu.
