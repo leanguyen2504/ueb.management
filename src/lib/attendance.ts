@@ -163,7 +163,7 @@ function daysBetween(a: string, b: string) {
 
 // ---- Tổng hợp theo ngày ----
 
-export type DayVerdict = 'dat' | 'mot-phan' | 'nghi-phep' | 'cho-duyet' | 'thieu' | 'cuoi-tuan' | 'chua-den' | 'hom-nay';
+export type DayVerdict = 'dat' | 'mot-phan' | 'nghi-phep' | 'cho-duyet' | 'thieu' | 'cuoi-tuan' | 'lam-cuoi-tuan' | 'chua-den' | 'hom-nay';
 export const VERDICT_LABEL: Record<DayVerdict, string> = {
   dat: 'Đạt',
   'mot-phan': 'Chưa đủ giờ',
@@ -173,6 +173,7 @@ export const VERDICT_LABEL: Record<DayVerdict, string> = {
   'cuoi-tuan': 'Cuối tuần',
   'chua-den': '',
   'hom-nay': 'Hôm nay',
+  'lam-cuoi-tuan': 'Làm cuối tuần',
 };
 
 export type DayRow = {
@@ -236,6 +237,17 @@ export function buildDays(input: {
     wl.set(d, (wl.get(d) ?? 0) + w.seconds);
   }
   const requestIssues = new Set(input.requests.map((r) => r.key));
+  // Việc đi công tác / onsite trên Jira có ngày trong tiêu đề ("Đi onsite Thành ủy ngày 14.10.2026").
+  const tripBy = new Map<string, { key: string; summary: string }>();
+  for (const i of input.issues) {
+    if (!isMine(i) && !i.is_reporter) continue;
+    const t = norm(i.summary);
+    if (!/onsite|công tác|đi công|khảo sát thực địa/.test(t)) continue;
+    const m = t.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+    if (!m) continue;
+    const d = `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    if (!tripBy.has(d)) tripBy.set(d, { key: i.issue_key, summary: i.summary });
+  }
   const prodBy = new Map<string, DayRow['products']>();
   for (const i of input.issues) {
     if (!isMine(i) || i.status_category !== 'done' || !i.resolved_at || requestIssues.has(i.issue_key) || isLeaveIssue(i)) continue;
@@ -269,6 +281,9 @@ export function buildDays(input: {
     } else if (ci) {
       place = CHECKIN_LABEL[ci.place];
       placeFrom = 'diem-danh';
+    } else if (tripBy.has(day)) {
+      place = `Công tác: ${tripBy.get(day)!.summary}`;
+      placeFrom = 'jira';
     } else if (items.some((i) => i.kind === 'giang_day')) {
       place = 'Đi giảng';
       placeFrom = 'lich';
@@ -294,7 +309,7 @@ export function buildDays(input: {
     if (day > today) verdict = 'chua-den';
     else if (leaveFraction >= 1) verdict = approvedLeave.length === leave.length ? 'nghi-phep' : 'cho-duyet';
     else if (weekend && !ci && !items.length && !worked && !overtime.length && !products.length) verdict = 'cuoi-tuan';
-    else if (worked >= target || converted >= target) verdict = target === 0 && !worked && !converted ? 'cuoi-tuan' : 'dat';
+    else if (worked >= target || converted >= target) verdict = weekend ? (worked || converted || products.length ? 'lam-cuoi-tuan' : 'cuoi-tuan') : 'dat';
     else if (day === today) verdict = 'hom-nay';
     else if (worked > 0 || converted > 0 || ci || items.length || products.length) verdict = 'mot-phan';
     else verdict = 'thieu';
