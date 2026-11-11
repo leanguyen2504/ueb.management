@@ -52,6 +52,12 @@ Người được giao việc phải là thành viên nhóm (hoặc Hiệu trư�
 - Danh bạ nhóm: mọi người dùng đang hoạt động gọi được `group_directory()` (tên, mô tả, đơn vị quản lý, số thành viên, số việc mở), `group_contacts(id)` (Trưởng nhóm là lãnh đạo, Văn thư là đầu mối liên hệ, kèm email, điện thoại, phòng) và `group_open_task_titles(id)` (chỉ tên, hạn và đã có người phụ trách chưa). Tài liệu, mô tả việc, sản phẩm, lịch và danh sách thành viên vẫn do RLS giữ kín.
 - Xin tham gia: `request_join(nhóm, việc?, lời nhắn)` tạo yêu cầu trong `join_requests` và báo cho Trưởng nhóm, Văn thư. Người có quyền quản lý thành viên duyệt bằng `decide_join_request`: nhận thì người xin vào nhóm với quyền mặc định (luôn có quyền xem); nếu xin một việc chưa có người phụ trách và người duyệt có quyền sửa thì được giao luôn việc đó. Người xin tự hủy bằng `cancel_join_request`. Không ghi thẳng vào bảng được.
 
+## Dự án và việc chung nhiều đơn vị
+
+- Bảng `group_units` gắn một dự án, sự kiện hoặc không gian với nhiều đơn vị/tổ cùng làm. Ai sửa được dự án thì gắn, gỡ được đơn vị; chỉ gắn vào nhóm loại Đơn vị đang hoạt động. Trưởng nhóm, Văn thư của đơn vị được gắn nhận thông báo.
+- Dự án tự hiện trong mục "Dự án liên đơn vị" của từng đơn vị được gắn. Việc gắn không cấp quyền xem: người của đơn vị thấy thông tin như danh bạ và xin tham gia được.
+- Trong trang đơn vị, "Việc chung nhiều đơn vị" tạo một không gian con (`create_subgroup`) rồi gắn đơn vị đó cùng các đơn vị đã chọn.
+
 ## Kiểm thử
 
 `supabase/tests/10_phan_quyen.sql` đăng nhập giả lập từng vai trò và kiểm tra các trường hợp được phép và bị chặn. Chạy bằng `npm run test:db`; CI chạy lại mỗi lần có pull request.

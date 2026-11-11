@@ -73,3 +73,15 @@ reset role;
 update public.system_settings set max_online = 200;
 
 select 'OK: kiểm thử danh bạ nhóm và xin tham gia' as ket_qua;
+
+-- 6. Dự án liên đơn vị: gắn dự án g9 vào đơn vị g1.
+set role authenticated;
+select set_config('request.jwt.claim.sub', :thuky, false);
+insert into public.group_units (group_id, unit_id) values (:g9, '10000000-0000-0000-0000-000000000001');
+select t.denied(format($$insert into public.group_units (group_id, unit_id) values ('10000000-0000-0000-0000-000000000001', %L)$$, :g9), 'gắn vào nhóm không phải đơn vị');
+select set_config('request.jwt.claim.sub', :tv2, false);
+select t.ok(t.count($$select * from public.group_units where unit_id = '10000000-0000-0000-0000-000000000001'$$) = 1, 'người của đơn vị thấy dự án được gắn');
+select t.denied(format($$delete from public.group_units where group_id = %L$$, :g9), 'người không sửa được dự án gỡ đơn vị');
+select t.denied(format($$insert into public.group_units (group_id, unit_id) values (%L, '10000000-0000-0000-0000-000000000002')$$, :g9), 'người không sửa được dự án gắn đơn vị');
+reset role;
+select 'OK: dự án liên đơn vị' as ket_qua;

@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireSession } from '@/lib/session';
-import { AddMemberForm, EditGroupForm } from '../GroupForms';
+import { AddMemberForm, EditGroupForm, GroupUnitsForm } from '../GroupForms';
 import { cancelInvitation, decideJoin, removeMember, setArchived, updateMember } from '../actions';
 import { PublicGroup, type DirGroup } from './PublicGroup';
+import { OpenFromHash } from '@/components/OpenFromHash';
 import { KIND_LABEL, PERMS, ROLE_LABEL, type Group, type GroupMember, type Profile } from '@/lib/types';
 import { fmtDateTime, fmtTime } from '@/lib/format';
 import { TaskList } from '@/components/TaskList';
@@ -28,15 +29,20 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   if (!group) {
     // Chưa tham gia: hiện trang công khai (lãnh đạo, đầu mối, tên việc) để xin tham gia.
     if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-    const [{ data: dir }, { data: contacts }, { data: open }, { data: reqs }] = await Promise.all([
+    const [{ data: dir }, { data: contacts }, { data: open }, { data: reqs }, { data: tagRows }] = await Promise.all([
       supabase.rpc('group_directory'),
       supabase.rpc('group_contacts', { p_group: id }),
       supabase.rpc('group_open_task_titles', { p_group: id }),
       supabase.from('join_requests').select('id, task_id, created_at').eq('group_id', id).eq('requester_id', userId).eq('status', 'pending'),
+      supabase.from('group_units').select('group_id, unit_id').or(`group_id.eq.${id},unit_id.eq.${id}`),
     ]);
-    const pub = ((dir ?? []) as DirGroup[]).find((g) => g.id === id);
+    const all = (dir ?? []) as (DirGroup & { can_view: boolean })[];
+    const pub = all.find((g) => g.id === id);
     if (!pub) notFound();
-    return <PublicGroup group={pub} contacts={contacts ?? []} tasks={open ?? []} requests={reqs ?? []} tb={tb} loi={loi} />;
+    const byId = new Map(all.map((g) => [g.id, g]));
+    const units = (tagRows ?? []).filter((r) => r.group_id === id).map((r) => byId.get(r.unit_id)).filter(Boolean) as DirGroup[];
+    const projects = (tagRows ?? []).filter((r) => r.unit_id === id).map((r) => byId.get(r.group_id)).filter(Boolean) as (DirGroup & { can_view: boolean })[];
+    return <PublicGroup group={pub} contacts={contacts ?? []} tasks={open ?? []} requests={reqs ?? []} units={units} projects={projects} tb={tb} loi={loi} />;
   }
 
   const [{ data: members }, { data: invites }, { data: log }, { data: tasks }, { data: events }, { data: joinReqs }] = await Promise.all([
@@ -54,10 +60,18 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     supabase.from('groups').select('id, name, description, archived_at').eq('parent_id', id).order('created_at', { ascending: false }),
     group.parent_id ? supabase.from('groups').select('id, name').eq('id', group.parent_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
-  // Đơn vị quản lý mình chưa tham gia vẫn hiện tên để bấm sang trang công khai của đơn vị đó.
-  const parentLink = parent ?? (group.parent_id
-    ? (((await supabase.rpc('group_directory')).data ?? []) as { id: string; name: string }[]).find((g) => g.id === group.parent_id) ?? null
-    : null);
+  // Danh bạ để hiện tên đơn vị quản lý, đơn vị cùng làm và dự án liên đơn vị, kể cả nhóm mình chưa tham gia.
+  const [{ data: dirData }, { data: tagRows }] = await Promise.all([
+    supabase.rpc('group_directory'),
+    supabase.from('group_units').select('group_id, unit_id').or(`group_id.eq.${id},unit_id.eq.${id}`),
+  ]);
+  const dirAll = (dirData ?? []) as (DirGroup & { can_view: boolean })[];
+  const dirById = new Map(dirAll.map((g) => [g.id, g]));
+  const parentLink = parent ?? (group.parent_id ? dirById.get(group.parent_id) ?? null : null);
+  const myUnits = (tagRows ?? []).filter((r) => r.group_id === id).map((r) => dirById.get(r.unit_id)).filter(Boolean) as DirGroup[];
+  // Không gian con của chính đơn vị này đã nằm trong mục Không gian, không lặp lại.
+  const sharedProjects = ((tagRows ?? []).filter((r) => r.unit_id === id).map((r) => dirById.get(r.group_id)).filter(Boolean) as (DirGroup & { can_view: boolean })[]).filter((p) => p.parent_id !== id);
+  const unitOptions = dirAll.filter((g) => g.kind === 'unit' && g.id !== id).map((g) => ({ id: g.id, name: g.name }));
   const links = new Map<string, TaskLink[]>();
   (linkRows ?? []).forEach((l) => links.set(l.task_id, [...(links.get(l.task_id) ?? []), l]));
   const childIds = (children ?? []).map((c) => c.id);
@@ -93,7 +107,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     { key: 'tong-quan', label: 'Tổng quan' },
     { key: 'viec', label: 'Việc', count: openTasks.length },
     { key: 'lich', label: 'Lịch', count: events?.length ?? 0 },
-    ...(childIds.length > 0 || canSub ? [{ key: 'khong-gian', label: 'Không gian', count: childIds.length }] : []),
+    ...(childIds.length > 0 || canSub || sharedProjects.length > 0 ? [{ key: 'khong-gian', label: 'Không gian', count: childIds.length + sharedProjects.length }] : []),
     { key: 'thanh-vien', label: (joinReqs?.length ? `Thành viên · ${joinReqs.length} yêu cầu` : 'Thành viên'), count: members?.length ?? 0 },
     { key: 'thong-tin', label: 'Thông tin' },
   ];
@@ -120,6 +134,26 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         );
       })}
     </ul>
+  );
+  const shared = sharedProjects.length > 0 && (
+    <section className="card" aria-labelledby="lien-dv-h">
+      <h2 id="lien-dv-h" className="mb-1 text-lg font-semibold">Dự án liên đơn vị ({sharedProjects.length})</h2>
+      <p className="mb-3 text-sm muted">Dự án, sự kiện có {group.name} cùng làm với đơn vị khác.</p>
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {sharedProjects.map((p) => (
+          <li key={p.id}>
+            <Link href={`/nhom/${p.id}`} className="block h-full rounded-xl border border-slate-200 bg-white p-3.5 hover:border-brand-600 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-brand-300">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-semibold">{p.name}</span>
+                {!p.can_view && <span className="chip">Chưa tham gia</span>}
+              </div>
+              {p.description && <p className="truncate text-xs muted">{p.description}</p>}
+              <p className="mt-1.5 text-xs muted">{KIND_LABEL[p.kind as keyof typeof KIND_LABEL] ?? p.kind} · {p.member_count} thành viên · {p.open_tasks} việc đang mở</p>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
   const eventList = events?.length ? (
     <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">
@@ -153,6 +187,8 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
             <span className="chip bg-gold-50 text-gold-600 dark:bg-gold-600/15 dark:text-gold-500">{KIND_LABEL[group.kind]}</span>
             {group.archived_at && <span className="chip">Đã lưu trữ</span>}
+            {myUnits.length > 0 && <span className="muted">Cùng làm:</span>}
+            {myUnits.map((u) => <Link key={u.id} href={`/nhom/${u.id}`} className="chip hover:text-brand-600 dark:hover:text-brand-300">{u.name}</Link>)}
           </div>
           {group.description && <p className="mt-2 max-w-3xl text-sm muted">{group.description}</p>}
         </div>
@@ -161,6 +197,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
           {canAddTask && <Link href={`${tabHref('viec')}#tao-viec`} className="btn">+ Tạo việc</Link>}
         </div>
       </div>
+      <OpenFromHash />
       {tb && <p role="status" className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{tb}</p>}
       {loi && <p role="alert" className="mb-4 rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">{loi}</p>}
 
@@ -185,6 +222,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                 {spaces}
               </section>
             )}
+            {shared && <div className="mt-5">{shared}</div>}
           </div>
           <div className="space-y-5">
             <section className="card">
@@ -212,10 +250,19 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
             )}
           </section>
           {canAddTask && (
-            <section id="tao-viec" className="card scroll-mt-20">
-              <h2 className="mb-3 text-lg font-semibold">Tạo việc mới</h2>
-              <TaskForm groupId={group.id} people={memberOptions} />
-            </section>
+            <div className="space-y-5">
+              <section id="tao-viec" data-hash-focus className="card scroll-mt-20 target:ring-2 target:ring-gold-500">
+                <h2 className="mb-3 text-lg font-semibold">Tạo việc mới</h2>
+                <TaskForm groupId={group.id} people={memberOptions} />
+              </section>
+              {canSub && (
+                <section className="card">
+                  <h2 className="mb-1 text-lg font-semibold">Việc chung nhiều đơn vị</h2>
+                  <p className="mb-3 text-sm muted">Việc cần nhiều phòng ban cùng làm: tạo một không gian chung, chọn các đơn vị cùng làm. Không gian tự hiện ở trang của từng đơn vị đó.</p>
+                  <Link href={`${tabHref('khong-gian')}#tao-khong-gian`} className="btn-secondary">+ Tạo việc chung</Link>
+                </section>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -227,15 +274,16 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         </div>
       )}
 
-      {tab === 'khong-gian' && (
+      {tab === 'khong-gian' && shared && <div className="mb-5">{shared}</div>}
+      {tab === 'khong-gian' && (childIds.length > 0 || canSub) && (
         <section className="card" aria-labelledby="kgc-h">
           <h2 id="kgc-h" className="mb-1 text-lg font-semibold">Không gian sự kiện / việc chung ({childIds.length})</h2>
           <p className="mb-4 text-sm muted">Mỗi không gian chỉ gồm người tham gia, để giao việc, đôn đốc và gắn sản phẩm riêng.</p>
           {childIds.length > 0 && <div className="mb-4">{spaces}</div>}
           {canSub && (
-            <details>
-              <summary className="btn-secondary cursor-pointer list-none">+ Tạo không gian mới</summary>
-              <SubgroupForm parentId={group.id} people={memberOptions} me={userId} />
+            <details id="tao-khong-gian" data-hash-open className="scroll-mt-20">
+              <summary className="btn-secondary cursor-pointer list-none">+ Tạo không gian / việc chung</summary>
+              <SubgroupForm parentId={group.id} people={memberOptions} me={userId} units={group.kind === 'unit' ? unitOptions : []} />
             </details>
           )}
         </section>
@@ -368,15 +416,18 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
               </ul>
             ) : <p className="text-sm muted">Chưa có hoạt động.</p>}
           </section>
-          {canManage && (
+          {(canManage || (canEdit && group.kind !== 'unit')) && (
             <div className="space-y-5">
-              <EditGroupForm group={group} />
+              {group.kind !== 'unit' && canEdit && !group.archived_at && <GroupUnitsForm groupId={group.id} units={unitOptions} selected={myUnits.map((u) => u.id)} />}
+              {canManage && <EditGroupForm group={group} />}
+              {canManage && (
               <form action={setArchived} className="card">
                 <input type="hidden" name="id" value={group.id} />
                 <input type="hidden" name="archive" value={group.archived_at ? '0' : '1'} />
                 <p className="mb-2 text-sm muted">{group.archived_at ? 'Nhóm đang lưu trữ. Khôi phục để dùng lại.' : 'Lưu trữ nhóm khi không còn hoạt động. Dữ liệu không bị xóa.'}</p>
                 <button className="btn-secondary">{group.archived_at ? 'Khôi phục nhóm' : 'Lưu trữ nhóm'}</button>
               </form>
+              )}
             </div>
           )}
         </div>
