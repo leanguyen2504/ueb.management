@@ -23,6 +23,7 @@ const VERDICT_TONE: Record<DayVerdict, string> = {
   'cho-duyet': 'bg-gold-100 text-gold-600 dark:bg-gold-600/20 dark:text-gold-500',
   thieu: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
   'cuoi-tuan': '',
+  'lam-cuoi-tuan': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
   'chua-den': '',
   'hom-nay': 'bg-brand-50 text-brand-600 dark:bg-brand-900 dark:text-brand-100',
 };
@@ -150,7 +151,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
                 </td>
                 <td className="align-top text-sm">
                   {d.place ?? <span className="muted">—</span>}
-                  {d.placeFrom && <div className="text-xs muted">{d.placeFrom === 'diem-danh' ? 'tự điểm danh' : d.placeFrom === 'lich' ? 'theo lịch' : d.placeFrom === 'mac-dinh' ? 'không có đơn nghỉ' : 'theo đơn Jira'}</div>}
+                  {d.placeFrom && <div className="text-xs muted">{d.placeFrom === 'diem-danh' ? 'tự điểm danh' : d.placeFrom === 'lich' ? 'theo lịch' : d.placeFrom === 'mac-dinh' ? 'không có đơn nghỉ' : 'theo Jira'}</div>}
                   {d.checkin?.note && <div className="text-xs muted">{d.checkin.note}</div>}
                 </td>
                 <td className="align-top text-sm">
@@ -222,7 +223,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
       <section className="mt-6 text-sm muted" aria-label="Cách tính">
         <h2 className="mb-1 font-semibold text-slate-700 dark:text-slate-300">Cách tính</h2>
         <ul className="list-disc space-y-1 pl-5">
-          <li><b>Làm việc ở đâu</b>: web không nhận được dữ liệu chấm công khuôn mặt của trường, nên ngày làm việc nào không có đơn nghỉ trên Jira đều tính là <b>Có mặt</b>. Muốn ghi rõ ở trường, ở khoa hay đi giảng thì điểm danh hoặc thêm lịch cá nhân.</li>
+          <li><b>Làm việc ở đâu</b>: Jira không có dữ liệu chấm công và web không nhận được dữ liệu chấm công khuôn mặt của trường, nên ngày làm việc nào không có đơn nghỉ phép trên Jira đều tính là <b>Có mặt</b>. Ngày có việc đi onsite/công tác trên Jira (tiêu đề ghi ngày, ví dụ &quot;Đi onsite Thành ủy ngày 14.10.2026&quot;) hiện là Công tác. Muốn ghi rõ ở trường, ở khoa hay đi giảng thì điểm danh hoặc thêm lịch cá nhân.</li>
           <li><b>Nghỉ phép, làm ngoài giờ</b>: chỉ đọc từ đơn trên Jira loại &quot;nghỉ phép&quot; mà bạn là người viết đơn (trường &quot;Người viết đơn&quot;, &quot;Từ ngày&quot;, &quot;Đến ngày&quot;, &quot;Số ngày nghỉ&quot;). Mỗi lần đồng bộ Jira, bảng tự cập nhật; đơn bị từ chối không tính.</li>
           <li><b>Giờ làm</b> = giờ log work trên Jira trong ngày + giờ dạy/giảng trên lịch cá nhân. <b>Sản phẩm</b> = việc Jira của bạn chuyển sang Xong trong ngày, giờ quy đổi theo trường &quot;{data.convertedField ?? 'Sản phẩm'}&quot;.</li>
           <li><b>Đạt</b> khi giờ làm hoặc giờ quy đổi đủ {DAY_TARGET_HOURS} giờ (trừ phần nghỉ phép); <b>Nghỉ có phép</b> khi đơn nghỉ đã duyệt; <b>Chưa log work</b> khi ngày làm việc đã qua mà chưa có worklog, giờ giảng hay sản phẩm nào trên Jira (vẫn tính là có mặt, chỉ nhắc bạn log work).</li>
