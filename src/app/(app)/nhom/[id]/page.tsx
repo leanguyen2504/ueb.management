@@ -205,7 +205,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         <div className="min-w-0">
           <BackForward up={parentLink} />
           <nav className="mb-1.5 flex flex-wrap items-center gap-1.5 text-sm muted" aria-label="Vị trí">
-            <Link href="/nhom" className="link">Dự án</Link>
+            <Link href="/nhom" className="link">Nhóm và Dự án</Link>
             {ancestors.map((a) => <span key={a.id} className="contents"><span>›</span><Link href={`/nhom/${a.id}`} className="link">{a.name}</Link></span>)}
           </nav>
           <h1 className="text-2xl font-semibold md:text-[28px] md:leading-tight">{group.name}</h1>
