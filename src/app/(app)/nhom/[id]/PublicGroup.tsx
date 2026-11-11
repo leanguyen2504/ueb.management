@@ -1,10 +1,10 @@
 import Link from 'next/link';
-import { KIND_LABEL } from '@/lib/types';
+import { groupTypeLabel } from '@/lib/types';
 import { fmtDate } from '@/lib/format';
 import { Avatar } from '@/components/Avatar';
 import { cancelJoin, requestJoin } from '../actions';
 
-export type DirGroup = { id: string; name: string; description: string | null; kind: string; parent_id: string | null; parent_name: string | null; member_count: number; open_tasks: number };
+export type DirGroup = { id: string; name: string; description: string | null; kind: string; unit_category?: string | null; parent_id: string | null; parent_name: string | null; member_count: number; open_tasks: number };
 type Contact = { user_id: string; full_name: string; email: string; position: string | null; phone: string | null; office: string | null; role: string };
 type OpenTask = { id: string; title: string; due_date: string | null; has_assignee: boolean };
 type MyRequest = { id: string; task_id: string | null; created_at: string };
@@ -54,7 +54,7 @@ export function PublicGroup({ group, contacts, tasks, requests, units = [], proj
         </nav>
         <h1 className="text-2xl font-semibold md:text-[28px] md:leading-tight">{group.name}</h1>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
-          <span className="chip bg-gold-50 text-gold-600 dark:bg-gold-600/15 dark:text-gold-500">{KIND_LABEL[group.kind as keyof typeof KIND_LABEL] ?? group.kind}</span>
+          <span className="chip bg-gold-50 text-gold-600 dark:bg-gold-600/15 dark:text-gold-500">{groupTypeLabel(group)}</span>
           <span className="muted">{group.member_count} thành viên · {group.open_tasks} việc đang mở</span>
           {units.length > 0 && <span className="muted">· Cùng làm:</span>}
           {units.map((u) => <Link key={u.id} href={`/nhom/${u.id}`} className="chip hover:text-brand-600 dark:hover:text-brand-300">{u.name}</Link>)}
