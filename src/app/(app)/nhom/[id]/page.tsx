@@ -98,6 +98,8 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const canNudge = canEdit || canManage;
   const canAttach = seesAll || Boolean(me?.can_upload);
   const canSub = !group.archived_at && (canCreate || canManage);
+  // Không gian cá nhân: chỉ chủ sở hữu, không có thành viên hay đơn vị cùng làm.
+  const isPersonal = Boolean(group.owner_id);
   const sortedMembers = [...(members ?? [])].sort((a, b) => rankMember({ ...a, profile: person.get(a.user_id) }) - rankMember({ ...b, profile: person.get(b.user_id) }));
   const openTasks = (tasks ?? []).filter((t) => t.status !== 'done');
   const doneTasks = (tasks ?? []).filter((t) => t.status === 'done');
@@ -109,7 +111,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     { key: 'viec', label: 'Việc', count: openTasks.length },
     { key: 'lich', label: 'Lịch', count: events?.length ?? 0 },
     ...(childIds.length > 0 || canSub || sharedProjects.length > 0 ? [{ key: 'khong-gian', label: 'Không gian', count: childIds.length + sharedProjects.length }] : []),
-    { key: 'thanh-vien', label: (joinReqs?.length ? `Thành viên · ${joinReqs.length} yêu cầu` : 'Thành viên'), count: members?.length ?? 0 },
+    ...(isPersonal ? [] : [{ key: 'thanh-vien', label: (joinReqs?.length ? `Thành viên · ${joinReqs.length} yêu cầu` : 'Thành viên'), count: members?.length ?? 0 }]),
     { key: 'thong-tin', label: 'Thông tin' },
   ];
   const tab = TABS.some((t) => t.key === tabParam) ? tabParam! : 'tong-quan';
@@ -254,9 +256,9 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
             <div className="space-y-5">
               <section id="tao-viec" data-hash-focus className="card scroll-mt-20 target:ring-2 target:ring-gold-500">
                 <h2 className="mb-3 text-lg font-semibold">Tạo việc mới</h2>
-                <TaskForm groupId={group.id} people={memberOptions} />
+                <TaskForm groupId={group.id} people={memberOptions} self={isPersonal ? userId : undefined} />
               </section>
-              {canSub && (
+              {canSub && !isPersonal && (
                 <section className="card">
                   <h2 className="mb-1 text-lg font-semibold">Việc chung nhiều đơn vị</h2>
                   <p className="mb-3 text-sm muted">Việc cần nhiều phòng ban cùng làm: tạo một không gian chung, chọn các đơn vị cùng làm. Không gian tự hiện ở trang của từng đơn vị đó.</p>
@@ -419,7 +421,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
           </section>
           {(canManage || (canEdit && group.kind !== 'unit')) && (
             <div className="space-y-5">
-              {group.kind !== 'unit' && canEdit && !group.archived_at && <GroupUnitsForm groupId={group.id} units={unitOptions} selected={myUnits.map((u) => u.id)} />}
+              {group.kind !== 'unit' && !isPersonal && canEdit && !group.archived_at && <GroupUnitsForm groupId={group.id} units={unitOptions} selected={myUnits.map((u) => u.id)} />}
               {canManage && <EditGroupForm group={group} />}
               {canManage && (
               <form action={setArchived} className="card">

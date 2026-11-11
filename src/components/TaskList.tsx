@@ -21,6 +21,7 @@ export function TaskList({
   canNudge = false,
   canAttach = false,
   me,
+  showProgress = false,
 }: {
   tasks: Task[];
   name: (id: string | null) => string;
@@ -33,6 +34,8 @@ export function TaskList({
   /** Có quyền gắn sản phẩm cho mọi việc trong nhóm (người được giao luôn gắn được). */
   canAttach?: boolean;
   me?: string;
+  /** Hiện ô % tiến độ cạnh trạng thái (trang Việc). */
+  showProgress?: boolean;
 }) {
   if (!tasks.length) return <p className="text-sm muted">{empty}</p>;
   const today = vnDay();
@@ -41,15 +44,22 @@ export function TaskList({
       {tasks.map((t) => {
         const overdue = t.due_date && t.status !== 'done' && t.due_date < today;
         return (
-          <li key={t.id} className="flex flex-wrap items-start gap-3 py-2.5">
+          <li key={`${t.id}:${t.status}:${t.progress}`} className="flex flex-wrap items-start gap-3 py-2.5">
             <div className="min-w-0 flex-1">
               <div className={`font-medium ${t.status === 'done' ? 'line-through muted' : ''}`}>{t.title}</div>
               <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 text-xs muted">
                 {groupName && <Link href={`/nhom/${t.group_id}`} className="hover:underline">{groupName(t.group_id)}</Link>}
                 {t.assignee_id ? <span>Người làm: {name(t.assignee_id)}</span> : <span>Chưa giao</span>}
+                {t.start_date && <span>Bắt đầu {fmtDate(t.start_date)}</span>}
                 {t.due_date && <span className={overdue ? 'font-semibold text-orange-600 dark:text-orange-400' : ''}>Hạn {fmtDate(t.due_date)}{overdue ? ' (quá hạn)' : ''}</span>}
                 {t.priority !== 'normal' && <span className={`chip ${PRIORITY_CLASS[t.priority]}`}>{TASK_PRIORITY_LABEL[t.priority]}</span>}
               </div>
+              {t.progress != null && t.status !== 'done' && (
+                <div className="mt-1.5 flex items-center gap-2 text-xs muted">
+                  <div className="h-1.5 w-32 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"><div className="h-full bg-brand-600" style={{ width: `${t.progress}%` }} /></div>
+                  <span className="tabular-nums">{t.progress}%</span>
+                </div>
+              )}
               {t.description && <p className="mt-1 text-sm">{t.description}</p>}
               {links && <TaskLinks task={t} links={links.get(t.id) ?? []} canAttach={canAttach || t.assignee_id === me} me={me} />}
             </div>
@@ -62,6 +72,9 @@ export function TaskList({
             )}
             <form action={setTaskStatus} className="flex items-center gap-1">
               <input type="hidden" name="id" value={t.id} />
+              {showProgress && (
+                <input name="progress" type="number" min={0} max={100} step={5} defaultValue={t.progress ?? ''} placeholder="%" className="input w-16 py-1 text-xs" aria-label="Tiến độ (%)" />
+              )}
               <select name="status" defaultValue={t.status} className="input w-auto py-1 text-xs" aria-label="Trạng thái">
                 {Object.entries(TASK_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
