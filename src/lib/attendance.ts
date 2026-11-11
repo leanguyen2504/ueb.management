@@ -94,8 +94,10 @@ export function parseDay(v: unknown): string | null {
   return null;
 }
 
+// Trường "Số ngày nghỉ", "Từ ngày" có sẵn giá trị mặc định trên mọi mã việc của Jira trường, nên không dùng để nhận đơn nghỉ:
+// chỉ dựa vào loại mã việc (Chuyên viên/ Giảng viên nghỉ phép) hoặc trường "Loại nghỉ phép".
 export const isLeaveIssue = (i: JiraIssueRow) =>
-  LEAVE_RE.test(norm(i.issue_type)) || field(i, /^loại nghỉ phép$|^số ngày nghỉ$/) !== undefined || (LEAVE_RE.test(norm(i.summary)) && field(i, /^từ ngày$/) !== undefined);
+  LEAVE_RE.test(norm(i.issue_type)) || field(i, /^loại nghỉ phép$/) !== undefined;
 export const isOvertimeIssue = (i: JiraIssueRow) => !isLeaveIssue(i) && (OT_RE.test(norm(i.issue_type)) || OT_RE.test(norm(i.summary)));
 
 // Đơn của chính mình: trường "Người viết đơn" có tên đăng nhập hoặc tên hiển thị của mình; không có trường đó thì xét người tạo.
@@ -167,7 +169,7 @@ export const VERDICT_LABEL: Record<DayVerdict, string> = {
   'mot-phan': 'Chưa đủ giờ',
   'nghi-phep': 'Nghỉ có phép',
   'cho-duyet': 'Nghỉ, chờ duyệt',
-  thieu: 'Không có dữ liệu',
+  thieu: 'Chưa log work',
   'cuoi-tuan': 'Cuối tuần',
   'chua-den': '',
   'hom-nay': 'Hôm nay',
@@ -182,7 +184,8 @@ export type DayRow = {
   overtime: JiraRequest[];
   // Nơi làm việc trong ngày (nhãn).
   place: string | null;
-  placeFrom: 'diem-danh' | 'lich' | 'jira' | null;
+  // mac-dinh: ngày làm việc không có đơn nghỉ thì coi là có mặt (web không nhận dữ liệu chấm công khuôn mặt).
+  placeFrom: 'diem-danh' | 'lich' | 'jira' | 'mac-dinh' | null;
   worklogHours: number;
   teachHours: number;
   overtimeHours: number;
@@ -275,6 +278,10 @@ export function buildDays(input: {
         place = p === 'ngoai_truong' ? 'Công tác ngoài trường' : PLACE_LABEL[p];
         placeFrom = 'lich';
       }
+    }
+    if (!place && !weekend && day <= today) {
+      place = 'Có mặt';
+      placeFrom = 'mac-dinh';
     }
     if (leaveFraction > 0 && leaveFraction < 1 && place) place = `${place} · nghỉ nửa ngày`;
     else if (leaveFraction > 0 && leaveFraction < 1) {

@@ -21,7 +21,7 @@ const VERDICT_TONE: Record<DayVerdict, string> = {
   'mot-phan': 'bg-gold-100 text-gold-600 dark:bg-gold-600/20 dark:text-gold-500',
   'nghi-phep': 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
   'cho-duyet': 'bg-gold-100 text-gold-600 dark:bg-gold-600/20 dark:text-gold-500',
-  thieu: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+  thieu: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
   'cuoi-tuan': '',
   'chua-den': '',
   'hom-nay': 'bg-brand-50 text-brand-600 dark:bg-brand-900 dark:text-brand-100',
@@ -61,6 +61,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
     ok: past.filter((d) => d.verdict === 'dat').length,
     checked: past.filter((d) => d.checkin).length,
     leave: past.reduce((s, d) => s + (d.leaveFraction > 0 ? d.leaveFraction : 0), 0),
+    present: workdays.filter((d) => d.leaveFraction < 1).length,
     missing: workdays.filter((d) => d.verdict === 'thieu').length,
     hours: sum((d) => d.worklogHours + d.teachHours),
     products: sum((d) => d.products.length),
@@ -105,10 +106,10 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
         </section>
 
         <section aria-label="Tổng hợp tháng" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="Ngày đạt" value={`${stats.ok}/${workdays.length}`} />
-          <Stat label="Ngày đã điểm danh" value={String(stats.checked)} />
-          <Stat label="Ngày nghỉ phép" value={fmtHours(stats.leave)} />
-          <Stat label="Ngày thiếu dữ liệu" value={String(stats.missing)} warn={stats.missing > 0} />
+          <Stat label="Ngày có mặt" value={`${stats.present}/${workdays.length}`} />
+          <Stat label="Ngày nghỉ phép (Jira)" value={fmtHours(stats.leave)} />
+          <Stat label="Ngày đạt 8 giờ" value={String(stats.ok)} />
+          <Stat label="Ngày chưa log work" value={String(stats.missing)} />
           <Stat label="Giờ làm (log + giảng)" value={fmtHours(Math.round(stats.hours * 100) / 100)} />
           <Stat label="Sản phẩm hoàn thành" value={String(stats.products)} />
           <Stat label="Giờ quy đổi" value={fmtHours(Math.round(stats.converted * 100) / 100)} />
@@ -149,7 +150,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
                 </td>
                 <td className="align-top text-sm">
                   {d.place ?? <span className="muted">—</span>}
-                  {d.placeFrom && <div className="text-xs muted">{d.placeFrom === 'diem-danh' ? 'tự điểm danh' : d.placeFrom === 'lich' ? 'theo lịch' : 'theo đơn Jira'}</div>}
+                  {d.placeFrom && <div className="text-xs muted">{d.placeFrom === 'diem-danh' ? 'tự điểm danh' : d.placeFrom === 'lich' ? 'theo lịch' : d.placeFrom === 'mac-dinh' ? 'không có đơn nghỉ' : 'theo đơn Jira'}</div>}
                   {d.checkin?.note && <div className="text-xs muted">{d.checkin.note}</div>}
                 </td>
                 <td className="align-top text-sm">
@@ -221,10 +222,10 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
       <section className="mt-6 text-sm muted" aria-label="Cách tính">
         <h2 className="mb-1 font-semibold text-slate-700 dark:text-slate-300">Cách tính</h2>
         <ul className="list-disc space-y-1 pl-5">
-          <li><b>Làm việc ở đâu</b>: theo đơn nghỉ trên Jira trước, rồi đến điểm danh của bạn, rồi lịch dạy/giảng và nơi làm việc ghi trên lịch cá nhân, việc được giao.</li>
-          <li><b>Nghỉ phép, làm ngoài giờ</b>: đọc từ đơn trên Jira mà bạn là người viết đơn (trường &quot;Người viết đơn&quot;, &quot;Từ ngày&quot;, &quot;Đến ngày&quot;, &quot;Số ngày nghỉ&quot;). Mỗi lần đồng bộ Jira, bảng tự cập nhật; đơn bị từ chối không tính.</li>
+          <li><b>Làm việc ở đâu</b>: web không nhận được dữ liệu chấm công khuôn mặt của trường, nên ngày làm việc nào không có đơn nghỉ trên Jira đều tính là <b>Có mặt</b>. Muốn ghi rõ ở trường, ở khoa hay đi giảng thì điểm danh hoặc thêm lịch cá nhân.</li>
+          <li><b>Nghỉ phép, làm ngoài giờ</b>: chỉ đọc từ đơn trên Jira loại &quot;nghỉ phép&quot; mà bạn là người viết đơn (trường &quot;Người viết đơn&quot;, &quot;Từ ngày&quot;, &quot;Đến ngày&quot;, &quot;Số ngày nghỉ&quot;). Mỗi lần đồng bộ Jira, bảng tự cập nhật; đơn bị từ chối không tính.</li>
           <li><b>Giờ làm</b> = giờ log work trên Jira trong ngày + giờ dạy/giảng trên lịch cá nhân. <b>Sản phẩm</b> = việc Jira của bạn chuyển sang Xong trong ngày, giờ quy đổi theo trường &quot;{data.convertedField ?? 'Sản phẩm'}&quot;.</li>
-          <li><b>Đạt</b> khi giờ làm hoặc giờ quy đổi đủ {DAY_TARGET_HOURS} giờ (trừ phần nghỉ phép); <b>Nghỉ có phép</b> khi đơn nghỉ đã duyệt; <b>Không có dữ liệu</b> khi ngày làm việc đã qua mà không có điểm danh, lịch, worklog hay sản phẩm.</li>
+          <li><b>Đạt</b> khi giờ làm hoặc giờ quy đổi đủ {DAY_TARGET_HOURS} giờ (trừ phần nghỉ phép); <b>Nghỉ có phép</b> khi đơn nghỉ đã duyệt; <b>Chưa log work</b> khi ngày làm việc đã qua mà chưa có worklog, giờ giảng hay sản phẩm nào trên Jira (vẫn tính là có mặt, chỉ nhắc bạn log work).</li>
           {data.account?.last_synced_at && <li>Dữ liệu Jira cập nhật lần cuối {fmtDateTime(data.account.last_synced_at)}. <Link href="/jira#ket-noi" className="text-brand-600 hover:underline dark:text-brand-300">Cập nhật</Link></li>}
         </ul>
       </section>
