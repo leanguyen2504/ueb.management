@@ -97,6 +97,20 @@ export async function collectMyJira(
     if (e && e.status === 400) main = await search(`((${mine}) AND ${recent})${tail}`, '*all', 'names,changelog');
     else throw e;
   }
+  // Đơn nghỉ phép / đăng ký làm ngoài giờ của mình (cho bảng chấm công): đơn thường do người khác tạo hộ
+  // và giao cho người duyệt, nên tìm thêm theo tên đăng nhập ghi trong đơn (trường "Người viết đơn").
+  try {
+    say('Đang tìm đơn nghỉ phép, làm ngoài giờ của bạn…');
+    const have = new Set(main.issues.map((i: any) => i.key));
+    const extra = await search(
+      `text ~ ${quoted} AND (summary ~ "nghỉ" OR summary ~ "ngoài giờ" OR summary ~ "làm thêm" OR issuetype in ("Chuyên viên/ Giảng viên nghỉ phép")) AND ${recent}`,
+      '*all', 'names,changelog',
+    ).catch(() => search(`text ~ ${quoted} AND (summary ~ "nghỉ" OR summary ~ "ngoài giờ" OR summary ~ "làm thêm") AND ${recent}`, '*all', 'names,changelog'));
+    for (const it of extra.issues) if (!have.has(it.key)) main.issues.push(it);
+    main.names = { ...extra.names, ...main.names };
+  } catch {
+    // Jira không cho tìm theo nội dung: chỉ dùng các đơn đã có ở trên.
+  }
   // Nhóm trạng thái (Cần làm / Đang làm / Xong) của mọi trạng thái, để đọc lịch sử chuyển trạng thái.
   const statusCat: Record<string, string> = {};
   try {

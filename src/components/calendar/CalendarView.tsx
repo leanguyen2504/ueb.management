@@ -26,6 +26,9 @@ type Props = {
   deleteAction?: (form: FormData) => Promise<void>;
   createForm?: React.ReactNode;
   sideExtra?: React.ReactNode;
+  // Đường dẫn của trang lịch (mặc định /lich) và tiêu đề hộp thoại tạo lịch.
+  basePath?: string;
+  createTitle?: string;
 };
 
 const isAllDayLike = (it: CalItem) => it.all_day || new Date(it.ends_at).getTime() - new Date(it.starts_at).getTime() >= DAY_MS;
@@ -94,7 +97,7 @@ function layoutDay(items: CalItem[], day: string): Seg[] {
 }
 
 export function CalendarView(props: Props) {
-  const { view, anchor, today, title, items, sources, extraQuery = '', deleteAction, createForm, sideExtra } = props;
+  const { view, anchor, today, title, items, sources, extraQuery = '', deleteAction, createForm, sideExtra, basePath = '/lich', createTitle = 'Thêm lịch nhóm' } = props;
   const router = useRouter();
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<{ it: CalItem; x: number; y: number } | null>(null);
@@ -119,7 +122,7 @@ export function CalendarView(props: Props) {
   const label = useMemo(() => new Map(sources.map((s) => [s.key, s.label])), [sources]);
   const visible = useMemo(() => items.filter((i) => !hidden.has(i.source)), [items, hidden]);
 
-  const href = (v: CalView, d: string) => `/lich?xem=${v}&ngay=${d}${extraQuery}`;
+  const href = (v: CalView, d: string) => `${basePath}?xem=${v}&ngay=${d}${extraQuery}`;
   const step = (dir: 1 | -1) => {
     if (view === 'ngay') return addDay(anchor, dir);
     if (view === 'tuan') return addDay(anchor, 7 * dir);
@@ -238,7 +241,7 @@ export function CalendarView(props: Props) {
         <div className="fixed inset-0 z-30 flex items-start justify-center bg-black/30 p-4 pt-16" onClick={() => setCreating(false)}>
           <div role="dialog" aria-modal="true" aria-label="Tạo lịch" className="card max-h-[85dvh] w-full max-w-lg overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-semibold">Thêm lịch nhóm</h2>
+              <h2 className="font-semibold">{createTitle}</h2>
               <button type="button" onClick={() => setCreating(false)} aria-label="Đóng" className="rounded-full p-1 hover:bg-slate-100 dark:hover:bg-slate-800">✕</button>
             </div>
             {createForm}
