@@ -20,8 +20,15 @@ export async function createGroup(_prev: FormState, form: FormData): Promise<For
   const name = String(form.get('name') || '').trim();
   const kind = String(form.get('kind') || 'unit') as GroupKind;
   if (!name) return { error: 'Hãy nhập tên nhóm.' };
-  if (!KINDS.includes(kind)) return { error: 'Loại nhóm không hợp lệ.' };
   const supabase = await createClient();
+  // Cá nhân: dự án con trong mục Cá nhân, chỉ chủ sở hữu thấy.
+  if (String(form.get('kind')) === 'ca_nhan') {
+    const { data: pid, error: perr } = await supabase.rpc('create_personal_project', { p_name: name, p_description: String(form.get('description') || '').trim() || null });
+    if (perr) return { error: errText(perr) };
+    revalidatePath('/nhom');
+    redirect(`/nhom/${pid}`);
+  }
+  if (!KINDS.includes(kind)) return { error: 'Loại nhóm không hợp lệ.' };
   const { data, error } = await supabase
     .from('groups')
     .insert({ name, kind, unit_category: category(form, kind), description: String(form.get('description') || '').trim() || null })
