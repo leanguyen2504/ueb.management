@@ -31,6 +31,9 @@ export async function createTask(_prev: FormState, form: FormData): Promise<Form
   if (!title) return { error: 'Hãy nhập tên việc.' };
   if (!PRIORITIES.includes(priority)) return { error: 'Mức ưu tiên không hợp lệ.' };
   if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return { error: 'Hạn hoàn thành không hợp lệ.' };
+  const start = text(form, 'start_date');
+  if (start && !/^\d{4}-\d{2}-\d{2}$/.test(start)) return { error: 'Ngày bắt đầu không hợp lệ.' };
+  if (start && due && start > due) return { error: 'Ngày bắt đầu phải trước hạn.' };
   const supabase = await createClient();
   const { error } = await supabase.from('tasks').insert({
     group_id,
@@ -38,6 +41,7 @@ export async function createTask(_prev: FormState, form: FormData): Promise<Form
     description: text(form, 'description') || null,
     priority,
     due_date: due || null,
+    start_date: start || null,
     assignee_id: uuidOrNull(text(form, 'assignee_id')),
   });
   if (error) return { error: errText(error) };
@@ -49,8 +53,16 @@ export async function setTaskStatus(form: FormData) {
   const id = uuidOrNull(text(form, 'id'));
   const status = text(form, 'status') as TaskStatus;
   if (!id || !STATUSES.includes(status)) return;
+  const patch: { status: TaskStatus; progress?: number | null } = { status };
+  // Ô % tiến độ chỉ có trên trang Việc; để trống là bỏ theo dõi %.
+  if (form.has('progress')) {
+    const raw = text(form, 'progress');
+    const n = raw === '' ? null : Math.round(Number(raw));
+    if (n !== null && !(n >= 0 && n <= 100)) return;
+    patch.progress = status === 'done' ? 100 : n;
+  }
   const supabase = await createClient();
-  const { data } = await supabase.from('tasks').update({ status }).eq('id', id).select('group_id').maybeSingle();
+  const { data } = await supabase.from('tasks').update(patch).eq('id', id).select('group_id').maybeSingle();
   refresh(data?.group_id);
 }
 
@@ -293,4 +305,16 @@ export async function deleteTaskLink(form: FormData) {
   const supabase = await createClient();
   await supabase.from('task_links').delete().eq('id', id);
   refresh(groupId ?? undefined);
+}
+
+// ---- Không gian cá nhân ----
+
+export async function createPersonalProject(_prev: FormState, form: FormData): Promise<FormState> {
+  const name = text(form, 'name');
+  if (!name) return { error: 'Hãy đặt tên dự án.' };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('create_personal_project', { p_name: name, p_description: text(form, 'description') || null });
+  if (error) return { error: errText(error) };
+  refresh();
+  return { ok: `Đã tạo dự án cá nhân "${name}".` };
 }

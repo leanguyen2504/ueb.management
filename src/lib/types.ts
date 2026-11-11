@@ -23,6 +23,8 @@ export type Group = {
   parent_id: string | null;
   description: string | null;
   unit_category: UnitCategory | null;
+  /** Có giá trị khi là không gian cá nhân (chỉ chủ sở hữu thấy). */
+  owner_id: string | null;
   default_can_view: boolean;
   default_can_create: boolean;
   default_can_edit: boolean;
@@ -76,7 +78,8 @@ export const UNIT_CATEGORY_LABEL: Record<UnitCategory, string> = {
   dao_tao: 'Đơn vị đào tạo (Khoa, Viện)',
   nghien_cuu: 'Đơn vị nghiên cứu và dịch vụ',
 };
-export function groupTypeLabel(g: { kind: string; unit_category?: string | null }): string {
+export function groupTypeLabel(g: { kind: string; unit_category?: string | null; owner_id?: string | null }): string {
+  if (g.owner_id) return 'Cá nhân';
   if (g.kind === 'unit' && g.unit_category && g.unit_category in UNIT_CATEGORY_LABEL) return UNIT_CATEGORY_LABEL[g.unit_category as UnitCategory];
   return KIND_LABEL[g.kind as GroupKind] ?? g.kind;
 }
@@ -103,6 +106,8 @@ export type Task = {
   status: TaskStatus;
   priority: TaskPriority;
   due_date: string | null;
+  start_date: string | null;
+  progress: number | null;
   assignee_id: string | null;
   completed_at: string | null;
   created_by: string | null;
