@@ -28,7 +28,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
   const like = `%${q}%`;
   const or = (...cols: string[]) => cols.map((c) => `${c}.ilike.${like}`).join(',');
-  const [meetings, records, items, groups, tasks, events, people, sources] = await Promise.all([
+  const [meetings, records, items, groupsRls, tasks, events, people, sources, dir] = await Promise.all([
     supabase.from('calendar_events').select('source_id, google_event_id, title, starts_at, location').or(or('title', 'description', 'location')).order('starts_at', { ascending: false }).limit(25),
     supabase.from('meeting_records').select('source_id, event_key, meeting_title, meeting_starts_at, jira_key').or(or('jira_key', 'meeting_title', 'follow_up')).order('meeting_starts_at', { ascending: false }).limit(25),
     supabase.from('meeting_items').select('id, source_id, event_key, meeting_title, meeting_starts_at, party, title, url, kind').or(or('title', 'party', 'note', 'meeting_title')).order('meeting_starts_at', { ascending: false }).limit(25),
@@ -37,7 +37,15 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     supabase.from('events').select('id, group_id, title, starts_at, location').or(or('title', 'description', 'location')).order('starts_at', { ascending: false }).limit(20),
     supabase.from('profiles').select('id, full_name, email, position').eq('is_active', true).or(or('full_name', 'email', 'position')).order('full_name').limit(20),
     supabase.from('calendar_sources').select('id, label'),
+    // Danh bạ nhóm: cả nhóm chưa tham gia, để xin tham gia.
+    supabase.rpc('group_directory'),
   ]);
+  const fold = (x: string) => x.normalize('NFC').toLowerCase();
+  const seen = new Set((groupsRls.data ?? []).map((g) => g.id));
+  const extra = ((dir.data ?? []) as { id: string; name: string; description: string | null; kind: Group['kind']; can_view: boolean }[])
+    .filter((g) => !seen.has(g.id) && (fold(g.name).includes(fold(q)) || fold(g.description ?? '').includes(fold(q))))
+    .map((g) => ({ id: g.id, name: g.name, description: g.description, kind: g.kind, archived_at: null, outside: true }));
+  const groups = { data: [...(groupsRls.data ?? []).map((g) => ({ ...g, outside: false })), ...extra].slice(0, 30) };
   const srcLabel = new Map((sources.data ?? []).map((s) => [s.id as string, s.label as string]));
   const groupIds = [...new Set([...(tasks.data ?? []).map((t) => t.group_id), ...(events.data ?? []).map((e) => e.group_id as string)])];
   const { data: groupNames } = groupIds.length ? await supabase.from('groups').select('id, name').in('id', groupIds) : { data: [] as { id: string; name: string }[] };
@@ -122,7 +130,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         <Section id="nhom" title="Dự án và nhóm" n={groups.data?.length ?? 0}>
           {pick('nhom', groups.data ?? []).map((g) => (
             <Row key={g.id} href={`/nhom/${g.id}`} title={g.name} sub={g.description ?? undefined}
-              right={<span className="chip">{g.archived_at ? 'Đã lưu trữ' : KIND_LABEL[g.kind]}</span>} />
+              right={<span className="chip">{g.archived_at ? 'Đã lưu trữ' : g.outside ? `${KIND_LABEL[g.kind]} · chưa tham gia` : KIND_LABEL[g.kind]}</span>} />
           ))}
         </Section>
         <Section id="lich" title="Lịch nhóm" n={events.data?.length ?? 0}>

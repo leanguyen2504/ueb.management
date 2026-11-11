@@ -43,7 +43,10 @@ select t.ok((select current_admin_id from public.system_settings) = :admin, 'ng�
 select t.ok((select email from public.profiles where id = :admin) = 'ntkling@vnu.edu.vn', 'email được chuẩn hóa chữ thường');
 
 -- 2. Đăng ký không được mời hoặc sai tên miền bị chặn.
+-- (Khi quản trị tắt chế độ mở cho mọi người cùng tên miền.)
+update public.system_settings set open_signup = false;
 select t.denied($$insert into auth.users (email) values ('nguoila@vnu.edu.vn')$$, 'email chưa được mời');
+update public.system_settings set open_signup = true;
 select t.denied($$insert into auth.users (email) values ('ai@gmail.com')$$, 'email ngoài tên miền');
 
 -- 3. Quản trị mời người dùng (chạy như người dùng đã đăng nhập, RLS áp dụng).

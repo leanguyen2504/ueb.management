@@ -14,6 +14,10 @@ export const dynamic = 'force-dynamic';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase, profile, ctx } = await requireSession();
+  // Giới hạn số người dùng cùng lúc (mặc định 200). Người đang dùng dở và quản trị luôn được vào.
+  const { data: gate } = await supabase.rpc('enter_app');
+  const g = gate as { allowed: boolean; online: number; max: number } | null;
+  if (g && !g.allowed) return <Busy online={g.online} max={g.max} />;
   const [{ count: unread }, { count: overdue }, avatars] = await Promise.all([
     supabase.from('notifications').select('id', { count: 'exact', head: true }).is('read_at', null),
     supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('assignee_id', profile.id).neq('status', 'done').lt('due_date', vnDay()),
@@ -46,7 +50,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="rounded-xl bg-slate-100 py-2.5 dark:bg-slate-800">
             <OnlineCount url={publicEnv.supabaseUrl()} anonKey={publicEnv.supabaseAnonKey()} userId={profile.id} />
           </div>
-          <p className="px-2 text-xs muted">Mỗi tài khoản chỉ thấy dữ liệu của nhóm được cấp quyền.</p>
+          <p className="px-2 text-xs muted">Mỗi tài khoản chỉ thấy chi tiết của nhóm mình tham gia.</p>
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
@@ -88,5 +92,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <NavLinks items={items} variant="bottom" />
       </nav>
     </div>
+  );
+}
+
+function Busy({ online, max }: { online: number; max: number }) {
+  return (
+    <main className="flex min-h-dvh items-center justify-center p-6">
+      <div className="card max-w-md text-center">
+        <span className="mx-auto mb-4 flex h-12 w-11 items-center justify-center rounded-t-md rounded-b-[22px] bg-[#8b1c24] text-xs font-semibold text-white ring-2 ring-inset ring-gold-500">UEB</span>
+        <h1 className="text-xl font-semibold">Hệ thống đang đông người dùng</h1>
+        <p className="mt-2 text-sm muted">Hiện có {online}/{max} người đang dùng cùng lúc. Bạn vui lòng quay lại sau ít phút; chỗ trống sẽ có ngay khi có người rời đi.</p>
+        <div className="mt-5 flex justify-center gap-3">
+          <a href="/" className="btn">Thử lại</a>
+          <form action={signOut}><button className="btn-secondary">Đăng xuất</button></form>
+        </div>
+      </div>
+    </main>
   );
 }

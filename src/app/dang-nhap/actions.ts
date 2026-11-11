@@ -33,7 +33,9 @@ export async function requestCode(_prev: LoginState, form: FormData): Promise<Lo
         if (!existing) await admin.from('invitations').insert({ email, make_admin: true });
       }
     }
-    const { count } = await admin
+    // Mặc định ai có email thuộc tên miền trường cũng tự vào được (open_signup); quản trị có thể tắt để chỉ nhận người được mời.
+    const { data: settings } = await admin.from('system_settings').select('open_signup').single();
+    const { count } = settings?.open_signup ? { count: 1 } : await admin
       .from('invitations')
       .select('id', { count: 'exact', head: true })
       .eq('email', email)

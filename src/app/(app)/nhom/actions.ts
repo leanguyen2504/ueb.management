@@ -128,3 +128,37 @@ export async function cancelInvitation(form: FormData) {
   await supabase.from('invitations').delete().eq('id', id);
   revalidatePath(`/nhom/${groupId}`);
 }
+
+// Xin tham gia nhóm hoặc một việc trong nhóm (task_id). back: trang quay về sau khi gửi.
+export async function requestJoin(form: FormData) {
+  const groupId = String(form.get('group_id'));
+  const taskId = String(form.get('task_id') || '') || null;
+  const message = String(form.get('message') || '').trim().slice(0, 500) || null;
+  const back = String(form.get('back') || `/nhom/${groupId}`);
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('request_join', { p_group: groupId, p_task: taskId, p_message: message });
+  revalidatePath('/nhom');
+  revalidatePath(`/nhom/${groupId}`);
+  const sep = back.includes('?') ? '&' : '?';
+  if (error) redirect(`${back}${sep}loi=${encodeURIComponent(errText(error))}`);
+  redirect(`${back}${sep}tb=${encodeURIComponent('Đã gửi yêu cầu. Trưởng nhóm hoặc Văn thư sẽ xem và trả lời qua thông báo.')}`);
+}
+
+export async function cancelJoin(form: FormData) {
+  const id = String(form.get('id'));
+  const groupId = String(form.get('group_id'));
+  const supabase = await createClient();
+  await supabase.rpc('cancel_join_request', { p_id: id });
+  revalidatePath('/nhom');
+  revalidatePath(`/nhom/${groupId}`);
+}
+
+export async function decideJoin(form: FormData) {
+  const id = String(form.get('id'));
+  const groupId = String(form.get('group_id'));
+  const accept = form.get('accept') === '1';
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('decide_join_request', { p_id: id, p_accept: accept });
+  revalidatePath(`/nhom/${groupId}`);
+  if (error) redirect(`/nhom/${groupId}?tab=thanh-vien&loi=${encodeURIComponent(errText(error))}`);
+}
