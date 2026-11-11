@@ -19,8 +19,11 @@ export const serverEnv = {
       .split(',')
       .map((d) => d.trim().toLowerCase())
       .filter(Boolean),
-  // Địa chỉ Jira của trường, để tạo link tới từng mã Jira (chỉ tạo link, không gọi API).
-  jiraBaseUrl: () => (process.env.JIRA_BASE_URL || '').trim() || null,
+  // Địa chỉ Jira của trường, để tạo link tới từng mã Jira. Máy chủ chỉ gọi API Jira khi FEATURE_JIRA=true
+  // và người dùng tự lưu Personal Access Token của mình (xem docs/jira.md).
+  jiraBaseUrl: () => (process.env.JIRA_BASE_URL || '').trim().replace(/\/+$/, '') || null,
+  // Khóa mã hóa token lưu trong cơ sở dữ liệu (32 byte, dạng base64 hoặc hex 64 ký tự).
+  tokenEncryptionKey: () => required('TOKEN_ENCRYPTION_KEY', process.env.TOKEN_ENCRYPTION_KEY),
   bootstrapAdminEmail: () => (process.env.BOOTSTRAP_ADMIN_EMAIL || '').trim().toLowerCase(),
 };
 
@@ -28,6 +31,9 @@ export const serverEnv = {
 const flag = (v: string | undefined) => (v || '').trim().toLowerCase() === 'true';
 export const features = {
   googleCalendar: () => flag(process.env.FEATURE_GOOGLE_CALENDAR),
+  // Máy chủ web tự gọi Jira bằng token cá nhân (chỉ bật khi Jira mở ra Internet).
+  // Cách bấm nút "Đồng bộ Jira" trên trang Jira không cần biến này.
+  jiraServerSync: () => flag(process.env.FEATURE_JIRA),
 };
 
 export const TIMEZONE = 'Asia/Ho_Chi_Minh';
