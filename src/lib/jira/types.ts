@@ -1,0 +1,68 @@
+// Ảnh chụp dữ liệu Jira cá nhân, gửi từ trình duyệt (bookmarklet) hoặc máy chủ về hàm jira_save_snapshot.
+export type JiraSnapshot = {
+  me: { name: string; key: string; displayName: string | null };
+  issues: {
+    key: string;
+    summary: string;
+    status: string | null;
+    statusCategory: string | null;
+    issueType: string | null;
+    projectKey: string | null;
+    projectName: string | null;
+    priority: string | null;
+    assignee: string | null;
+    reporter: string | null;
+    isAssignee: boolean;
+    isReporter: boolean;
+    isWatcher: boolean;
+    hasMyWorklog: boolean;
+    mentionsMe: boolean;
+    created: string | null;
+    updated: string | null;
+    resolved: string | null;
+    due: string | null;
+    mySeconds: number;
+    custom: Record<string, string | number | boolean>;
+  }[];
+  worklogs: { id: string; issueKey: string; started: string; seconds: number; comment: string | null }[];
+  mentions: { id: string; issueKey: string; author: string | null; body: string; created: string }[];
+  customFieldNames: string[];
+  fetchedAt: string;
+};
+
+export type JiraAccount = {
+  user_id: string;
+  jira_username: string | null;
+  jira_display_name: string | null;
+  has_token: boolean;
+  has_sync_key: boolean;
+  last_synced_at: string | null;
+  last_source: 'bookmarklet' | 'server' | null;
+  last_error: string | null;
+  issue_count: number;
+  worklog_count: number;
+  mention_count: number;
+  custom_field_names: string[];
+};
+
+export type JiraIssueRow = {
+  issue_key: string;
+  summary: string;
+  status: string | null;
+  status_category: string | null;
+  issue_type: string | null;
+  project_key: string | null;
+  project_name: string | null;
+  assignee_name: string | null;
+  reporter_name: string | null;
+  is_assignee: boolean;
+  is_reporter: boolean;
+  is_watcher: boolean;
+  has_my_worklog: boolean;
+  mentions_me: boolean;
+  updated_at_jira: string | null;
+  resolved_at: string | null;
+  due_date: string | null;
+  my_seconds: number;
+  custom: Record<string, string | number | boolean>;
+};

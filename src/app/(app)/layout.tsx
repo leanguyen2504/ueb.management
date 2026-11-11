@@ -79,6 +79,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <TopMenu label="Tài khoản" buttonClass="flex items-center gap-2.5 rounded-full border border-slate-200 bg-white py-1 pl-1 pr-1 sm:pr-3 dark:border-slate-700 dark:bg-slate-900"
             button={<>{me}<span className="hidden text-left leading-tight sm:block"><span className="block max-w-40 truncate text-[13px] font-semibold">{name}</span><span className="block text-[11px] muted">{roleText}</span></span></>}>
             <Link role="menuitem" href="/tai-khoan" className="menu-item">Hồ sơ cá nhân</Link>
+            <Link role="menuitem" href="/jira" className="menu-item">Jira của tôi</Link>
             <Link role="menuitem" href="/moi" className="menu-item">Mời đồng nghiệp</Link>
             {canAdmin && <Link role="menuitem" href="/quan-tri" className="menu-item">Quản trị danh mục</Link>}
             <hr className="my-1 border-slate-200 dark:border-slate-700" />
