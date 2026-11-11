@@ -182,9 +182,13 @@ function Progress({ tasks, label, me }: { tasks: Task[]; label: (id: string) => 
                 <tr key={gid}>
                   <td className="py-2 pr-3"><Link href={`/nhom/${gid}`} className="font-medium hover:underline">{label(gid)}</Link></td>
                   <td className="pr-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"><div className="h-full bg-brand-600" style={{ width: `${pct}%` }} /></div>
-                      <span className="tabular-nums">{r.done}/{r.total} · {pct}%</span>
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                      {/* % chỉ hiện khi rê chuột (hoặc chạm) vào thanh tiến độ. */}
+                      <div className="group relative py-1.5" tabIndex={0} aria-label={`Hoàn thành ${pct}%`} title={`${pct}%`}>
+                        <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"><div className="h-full bg-brand-600" style={{ width: `${pct}%` }} /></div>
+                        <span className="pointer-events-none absolute -top-6 left-1/2 -translate-x-1/2 rounded bg-slate-900 px-1.5 py-0.5 text-xs font-medium tabular-nums text-white opacity-0 shadow transition-opacity group-hover:opacity-100 group-focus:opacity-100 dark:bg-slate-100 dark:text-slate-900">{pct}%</span>
+                      </div>
+                      <span className="tabular-nums">{r.done}/{r.total}</span>
                     </div>
                   </td>
                   <td className="pr-3 tabular-nums">{r.total - r.done}</td>
