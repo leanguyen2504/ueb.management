@@ -41,10 +41,11 @@ function CategorySelect({ value, id }: { value?: string | null; id: string }) {
   );
 }
 
-function KindSelect({ value, onChange }: { value?: string; onChange?: (v: string) => void }) {
+function KindSelect({ value, onChange, personal = false }: { value?: string; onChange?: (v: string) => void; personal?: boolean }) {
   return (
     <select name="kind" defaultValue={value ?? 'unit'} onChange={(e) => onChange?.(e.target.value)} className="input">
       {Object.entries(KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      {personal && <option value="ca_nhan">Cá nhân (chỉ bạn thấy)</option>}
     </select>
   );
 }
@@ -61,11 +62,12 @@ export function CreateGroupForm({ units = [] }: { units?: UnitOption[] }) {
       <form action={action} className="mt-3 space-y-3">
         <div className="grid gap-3 md:grid-cols-[2fr_1fr_3fr]">
           <div><label className="label" htmlFor="g-name">Tên nhóm</label><input id="g-name" name="name" required maxLength={200} className="input" placeholder="Ví dụ: Phòng Hành chính" /></div>
-          <div><label className="label" htmlFor="g-kind">Loại</label><KindSelect onChange={setKind} /></div>
+          <div><label className="label" htmlFor="g-kind">Loại</label><KindSelect onChange={setKind} personal /></div>
           <div><label className="label" htmlFor="g-desc">Mô tả</label><input id="g-desc" name="description" maxLength={2000} className="input" /></div>
         </div>
         {kind === 'unit' && <div className="md:w-1/3"><CategorySelect id="g-cat" /></div>}
-        {kind !== 'unit' && units.length > 0 && (
+        {kind === 'ca_nhan' && <p className="text-sm muted">Tạo dự án trong mục Cá nhân của bạn: chỉ bạn xem được, không thêm được người khác.</p>}
+        {kind !== 'unit' && kind !== 'ca_nhan' && units.length > 0 && (
           <fieldset>
             <legend className="label">Các đơn vị/tổ cùng làm (không bắt buộc)</legend>
             <p className="mb-2 text-xs muted">Dự án sẽ tự hiện trong mục &quot;Dự án liên đơn vị&quot; của từng đơn vị được chọn.</p>

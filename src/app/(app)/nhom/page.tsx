@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
 import { CreateGroupForm } from './GroupForms';
+import { PersonalProjectForm } from '@/components/WorkForms';
 import { GroupTable } from './GroupTable';
-import { KIND_LABEL, groupTypeLabel, type Group } from '@/lib/types';
+import { KIND_LABEL, groupTypeLabel, type Group, type Task } from '@/lib/types';
+import { TaskList } from '@/components/TaskList';
 import { fmtDateTime } from '@/lib/format';
 import { requestJoin } from './actions';
 
@@ -18,7 +20,11 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
   const { supabase, userId, ctx } = await requireSession();
   let query = supabase.from('groups').select('*').order('name');
   query = luu_tru ? query.not('archived_at', 'is', null) : query.is('archived_at', null);
-  if (loai && loai in KIND_LABEL) query = query.eq('kind', loai);
+  // Thẻ Cá nhân: mục Cá nhân và các dự án cá nhân của tôi (chỉ tôi thấy). Thẻ theo loại không lẫn mục cá nhân.
+  if (loai === 'ca-nhan') {
+    await supabase.rpc('my_personal_group');
+    query = query.eq('owner_id', userId);
+  } else if (loai && loai in KIND_LABEL) query = query.eq('kind', loai).is('owner_id', null);
   const [{ data: groups }, { data: mine }, { data: counts }, { data: allNames }, { data: dir }, { data: myRequests }] = await Promise.all([
     query.returns<Group[]>(),
     supabase.from('group_members').select('group_id, is_manager, is_clerk').eq('user_id', userId),
@@ -28,8 +34,13 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
     luu_tru ? Promise.resolve({ data: [] as DirRow[] }) : groupDirectory(supabase),
     supabase.from('join_requests').select('group_id').eq('requester_id', userId).eq('status', 'pending').is('task_id', null),
   ]);
+  // Thẻ Cá nhân: hiện luôn mọi việc chưa xong trong mục Cá nhân.
+  const personalIds = loai === 'ca-nhan' ? (groups ?? []).map((g) => g.id) : [];
+  const { data: personalTasks } = personalIds.length
+    ? await supabase.from('tasks').select('*').in('group_id', personalIds).neq('status', 'done').order('due_date', { ascending: true, nullsFirst: false }).limit(500).returns<Task[]>()
+    : { data: [] as Task[] };
   const pending = new Set((myRequests ?? []).map((r) => r.group_id));
-  const others = ((dir ?? []) as DirRow[]).filter((g) => !g.can_view && (!loai || g.kind === loai));
+  const others = loai === 'ca-nhan' ? [] : ((dir ?? []) as DirRow[]).filter((g) => !g.can_view && (!loai || g.kind === loai));
   const { data: taskRows } = await supabase.from('tasks').select('group_id').neq('status', 'done');
   const openTasks = new Map<string, number>();
   (taskRows ?? []).forEach((t) => openTasks.set(t.group_id, (openTasks.get(t.group_id) ?? 0) + 1));
@@ -45,7 +56,7 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
       {loi && <p role="alert" className="mb-4 rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">{loi}</p>}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <nav className="seg" aria-label="Lọc theo loại">
-        {[['', 'Tất cả'], ...Object.entries(KIND_LABEL)].map(([k, label]) => (
+        {[['', 'Tất cả'], ...Object.entries(KIND_LABEL), ['ca-nhan', 'Cá nhân']].map(([k, label]) => (
           <Link key={k} href={`/nhom?${new URLSearchParams({ ...(k ? { loai: k } : {}), ...(luu_tru ? { luu_tru } : {}) })}`}
             aria-current={loai === k ? 'page' : undefined}>{label}</Link>
         ))}
@@ -58,13 +69,20 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
       </div>
       </div>
       <div className="space-y-4">
-        {ctx.can_create_group && !luu_tru && <CreateGroupForm units={((dir ?? []) as DirRow[]).filter((g) => g.kind === 'unit').map((g) => ({ id: g.id, name: g.name }))} />}
+        {loai === 'ca-nhan' && !luu_tru && (
+          <section className="card">
+            <h2 className="mb-1 font-semibold">+ Tạo dự án cá nhân</h2>
+            <p className="mb-3 text-sm muted">Mọi việc và lịch trong mục Cá nhân chỉ bạn thấy. Xem tiến độ ở <Link href="/viec?xem=tien-do" className="link">Việc › Tiến độ</Link>.</p>
+            <PersonalProjectForm />
+          </section>
+        )}
+        {ctx.can_create_group && !luu_tru && loai !== 'ca-nhan' && <CreateGroupForm units={((dir ?? []) as DirRow[]).filter((g) => g.kind === 'unit').map((g) => ({ id: g.id, name: g.name }))} />}
         {groups?.length ? (
           <GroupTable rows={groups.map((g) => ({
             id: g.id,
             name: g.name,
             parent: (g.parent_id && parentName.get(g.parent_id)) || '',
-            kind: g.kind === 'unit' && g.unit_category ? `unit:${g.unit_category}` : g.kind,
+            kind: g.owner_id ? 'ca-nhan' : g.kind === 'unit' && g.unit_category ? `unit:${g.unit_category}` : g.kind,
             kindLabel: groupTypeLabel(g),
             openTasks: openTasks.get(g.id) ?? 0,
             members: memberCount.get(g.id) ?? 0,
@@ -74,6 +92,12 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
           }))} />
         ) : (
           <p className="card text-sm muted">{luu_tru ? 'Chưa có nhóm nào đã lưu trữ.' : 'Bạn chưa tham gia nhóm nào. Chọn một đơn vị hoặc dự án bên dưới để xin tham gia.'}</p>
+        )}
+        {loai === 'ca-nhan' && (
+          <section className="card">
+            <h2 className="mb-3 text-lg font-semibold">Việc cá nhân chưa xong <span className="chip ml-1 align-middle">{personalTasks?.length ?? 0}</span></h2>
+            <TaskList tasks={personalTasks ?? []} name={() => 'Bạn'} groupName={(gid) => { const g = (groups ?? []).find((x) => x.id === gid); return g ? (g.parent_id ? `Cá nhân › ${g.name}` : 'Cá nhân') : 'Cá nhân'; }} showProgress me={userId} empty="Chưa có việc cá nhân nào. Tạo nhanh ở trang Việc." />
+          </section>
         )}
         {others.length > 0 && (
           <section className="card" aria-labelledby="nhom-khac">
