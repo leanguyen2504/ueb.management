@@ -16,6 +16,7 @@ import { avatarUrls } from '@/lib/avatars';
 import { ProgressBar, TaskProgress, progressOf } from '@/components/TaskProgress';
 import { SubgroupForm } from '../SubgroupForm';
 import { BackForward } from '@/components/BackForward';
+import { SpaceGrid } from './SpaceGrid';
 import type { TaskLink } from '@/lib/types';
 import { EventForm, TaskForm } from '@/components/WorkForms';
 import { deleteEvent } from '@/lib/work';
@@ -131,14 +132,21 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const tabHref = (k: string) => (k === 'tong-quan' ? `/nhom/${group.id}` : `/nhom/${group.id}?tab=${k}`);
   const canAddTask = canCreate && !group.archived_at;
 
+  // Kéo thả để chuyển không gian; cơ sở dữ liệu kiểm tra quyền ở cả hai nơi.
+  const canMoveSpaces = canSub;
   const spaces = (
-    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {(children ?? []).map((c) => {
+    <SpaceGrid
+      groupId={group.id}
+      canMove={canMoveSpaces}
+      up={canMoveSpaces && parentLink ? { id: parentLink.id, name: parentLink.name } : null}
+      items={(children ?? []).map((c) => {
         const p = progressOf((childTasks ?? []).filter((t) => t.group_id === c.id));
-        return (
-          <li key={c.id}>
-            <Link href={`/nhom/${c.id}`} className="block h-full rounded-xl border border-slate-200 bg-white p-3.5 hover:border-brand-600 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-brand-300">
-              <div className="flex items-baseline justify-between gap-2">
+        return {
+          id: c.id,
+          name: c.name,
+          card: (
+            <Link href={`/nhom/${c.id}`} draggable={false} className="block h-full rounded-xl border border-slate-200 bg-white p-3.5 hover:border-brand-600 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-brand-300">
+              <div className="flex items-baseline justify-between gap-2 pr-6">
                 <span className="font-semibold">{c.name}</span>
                 {c.archived_at && <span className="chip">Đã lưu trữ</span>}
               </div>
@@ -146,10 +154,10 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
               <ProgressBar pct={p.pct} className="mt-2.5 h-1.5" />
               <p className="mt-1.5 text-xs muted">{p.done}/{p.total} việc xong{p.overdue ? <span className="font-semibold text-orange-700 dark:text-orange-400"> · {p.overdue} quá hạn</span> : ''}</p>
             </Link>
-          </li>
-        );
+          ),
+        };
       })}
-    </ul>
+    />
   );
   const shared = sharedProjects.length > 0 && (
     <section className="card" aria-labelledby="lien-dv-h">
@@ -197,7 +205,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         <div className="min-w-0">
           <BackForward up={parentLink} />
           <nav className="mb-1.5 flex flex-wrap items-center gap-1.5 text-sm muted" aria-label="Vị trí">
-            <Link href="/nhom" className="link">Dự án</Link>
+            <Link href="/nhom" className="link">Nhóm và Dự án</Link>
             {ancestors.map((a) => <span key={a.id} className="contents"><span>›</span><Link href={`/nhom/${a.id}`} className="link">{a.name}</Link></span>)}
           </nav>
           <h1 className="text-2xl font-semibold md:text-[28px] md:leading-tight">{group.name}</h1>

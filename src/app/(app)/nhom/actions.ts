@@ -201,3 +201,13 @@ export async function setGroupUnits(_prev: FormState, form: FormData): Promise<F
   [...add, ...del].forEach((u) => revalidatePath(`/nhom/${u}`));
   return { ok: 'Đã lưu các đơn vị cùng làm.' };
 }
+
+// Kéo thả không gian vào không gian khác (như thư mục vào thư mục). Cơ sở dữ liệu kiểm tra quyền và vòng lặp.
+export async function moveGroup(groupId: string, newParentId: string, fromId: string): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('move_group', { p_group: groupId, p_new_parent: newParentId });
+  if (error) return { error: errText(error) };
+  for (const p of [fromId, newParentId, groupId]) revalidatePath(`/nhom/${p}`);
+  revalidatePath('/nhom');
+  return {};
+}

@@ -13,7 +13,7 @@ import { requestJoin } from './actions';
 
 type DirRow = { id: string; name: string; description: string | null; kind: string; unit_category: string | null; parent_id: string | null; parent_name: string | null; member_count: number; open_tasks: number; is_member: boolean; can_view: boolean };
 
-export const metadata: Metadata = { title: 'Dự án' };
+export const metadata: Metadata = { title: 'Nhóm và Dự án' };
 
 export default async function GroupsPage({ searchParams }: { searchParams: Promise<{ luu_tru?: string; loai?: string; tb?: string; loi?: string }> }) {
   const { luu_tru, loai = '', tb, loi } = await searchParams;
@@ -51,7 +51,7 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
 
   return (
     <>
-      <PageHead title="Dự án" sub="Nhóm bạn tham gia ở trên; các đơn vị và dự án khác ở dưới để xin tham gia." />
+      <PageHead title="Nhóm và Dự án" sub="Nhóm bạn tham gia ở trên; các đơn vị và dự án khác ở dưới để xin tham gia." />
       {tb && <p role="status" className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{tb}</p>}
       {loi && <p role="alert" className="mb-4 rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">{loi}</p>}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

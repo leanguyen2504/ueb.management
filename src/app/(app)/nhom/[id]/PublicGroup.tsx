@@ -49,7 +49,7 @@ export function PublicGroup({ group, contacts, tasks, requests, units = [], proj
     <>
       <div className="mb-5">
         <nav className="mb-1.5 flex flex-wrap items-center gap-1.5 text-sm muted" aria-label="Vị trí">
-          <Link href="/nhom" className="link">Dự án</Link>
+          <Link href="/nhom" className="link">Nhóm và Dự án</Link>
           {group.parent_id && <><span>›</span><Link href={`/nhom/${group.parent_id}`} className="link">{group.parent_name}</Link></>}
         </nav>
         <h1 className="text-2xl font-semibold md:text-[28px] md:leading-tight">{group.name}</h1>
