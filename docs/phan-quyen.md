@@ -45,6 +45,13 @@ Người được giao việc phải là thành viên nhóm (hoặc Hiệu trư�
 - Mọi bảng có `created_by`, `created_at`, `updated_by`, `updated_at`, do trigger điền; người dùng không sửa được.
 - Mọi thêm/sửa/xóa được ghi vào `activity_log` kèm dữ liệu trước và sau. Không ai sửa hay xóa được nhật ký.
 
+## Đăng nhập, danh bạ nhóm và xin tham gia
+
+- Ai có email thuộc tên miền được phép (`@vnu.edu.vn`) cũng tự đăng nhập được, là thành viên thường và chưa thuộc nhóm nào (`system_settings.open_signup`, mặc định bật; tắt thì quay về chỉ người được mời). Lời mời vẫn áp vai trò và nhóm như trước.
+- Giới hạn người dùng cùng lúc: `system_settings.max_online` (mặc định 200). Mỗi lần mở trang, hàm `enter_app()` ghi lại thời điểm vào bảng `presence`; người mở trang trong 10 phút qua tính là đang dùng. Khi đủ người, người mới thấy trang "Hệ thống đang đông"; người đang dùng dở, quản trị, Hiệu trưởng và thư ký luôn vào được.
+- Danh bạ nhóm: mọi người dùng đang hoạt động gọi được `group_directory()` (tên, mô tả, đơn vị quản lý, số thành viên, số việc mở), `group_contacts(id)` (Trưởng nhóm là lãnh đạo, Văn thư là đầu mối liên hệ, kèm email, điện thoại, phòng) và `group_open_task_titles(id)` (chỉ tên, hạn và đã có người phụ trách chưa). Tài liệu, mô tả việc, sản phẩm, lịch và danh sách thành viên vẫn do RLS giữ kín.
+- Xin tham gia: `request_join(nhóm, việc?, lời nhắn)` tạo yêu cầu trong `join_requests` và báo cho Trưởng nhóm, Văn thư. Người có quyền quản lý thành viên duyệt bằng `decide_join_request`: nhận thì người xin vào nhóm với quyền mặc định (luôn có quyền xem); nếu xin một việc chưa có người phụ trách và người duyệt có quyền sửa thì được giao luôn việc đó. Người xin tự hủy bằng `cancel_join_request`. Không ghi thẳng vào bảng được.
+
 ## Kiểm thử
 
 `supabase/tests/10_phan_quyen.sql` đăng nhập giả lập từng vai trò và kiểm tra các trường hợp được phép và bị chặn. Chạy bằng `npm run test:db`; CI chạy lại mỗi lần có pull request.

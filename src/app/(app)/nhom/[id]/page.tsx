@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireSession } from '@/lib/session';
 import { AddMemberForm, EditGroupForm } from '../GroupForms';
-import { cancelInvitation, removeMember, setArchived, updateMember } from '../actions';
+import { cancelInvitation, decideJoin, removeMember, setArchived, updateMember } from '../actions';
+import { PublicGroup, type DirGroup } from './PublicGroup';
 import { KIND_LABEL, PERMS, ROLE_LABEL, type Group, type GroupMember, type Profile } from '@/lib/types';
 import { fmtDateTime, fmtTime } from '@/lib/format';
 import { TaskList } from '@/components/TaskList';
@@ -24,14 +25,28 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const { loi, tb, tab: tabParam } = await searchParams;
   const { supabase, userId, ctx } = await requireSession();
   const { data: group } = await supabase.from('groups').select('*').eq('id', id).maybeSingle<Group>();
-  if (!group) notFound();
+  if (!group) {
+    // Chưa tham gia: hiện trang công khai (lãnh đạo, đầu mối, tên việc) để xin tham gia.
+    if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
+    const [{ data: dir }, { data: contacts }, { data: open }, { data: reqs }] = await Promise.all([
+      supabase.rpc('group_directory'),
+      supabase.rpc('group_contacts', { p_group: id }),
+      supabase.rpc('group_open_task_titles', { p_group: id }),
+      supabase.from('join_requests').select('id, task_id, created_at').eq('group_id', id).eq('requester_id', userId).eq('status', 'pending'),
+    ]);
+    const pub = ((dir ?? []) as DirGroup[]).find((g) => g.id === id);
+    if (!pub) notFound();
+    return <PublicGroup group={pub} contacts={contacts ?? []} tasks={open ?? []} requests={reqs ?? []} tb={tb} loi={loi} />;
+  }
 
-  const [{ data: members }, { data: invites }, { data: log }, { data: tasks }, { data: events }] = await Promise.all([
+  const [{ data: members }, { data: invites }, { data: log }, { data: tasks }, { data: events }, { data: joinReqs }] = await Promise.all([
     supabase.from('group_members').select('*').eq('group_id', id).returns<GroupMember[]>(),
     supabase.from('invitations').select('id, email, is_manager, is_clerk, created_at, expires_at').eq('group_id', id).is('accepted_at', null),
     supabase.from('activity_log').select('id, at, actor_id, action, entity_type').eq('group_id', id).order('at', { ascending: false }).limit(15),
     supabase.from('tasks').select('*').eq('group_id', id).order('status').order('due_date', { ascending: true, nullsFirst: false }).limit(200).returns<Task[]>(),
     supabase.from('events').select('*').eq('group_id', id).gte('ends_at', new Date(Date.now() - 86400000).toISOString()).order('starts_at').limit(30).returns<CalEvent[]>(),
+    // RLS: chỉ người quản lý thành viên thấy yêu cầu của người khác.
+    supabase.from('join_requests').select('id, task_id, requester_id, message, created_at').eq('group_id', id).eq('status', 'pending').neq('requester_id', userId).order('created_at'),
   ]);
   const taskIds = (tasks ?? []).map((t) => t.id);
   const [{ data: linkRows }, { data: children }, { data: parent }] = await Promise.all([
@@ -39,13 +54,17 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     supabase.from('groups').select('id, name, description, archived_at').eq('parent_id', id).order('created_at', { ascending: false }),
     group.parent_id ? supabase.from('groups').select('id, name').eq('id', group.parent_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
+  // Đơn vị quản lý mình chưa tham gia vẫn hiện tên để bấm sang trang công khai của đơn vị đó.
+  const parentLink = parent ?? (group.parent_id
+    ? (((await supabase.rpc('group_directory')).data ?? []) as { id: string; name: string }[]).find((g) => g.id === group.parent_id) ?? null
+    : null);
   const links = new Map<string, TaskLink[]>();
   (linkRows ?? []).forEach((l) => links.set(l.task_id, [...(links.get(l.task_id) ?? []), l]));
   const childIds = (children ?? []).map((c) => c.id);
   const { data: childTasks } = childIds.length
     ? await supabase.from('tasks').select('group_id, status, due_date').in('group_id', childIds)
     : { data: [] as { group_id: string; status: Task['status']; due_date: string | null }[] };
-  const ids = [...new Set([...(members ?? []).map((m) => m.user_id), ...(log ?? []).map((l) => l.actor_id).filter(Boolean) as string[], ...(tasks ?? []).map((t) => t.assignee_id).filter(Boolean) as string[], group.created_by, group.updated_by].filter(Boolean) as string[])];
+  const ids = [...new Set([...(members ?? []).map((m) => m.user_id), ...(log ?? []).map((l) => l.actor_id).filter(Boolean) as string[], ...(tasks ?? []).map((t) => t.assignee_id).filter(Boolean) as string[], ...(joinReqs ?? []).map((r) => r.requester_id), group.created_by, group.updated_by].filter(Boolean) as string[])];
   const { data: people } = await supabase.from('profiles').select('id, email, full_name, system_role, is_active, position, phone, office, avatar_path').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).returns<Profile[]>();
   const person = new Map((people ?? []).map((p) => [p.id, p]));
   const avatars = await avatarUrls(supabase, (members ?? []).map((m) => person.get(m.user_id)?.avatar_path));
@@ -75,7 +94,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     { key: 'viec', label: 'Việc', count: openTasks.length },
     { key: 'lich', label: 'Lịch', count: events?.length ?? 0 },
     ...(childIds.length > 0 || canSub ? [{ key: 'khong-gian', label: 'Không gian', count: childIds.length }] : []),
-    { key: 'thanh-vien', label: 'Thành viên', count: members?.length ?? 0 },
+    { key: 'thanh-vien', label: (joinReqs?.length ? `Thành viên · ${joinReqs.length} yêu cầu` : 'Thành viên'), count: members?.length ?? 0 },
     { key: 'thong-tin', label: 'Thông tin' },
   ];
   const tab = TABS.some((t) => t.key === tabParam) ? tabParam! : 'tong-quan';
@@ -128,7 +147,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         <div className="min-w-0">
           <nav className="mb-1.5 flex flex-wrap items-center gap-1.5 text-sm muted" aria-label="Vị trí">
             <Link href="/nhom" className="link">Dự án</Link>
-            {parent && <><span>›</span><Link href={`/nhom/${parent.id}`} className="link">{parent.name}</Link></>}
+            {parentLink && <><span>›</span><Link href={`/nhom/${parentLink.id}`} className="link">{parentLink.name}</Link></>}
           </nav>
           <h1 className="text-2xl font-semibold md:text-[28px] md:leading-tight">{group.name}</h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
@@ -224,6 +243,34 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
 
       {tab === 'thanh-vien' && (
         <div className="space-y-5">
+          {canManage && Boolean(joinReqs?.length) && (
+            <section className="card border-gold-500/40" aria-labelledby="yeu-cau-h">
+              <h2 id="yeu-cau-h" className="mb-1 text-lg font-semibold">Yêu cầu tham gia ({joinReqs!.length})</h2>
+              <p className="mb-3 text-sm muted">Nhận: người xin được thêm vào nhóm với quyền mặc định; nếu xin một việc chưa có người phụ trách thì được giao luôn việc đó.</p>
+              <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">
+                {joinReqs!.map((r) => {
+                  const p = person.get(r.requester_id);
+                  const task = r.task_id ? (tasks ?? []).find((t) => t.id === r.task_id) : null;
+                  return (
+                    <li key={r.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/nguoi/${r.requester_id}`} className="font-semibold hover:underline">{p?.full_name || p?.email || 'Người dùng'}</Link>
+                        <span className="muted"> {task ? <>xin tham gia việc <span className="font-medium text-slate-900 dark:text-white">{task.title}</span></> : 'xin vào nhóm'} · {fmtDateTime(r.created_at)}</span>
+                        <div className="text-xs muted">{[p?.position, p?.email].filter(Boolean).join(' · ')}</div>
+                        {r.message && <p className="mt-1 rounded-lg bg-slate-100 px-2.5 py-1.5 dark:bg-slate-800">“{r.message}”</p>}
+                      </div>
+                      <form action={decideJoin} className="flex gap-2">
+                        <input type="hidden" name="id" value={r.id} />
+                        <input type="hidden" name="group_id" value={group.id} />
+                        <button name="accept" value="1" className="btn px-3 py-1 text-xs">Nhận</button>
+                        <button name="accept" value="0" className="btn-secondary px-3 py-1 text-xs">Từ chối</button>
+                      </form>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
           <section id="thanh-vien" className="card">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Thành viên ({members?.length ?? 0})</h2>
