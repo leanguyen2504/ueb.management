@@ -15,6 +15,7 @@ import { Avatar } from '@/components/Avatar';
 import { avatarUrls } from '@/lib/avatars';
 import { ProgressBar, TaskProgress, progressOf } from '@/components/TaskProgress';
 import { SubgroupForm } from '../SubgroupForm';
+import { BackForward } from '@/components/BackForward';
 import type { TaskLink } from '@/lib/types';
 import { EventForm, TaskForm } from '@/components/WorkForms';
 import { deleteEvent } from '@/lib/work';
@@ -69,6 +70,18 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const dirAll = (dirData ?? []) as (DirGroup & { can_view: boolean })[];
   const dirById = new Map(dirAll.map((g) => [g.id, g]));
   const parentLink = parent ?? (group.parent_id ? dirById.get(group.parent_id) ?? null : null);
+  // Chuỗi cấp trên đầy đủ cho đường dẫn vị trí (tối đa 6 cấp).
+  const ancestors: { id: string; name: string }[] = [];
+  if (parentLink) {
+    ancestors.unshift(parentLink);
+    let up = dirById.get(parentLink.id)?.parent_id ?? null;
+    while (up && ancestors.length < 6 && !ancestors.some((a) => a.id === up)) {
+      const g = dirById.get(up);
+      if (!g) break;
+      ancestors.unshift(g);
+      up = g.parent_id;
+    }
+  }
   const myUnits = (tagRows ?? []).filter((r) => r.group_id === id).map((r) => dirById.get(r.unit_id)).filter(Boolean) as DirGroup[];
   // Không gian con của chính đơn vị này đã nằm trong mục Không gian, không lặp lại.
   const sharedProjects = ((tagRows ?? []).filter((r) => r.unit_id === id).map((r) => dirById.get(r.group_id)).filter(Boolean) as (DirGroup & { can_view: boolean })[]).filter((p) => p.parent_id !== id);
@@ -182,9 +195,10 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     <>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
+          <BackForward up={parentLink} />
           <nav className="mb-1.5 flex flex-wrap items-center gap-1.5 text-sm muted" aria-label="Vị trí">
             <Link href="/nhom" className="link">Dự án</Link>
-            {parentLink && <><span>›</span><Link href={`/nhom/${parentLink.id}`} className="link">{parentLink.name}</Link></>}
+            {ancestors.map((a) => <span key={a.id} className="contents"><span>›</span><Link href={`/nhom/${a.id}`} className="link">{a.name}</Link></span>)}
           </nav>
           <h1 className="text-2xl font-semibold md:text-[28px] md:leading-tight">{group.name}</h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
