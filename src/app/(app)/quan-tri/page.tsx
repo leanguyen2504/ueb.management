@@ -21,7 +21,7 @@ export default async function AdminHub() {
   const cards = [
     ctx.is_admin && { href: '/quan-tri/nguoi-dung', title: 'Người dùng', desc: 'Mời người dùng, đổi vai trò, khóa tài khoản, cấp phạm vi thư ký.', stat: `${users.count ?? 0} người dùng${invites.count ? ` · ${invites.count} lời mời chờ` : ''}` },
     isPrincipal && !ctx.is_admin
-      ? { href: '/tien-do', title: 'Tiến độ chung', desc: 'Danh sách đơn vị, dự án và tiến độ chung. Chỉ số liệu tổng hợp, không xem chi tiết bên trong.', stat: `${groups.count ?? 0} nhóm đang hoạt động` }
+      ? { href: '/nhom', title: 'Đơn vị, dự án và sự kiện', desc: 'Danh sách đơn vị, dự án, sự kiện kèm lãnh đạo và đầu mối liên hệ.', stat: `${groups.count ?? 0} nhóm đang hoạt động` }
       : { href: '/nhom', title: 'Đơn vị, dự án và sự kiện', desc: 'Tạo, sửa, lưu trữ nhóm; cấu hình quyền mặc định và thành viên.', stat: `${groups.count ?? 0} nhóm đang hoạt động` },
     ctx.is_admin && { href: '/quan-tri/nhat-ky', title: 'Nhật ký hoạt động', desc: 'Ai đã thêm, sửa, xóa gì và lúc nào. Không ai sửa được nhật ký.', stat: 'Chỉ xem' },
     ctx.is_admin && { href: '/quan-tri/lich-google', title: 'Lịch Google dùng chung', desc: 'Kết nối lịch Google (ví dụ lịch tuần BGH) để hiện trên trang Lịch. Chỉ đọc.', stat: '' },

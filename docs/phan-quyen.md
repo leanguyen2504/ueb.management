@@ -7,7 +7,7 @@ Quyền có hai lớp: vai trò hệ thống (gắn với người dùng) và qu
 | Vai trò | Phạm vi |
 | --- | --- |
 | Quản trị hệ thống (một người, lưu ở `system_settings.current_admin_id`) | Toàn bộ dữ liệu; mời người dùng, đổi vai trò, khóa tài khoản, cấp phạm vi thư ký; khởi tạo bàn giao |
-| Hiệu trưởng | Thấy danh sách mọi nhóm, dự án (tên, mô tả, loại, lãnh đạo, đầu mối) và tiến độ chung bằng số liệu (`progress_overview`); không xem chi tiết bên trong (đầu việc, lịch, tài liệu, thành viên), không tạo, sửa, không xem nhật ký. Ở nhóm được thêm làm thành viên thì có quyền như thành viên; việc được giao cho mình thì thấy việc đó |
+| Hiệu trưởng | Thấy danh sách mọi đơn vị, dự án, sự kiện (tên, mô tả, loại, số thành viên, nhóm con) và lãnh đạo, đầu mối liên hệ; không thấy tiến độ, số việc, tên việc, lịch, tài liệu, thành viên; không tạo, sửa; không xem nhật ký. Ở nhóm được thêm làm thành viên thì có quyền như thành viên; việc được giao cho mình thì thấy việc đó |
 | Thư ký | Tạo nhóm mới (trở thành người quản lý nhóm đó); quản lý các nhóm mình là người quản lý. Nếu được cấp "toàn trường": quản lý mọi nhóm |
 | Thành viên | Theo quyền trong từng nhóm |
 
@@ -24,7 +24,7 @@ Nằm trong schema `private` (không mở qua API):
 
 - `private.is_admin()`, `private.is_principal()`, `private.is_all_scope_secretary()`
 - `private.has_group_perm(group_id, perm)`: quyền `view | create | edit | upload | manage_members` trong nhóm
-- `public.progress_overview()`: tiến độ chung theo nhóm (số thành viên, số việc theo trạng thái, quá hạn, hạn gần nhất), không có tên việc hay người làm. Hiệu trưởng, quản trị, thư ký toàn trường thấy mọi nhóm (trừ không gian cá nhân); người khác thấy nhóm mình xem được. Trang `/tien-do` dùng hàm này.
+- `private.principal_outside(group_id)`: Hiệu trưởng ở nhóm mình không xem được; khi đó `group_directory()` trả số việc rỗng và `group_open_task_titles()` không trả gì.
 - Tài khoản bị khóa (`profiles.is_active = false`) không có quyền nào.
 
 Đổi vai trò và phạm vi thư ký chỉ qua hàm `admin_set_user` và `admin_set_secretary_scope`, cả hai kiểm tra quyền quản trị. Người dùng chỉ tự sửa được họ tên, đơn vị, chức vụ của mình.

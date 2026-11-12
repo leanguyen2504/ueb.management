@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { groupDirectory } from '@/lib/directory';
 import Link from 'next/link';
 import { requireSession } from '@/lib/session';
-import { PageHead, SectionTabs } from '@/components/PageHead';
+import { PageHead } from '@/components/PageHead';
 import { CreateGroupForm } from './GroupForms';
 import { PersonalProjectForm } from '@/components/WorkForms';
 import { GroupTable } from './GroupTable';
@@ -11,7 +11,7 @@ import { TaskList } from '@/components/TaskList';
 import { fmtDateTime } from '@/lib/format';
 import { requestJoin } from './actions';
 
-type DirRow = { id: string; name: string; description: string | null; kind: string; unit_category: string | null; parent_id: string | null; parent_name: string | null; member_count: number; open_tasks: number; is_member: boolean; can_view: boolean };
+type DirRow = { id: string; name: string; description: string | null; kind: string; unit_category: string | null; parent_id: string | null; parent_name: string | null; member_count: number; open_tasks: number | null; is_member: boolean; can_view: boolean };
 
 export const metadata: Metadata = { title: 'Nhóm và Dự án' };
 
@@ -56,12 +56,8 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <PageHead title="Nhóm và Dự án" sub={ctx.role === 'principal'
-        ? 'Các đơn vị, dự án và sự kiện đang có. Bấm vào tên để xem tổng quan và tiến độ chung.'
+        ? 'Các đơn vị, dự án và sự kiện đang có. Bấm vào tên để xem thông tin chung, lãnh đạo và đầu mối liên hệ.'
         : 'Nhóm bạn tham gia ở trên; các đơn vị và dự án khác ở dưới để xin tham gia.'} />
-      <SectionTabs current="nhom" tabs={[
-        { key: 'nhom', href: '/nhom', label: 'Danh sách' },
-        { key: 'tien-do', href: '/tien-do', label: 'Tiến độ chung' },
-      ]} />
       {tb && <p role="status" className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{tb}</p>}
       {loi && <p role="alert" className="mb-4 rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">{loi}</p>}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -88,7 +84,7 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
         )}
         {ctx.can_create_group && !luu_tru && loai !== 'ca-nhan' && <CreateGroupForm units={((dir ?? []) as DirRow[]).filter((g) => g.kind === 'unit').map((g) => ({ id: g.id, name: g.name }))} />}
         {groups?.length ? (
-          <GroupTable rows={groups.map((g) => ({
+          <GroupTable hideTasks={ctx.role === 'principal' && !ctx.is_admin} rows={groups.map((g) => ({
             id: g.id,
             name: g.name,
             parent: (g.parent_id && parentName.get(g.parent_id)) || '',
@@ -121,7 +117,7 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
                     <div className="text-xs muted">
                       {groupTypeLabel(g)}
                       {g.parent_id && <> · thuộc <Link href={`/nhom/${g.parent_id}`} className="link">{g.parent_name}</Link></>}
-                      {` · ${g.member_count} thành viên · ${g.open_tasks} việc đang mở`}
+                      {` · ${g.member_count} thành viên${g.open_tasks == null ? '' : ` · ${g.open_tasks} việc đang mở`}`}
                     </div>
                     {g.description && <p className="truncate text-xs muted">{g.description}</p>}
                   </div>

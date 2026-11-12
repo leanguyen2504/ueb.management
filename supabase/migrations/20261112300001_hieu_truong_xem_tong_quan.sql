@@ -1,6 +1,6 @@
--- Hiệu trưởng chỉ xem tổng quan: danh sách nhóm, dự án đang có và tiến độ chung.
--- Không còn tự động xem, tạo, sửa bên trong mọi nhóm (đầu việc, lịch, tài liệu, thành viên)
--- và không xem nhật ký hoạt động. Ở nhóm mà Hiệu trưởng được thêm làm thành viên thì vẫn
+-- Hiệu trưởng chỉ xem danh sách nhóm, dự án, sự kiện và lãnh đạo, đầu mối liên hệ.
+-- Không xem tiến độ, đầu việc, lịch, tài liệu, thành viên bên trong; không tạo, sửa;
+-- không xem nhật ký hoạt động. Ở nhóm mà Hiệu trưởng được thêm làm thành viên thì vẫn
 -- có quyền như mọi thành viên khác. Việc được giao cho Hiệu trưởng vẫn hiện với Hiệu trưởng.
 
 -- 1. Quyền trong nhóm: bỏ nhánh Hiệu trưởng, quay về quyền thành viên ---------------------
@@ -47,45 +47,51 @@ create policy log_read on public.activity_log for select to authenticated
     or (group_id is not null and private.has_group_perm(group_id, 'view'))
   );
 
--- 4. Tiến độ chung: chỉ số liệu tổng hợp theo nhóm, không có tên việc, người làm hay tài liệu.
---    Hiệu trưởng, quản trị và thư ký toàn trường thấy mọi nhóm; người khác thấy nhóm mình xem được.
-create function public.progress_overview()
+-- 4. Danh bạ nhóm: Hiệu trưởng (ở nhóm không là thành viên) không thấy số việc đang mở
+--    và tên các việc. Tên, mô tả, loại, số thành viên, lãnh đạo và đầu mối vẫn thấy.
+create function private.principal_outside(gid uuid)
+returns boolean
+language sql stable security definer
+set search_path = ''
+as $$
+  select private.is_principal() and not private.has_group_perm(gid, 'view');
+$$;
+grant execute on function private.principal_outside(uuid) to authenticated;
+
+create or replace function public.group_directory()
 returns table (
-  id uuid, name text, kind text, unit_category text, parent_id uuid, parent_name text,
-  member_count integer, task_total integer, task_todo integer, task_doing integer,
-  task_done integer, task_overdue integer, avg_progress integer,
-  next_due date, last_activity timestamptz
+  id uuid, name text, description text, kind text, parent_id uuid, parent_name text,
+  member_count integer, open_tasks integer, is_member boolean, can_view boolean,
+  my_role text, updated_at timestamptz
 )
 language sql stable security definer
 set search_path = ''
 as $$
-  with today as (select (now() at time zone 'Asia/Ho_Chi_Minh')::date as d)
-  select g.id, g.name, g.kind::text, g.unit_category, g.parent_id, p.name,
+  select g.id, g.name, g.description, g.kind::text, g.parent_id, p.name,
     (select count(*)::int from public.group_members m where m.group_id = g.id),
-    coalesce(s.total, 0), coalesce(s.todo, 0), coalesce(s.doing, 0), coalesce(s.done, 0),
-    coalesce(s.overdue, 0), s.avg_progress, s.next_due,
-    greatest(g.updated_at, s.last_update)
+    case when private.principal_outside(g.id) then null
+      else (select count(*)::int from public.tasks t where t.group_id = g.id and t.status <> 'done') end,
+    exists (select 1 from public.group_members m where m.group_id = g.id and m.user_id = auth.uid()),
+    private.has_group_perm(g.id, 'view'),
+    (select case when m.is_manager then 'Trưởng nhóm' when m.is_clerk then 'Văn thư' else 'Thành viên' end
+       from public.group_members m where m.group_id = g.id and m.user_id = auth.uid()),
+    g.updated_at
   from public.groups g
   left join public.groups p on p.id = g.parent_id
-  left join lateral (
-    select count(*)::int as total,
-      count(*) filter (where t.status = 'todo')::int as todo,
-      count(*) filter (where t.status in ('doing', 'review'))::int as doing,
-      count(*) filter (where t.status = 'done')::int as done,
-      count(*) filter (where t.status <> 'done' and t.due_date < (select d from today))::int as overdue,
-      round(avg(case when t.status = 'done' then 100 else coalesce(t.progress, 0) end))::int as avg_progress,
-      min(t.due_date) filter (where t.status <> 'done' and t.due_date >= (select d from today)) as next_due,
-      max(t.updated_at) as last_update
-    from public.tasks t where t.group_id = g.id
-  ) s on true
-  where private.is_active_user()
-    and g.archived_at is null
-    and g.owner_id is null
-    and (
-      private.is_admin() or private.is_principal() or private.is_all_scope_secretary()
-      or private.has_group_perm(g.id, 'view')
-    )
+  where private.is_active_user() and g.archived_at is null and g.owner_id is null
   order by g.name;
 $$;
-revoke execute on function public.progress_overview() from public, anon;
-grant execute on function public.progress_overview() to authenticated;
+
+create or replace function public.group_open_task_titles(p_group uuid)
+returns table (id uuid, title text, due_date date, has_assignee boolean)
+language sql stable security definer
+set search_path = ''
+as $$
+  select t.id, t.title, t.due_date, t.assignee_id is not null
+  from public.tasks t
+  join public.groups g on g.id = t.group_id and g.archived_at is null and g.owner_id is null
+  where private.is_active_user() and t.group_id = p_group and t.status <> 'done'
+    and not private.principal_outside(p_group)
+  order by t.due_date nulls last, t.title
+  limit 100;
+$$;
