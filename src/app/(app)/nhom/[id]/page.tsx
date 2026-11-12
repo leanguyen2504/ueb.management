@@ -46,9 +46,13 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
       const self = byId.get(id);
       const pick = (ids: string[]) => ids.map((x) => byId.get(x)).filter(Boolean) as DirGroup[];
       const units = pick((tagRows ?? []).filter((r) => r.group_id === id).map((r) => r.unit_id));
-      const related = [...all.filter((g) => g.parent_id === id), ...pick((tagRows ?? []).filter((r) => r.unit_id === id).map((r) => r.group_id))];
+      // Mọi cấp con đang hoạt động (đã lưu trữ thì danh bạ không trả về), theo thứ tự cây.
+      const tree: (DirGroup & { depth: number })[] = [];
+      const walk = (pid: string, depth: number) => all.filter((g) => g.parent_id === pid).forEach((g) => { tree.push({ ...g, depth }); walk(g.id, depth + 1); });
+      walk(id, 0);
+      const linked = pick((tagRows ?? []).filter((r) => r.unit_id === id).map((r) => r.group_id)).filter((g) => !tree.some((t) => t.id === g.id));
       const parent = group.parent_id ? { id: group.parent_id, name: byId.get(group.parent_id)?.name ?? self?.parent_name ?? '' } : null;
-      return <PrincipalGroup group={group} parent={parent} memberCount={self?.member_count ?? 0} contacts={contacts ?? []} units={units} related={[...new Map(related.map((g) => [g.id, g])).values()]} />;
+      return <PrincipalGroup group={group} parent={parent} memberCount={self?.member_count ?? 0} contacts={contacts ?? []} units={units} tree={tree} linked={linked} />;
     }
   }
   if (!group) {
