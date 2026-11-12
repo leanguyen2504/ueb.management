@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
+import { meetingJiraHref } from '@/lib/meetings';
 import Link from 'next/link';
 import { requireSession } from '@/lib/session';
 import { HopTabs, PageHead } from '@/components/PageHead';
 import { addDays, fmtDate, fmtTime, vnDay } from '@/lib/format';
 import { buildSummary, type SummaryParams, type SummaryLink } from '@/lib/meeting-summary';
-import { jiraUrl } from '@/lib/meeting-rules';
 import { meetingAnchor } from '@/lib/meeting-anchor';
 import { serverEnv } from '@/lib/env';
 
@@ -98,7 +98,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
           </thead>
           <tbody className="divide-y divide-slate-100 align-top dark:divide-slate-800">
             {rows.map(({ meeting: m, units, pre, post, updaters, status }) => {
-              const j = m.jira_key ? jiraUrl(jiraBase, m.jira_key) : null;
+              const j = meetingJiraHref(m, jiraBase);
               return (
                 <tr key={`${m.source_id}|${m.event_key}`}>
                   <td className="p-2">

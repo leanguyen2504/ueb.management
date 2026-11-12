@@ -46,6 +46,24 @@ export function jiraKeyIn(...texts: (string | null | undefined)[]): string | nul
 }
 export const isJiraKey = (v: string) => /^[A-Z][A-Z0-9]{0,19}-\d{1,9}$/.test(v);
 
+// Ô Jira trên dòng buổi họp: dán link Jira (…/browse/KHTC-6447, …?selectedIssue=KHTC-6447)
+// hoặc gõ mã, hoặc cả hai. Trả về mã và link (nếu có), hoặc lỗi.
+export function parseJiraInput(raw: string): { key: string | null; url: string | null } | { error: string } {
+  const v = raw.trim();
+  if (!v) return { key: null, url: null };
+  const url = v.match(/https?:\/\/\S+/i)?.[0] ?? null;
+  if (url && url.length > 1000) return { error: 'Link quá dài.' };
+  const rest = (url ? v.replace(url, ' ') : v).toUpperCase();
+  let decoded = url ?? '';
+  try { decoded = decodeURIComponent(decoded); } catch { /* giữ nguyên */ }
+  const key = jiraKeyIn(rest) ?? jiraKeyIn(decoded) ?? jiraKeyIn(decoded.toUpperCase());
+  if (!key) return { error: url ? 'Không thấy mã Jira trong link. Gõ thêm mã, ví dụ KHTC-6447.' : 'Mã Jira có dạng CHỮ-SỐ, ví dụ KHTC-6447.' };
+  return { key, url };
+}
+
+// Ghi chú tự sinh khi nhập hàng loạt (ví dụ "Nhập từ Lịch công tác tuần 45"): không hiện.
+export const isSourceNote = (note: string | null | undefined) => /^\s*nhập từ\s/iu.test(note ?? '');
+
 type ItemLike = { kind: 'pre' | 'minutes'; url: string | null };
 
 // Tình trạng tự suy ra khi đầu mối chưa chọn.

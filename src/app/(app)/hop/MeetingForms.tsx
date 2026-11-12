@@ -103,8 +103,9 @@ export function EditItemForm({ item, people, partiesListId }: { item: ItemValues
 
 export type RecordValues = { jira_key: string | null; drive_folder_url: string | null; status: string | null; follow_up: string | null };
 
-// Thông tin chung của buổi họp: mã Jira, thư mục Drive, tình trạng, nội dung cần theo dõi.
-export function RecordForm({ meeting, values, autoJira, autoStatusLabel, uid }: { meeting: MeetingRef; values: RecordValues | null; autoJira: string | null; autoStatusLabel: string; uid: string }) {
+// Thông tin chung của buổi họp: thư mục Drive, tình trạng, nội dung cần theo dõi
+// (mã Jira sửa ở ô ngay trên dòng buổi họp).
+export function RecordForm({ meeting, values, autoStatusLabel, uid }: { meeting: MeetingRef; values: RecordValues | null; autoStatusLabel: string; uid: string }) {
   const [state, action] = useActionState(saveMeetingRecord, null);
   return (
     <form action={action} className="space-y-3">
@@ -113,10 +114,6 @@ export function RecordForm({ meeting, values, autoJira, autoStatusLabel, uid }: 
       <input type="hidden" name="meeting_title" value={meeting.title} />
       <input type="hidden" name="meeting_starts_at" value={meeting.starts_at} />
       <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className="label" htmlFor={`${uid}-jira`}>Mã Jira</label>
-          <input id={`${uid}-jira`} name="jira_key" className="input" maxLength={30} defaultValue={values?.jira_key ?? ''} placeholder={autoJira ? `${autoJira} (đọc từ lịch)` : 'Ví dụ: KHTC-6447'} />
-        </div>
         <div>
           <label className="label" htmlFor={`${uid}-folder`}>Thư mục Drive của buổi họp</label>
           <input id={`${uid}-folder`} name="drive_folder_url" type="url" className="input" defaultValue={values?.drive_folder_url ?? ''} placeholder="https://drive.google.com/drive/folders/..." />

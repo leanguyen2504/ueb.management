@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { errText } from '@/lib/format';
 import type { FormState } from '@/components/FormMessage';
-import { DOC_TYPES, MAX_FILE_BYTES, STATUS_LABEL, isJiraKey } from '@/lib/meeting-rules';
+import { DOC_TYPES, MAX_FILE_BYTES, STATUS_LABEL, isJiraKey, parseJiraInput } from '@/lib/meeting-rules';
 
 const text = (f: FormData, k: string) => String(f.get(k) || '').trim();
 const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
@@ -146,7 +146,8 @@ export async function saveMeetingRecord(_prev: FormState, form: FormData): Promi
   if (bad) return { error: bad };
   if (status && !(status in STATUS_LABEL)) return { error: 'Tình trạng không hợp lệ.' };
   const supabase = await createClient();
-  const fields = { jira_key: jira || null, drive_folder_url: folder || null, status: status || null, follow_up };
+  // Mã Jira giờ sửa ở ô trên dòng buổi họp; biểu mẫu này chỉ ghi mã khi có ô mã.
+  const fields = { ...(form.has('jira_key') ? { jira_key: jira || null } : {}), drive_folder_url: folder || null, status: status || null, follow_up };
   // Cập nhật nếu đã có; chưa có thì tạo (quyền sửa không cho đổi buổi họp của hồ sơ).
   const upd = await supabase.from('meeting_records').update(fields, { count: 'exact' }).eq('source_id', source_id).eq('event_key', event_key);
   let error = upd.error;
@@ -162,6 +163,33 @@ export async function saveMeetingRecord(_prev: FormState, form: FormData): Promi
   refresh();
   revalidatePath('/hop/tong-hop');
   return { ok: 'Đã lưu thông tin buổi họp.' };
+}
+
+// Ô Jira trên dòng buổi họp: dán link hoặc gõ mã, lưu ngay. Để trống là xóa mã đã ghi.
+export async function saveMeetingJira(input: { source_id: string; event_key: string; meeting_title: string; meeting_starts_at: string; value: string }): Promise<FormState> {
+  const { source_id, event_key, meeting_starts_at } = input;
+  if (!isUuid(source_id) || !event_key || Number.isNaN(Date.parse(meeting_starts_at))) return { error: 'Thiếu thông tin buổi họp.' };
+  const parsed = parseJiraInput(String(input.value ?? '').slice(0, 1200));
+  if ('error' in parsed) return { error: parsed.error };
+  const supabase = await createClient();
+  const save = async (fields: Record<string, string | null>) => {
+    const upd = await supabase.from('meeting_records').update(fields, { count: 'exact' }).eq('source_id', source_id).eq('event_key', event_key);
+    if (upd.error || upd.count) return upd.error;
+    const { error } = await supabase.from('meeting_records').insert({
+      source_id, event_key,
+      meeting_title: String(input.meeting_title ?? '').slice(0, 300),
+      meeting_starts_at: new Date(meeting_starts_at).toISOString(),
+      ...fields,
+    });
+    return error;
+  };
+  let error = await save({ jira_key: parsed.key, jira_url: parsed.url });
+  // Chưa chạy SQL thêm cột jira_url: vẫn lưu mã.
+  if (error && /jira_url/.test(error.message ?? '')) error = await save({ jira_key: parsed.key });
+  if (error) return { error: errText(error) };
+  refresh();
+  revalidatePath('/hop/tong-hop');
+  return { ok: parsed.key ? `Đã lưu mã ${parsed.key}.` : 'Đã xóa mã Jira.' };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getGoogleCalendarEvents, type GoogleCalendarEvent } from '@/lib/google-calendar';
-import { autoStatus, jiraKeyIn, type DocType, type MeetingStatus } from '@/lib/meeting-rules';
+import { autoStatus, jiraKeyIn, jiraUrl, type DocType, type MeetingStatus } from '@/lib/meeting-rules';
 
 // Hồ sơ cuộc họp: buổi họp từ lịch Google dùng chung kèm tài liệu trước họp và biên bản
 // (bảng meeting_items). RLS quyết định ai xem, ai gắn được.
@@ -37,6 +37,8 @@ export type MeetingRecord = {
   source_id: string;
   event_key: string;
   jira_key: string | null;
+  // Link Jira dán vào ô trên dòng buổi họp (cột thêm sau, có thể chưa có).
+  jira_url?: string | null;
   drive_folder_url: string | null;
   status: MeetingStatus | null;
   follow_up: string | null;
@@ -77,12 +79,19 @@ export type Meeting = {
 };
 
 const ITEM_COLS = 'id, source_id, event_key, meeting_title, meeting_starts_at, kind, party, party_group_id, assignee_id, title, url, note, doc_type, area_id, file_path, file_name, file_size, created_by, updated_by, updated_at';
-const RECORD_COLS = 'source_id, event_key, jira_key, drive_folder_url, status, follow_up, updated_by, updated_at, meeting_title, meeting_starts_at';
+// Lấy mọi cột để trang vẫn chạy khi chưa chạy SQL thêm cột jira_url.
+const RECORD_COLS = '*';
 
 export async function loadAreas(supabase: SupabaseClient): Promise<WorkArea[]> {
   const { data } = await supabase.from('work_areas').select('id, name, group_id, primary_email, coordinator_emails, sort_order').order('sort_order').order('name').returns<WorkArea[]>();
   return data ?? [];
 }
+// Link mở mã Jira của buổi họp: link đã dán (nếu đúng mã đang hiện), không thì tạo từ JIRA_BASE_URL.
+export function meetingJiraHref(m: Pick<Meeting, 'jira_key' | 'record'>, base: string | null): string | null {
+  if (!m.jira_key) return null;
+  return (m.record?.jira_key === m.jira_key && m.record?.jira_url) || jiraUrl(base, m.jira_key);
+}
+
 const keyOf = (sourceId: string, eventKey: string) => `${sourceId}|${eventKey}`;
 
 // Số bên đã gửi / tổng số bên được đề nghị gửi tài liệu trước họp, và biên bản đã có chưa.
