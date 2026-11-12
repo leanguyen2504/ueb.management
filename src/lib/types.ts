@@ -30,10 +30,24 @@ export type Group = {
   default_can_edit: boolean;
   default_can_upload: boolean;
   archived_at: string | null;
+  /** Link Drive chung của không gian (mục Tài liệu); chưa chạy SQL 20261112800001 thì không có. */
+  drive_url?: string | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;
   updated_by: string | null;
+};
+
+export type GroupFile = {
+  id: string;
+  group_id: string;
+  url: string | null;
+  file_path: string | null;
+  file_name: string | null;
+  file_size: number | null;
+  label: string | null;
+  created_at: string;
+  created_by: string | null;
 };
 
 export type GroupMember = {
