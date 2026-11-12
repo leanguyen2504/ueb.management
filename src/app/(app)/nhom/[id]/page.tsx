@@ -6,6 +6,7 @@ import { requireSession } from '@/lib/session';
 import { AddMemberForm, EditGroupForm, GroupUnitsForm } from '../GroupForms';
 import { cancelInvitation, decideJoin, removeMember, setArchived, updateMember } from '../actions';
 import { PublicGroup, type DirGroup } from './PublicGroup';
+import { PrincipalGroup } from './PrincipalGroup';
 import { OpenFromHash } from '@/components/OpenFromHash';
 import { KIND_LABEL, PERMS, groupTypeLabel, ROLE_LABEL, type Group, type GroupMember, type Profile } from '@/lib/types';
 import { fmtDateTime, fmtTime } from '@/lib/format';
@@ -29,6 +30,27 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const { loi, tb, tab: tabParam } = await searchParams;
   const { supabase, userId, ctx } = await requireSession();
   const { data: group } = await supabase.from('groups').select('*').eq('id', id).maybeSingle<Group>();
+  // Hiệu trưởng thấy mọi nhóm trong danh sách nhưng chỉ xem thông tin chung, sự kiện, dự án con,
+  // lãnh đạo và đầu mối; không xem tiến độ, đầu việc, lịch, tài liệu, thành viên. Chi tiết chỉ hiện
+  // ở nhóm mà Hiệu trưởng được thêm làm thành viên.
+  if (group && !group.owner_id && ctx.role === 'principal' && !ctx.is_admin) {
+    const { data: mine } = await supabase.from('group_members').select('can_view').eq('group_id', id).eq('user_id', userId).maybeSingle();
+    if (!mine?.can_view) {
+      const [{ data: dir }, { data: contacts }, { data: tagRows }] = await Promise.all([
+        groupDirectory(supabase),
+        supabase.rpc('group_contacts', { p_group: id }),
+        supabase.from('group_units').select('group_id, unit_id').or(`group_id.eq.${id},unit_id.eq.${id}`),
+      ]);
+      const all = (dir ?? []) as DirGroup[];
+      const byId = new Map(all.map((g) => [g.id, g]));
+      const self = byId.get(id);
+      const pick = (ids: string[]) => ids.map((x) => byId.get(x)).filter(Boolean) as DirGroup[];
+      const units = pick((tagRows ?? []).filter((r) => r.group_id === id).map((r) => r.unit_id));
+      const related = [...all.filter((g) => g.parent_id === id), ...pick((tagRows ?? []).filter((r) => r.unit_id === id).map((r) => r.group_id))];
+      const parent = group.parent_id ? { id: group.parent_id, name: byId.get(group.parent_id)?.name ?? self?.parent_name ?? '' } : null;
+      return <PrincipalGroup group={group} parent={parent} memberCount={self?.member_count ?? 0} contacts={contacts ?? []} units={units} related={[...new Map(related.map((g) => [g.id, g])).values()]} />;
+    }
+  }
   if (!group) {
     // Chưa tham gia: hiện trang công khai (lãnh đạo, đầu mối, tên việc) để xin tham gia.
     if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
@@ -105,7 +127,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   // Trưởng nhóm (và quản trị, thư ký toàn trường) bổ nhiệm vai trò; Văn thư chỉ quản lý thành viên thường.
   const isLead = ctx.is_admin || ctx.all_groups_secretary || Boolean(me?.is_manager);
   const EDIT_PERMS = PERMS.filter(([k]) => k !== 'can_manage_members');
-  const seesAll = ctx.is_admin || ctx.all_groups_secretary || ctx.role === 'principal';
+  const seesAll = ctx.is_admin || ctx.all_groups_secretary;
   const canCreate = seesAll || Boolean(me?.can_create);
   const canEdit = seesAll || Boolean(me?.can_edit);
   const memberOptions = (members ?? []).map((m) => ({ id: m.user_id, label: person.get(m.user_id)?.full_name || person.get(m.user_id)?.email || 'Người dùng' }));
@@ -172,7 +194,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                 {!p.can_view && <span className="chip">Chưa tham gia</span>}
               </div>
               {p.description && <p className="truncate text-xs muted">{p.description}</p>}
-              <p className="mt-1.5 text-xs muted">{groupTypeLabel(p)} · {p.member_count} thành viên · {p.open_tasks} việc đang mở</p>
+              <p className="mt-1.5 text-xs muted">{groupTypeLabel(p)} · {p.member_count} thành viên{p.open_tasks == null ? '' : ` · ${p.open_tasks} việc đang mở`}</p>
             </Link>
           </li>
         ))}

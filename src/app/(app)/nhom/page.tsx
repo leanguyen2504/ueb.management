@@ -11,7 +11,7 @@ import { TaskList } from '@/components/TaskList';
 import { fmtDateTime } from '@/lib/format';
 import { requestJoin } from './actions';
 
-type DirRow = { id: string; name: string; description: string | null; kind: string; unit_category: string | null; parent_id: string | null; parent_name: string | null; member_count: number; open_tasks: number; is_member: boolean; can_view: boolean };
+type DirRow = { id: string; name: string; description: string | null; kind: string; unit_category: string | null; parent_id: string | null; parent_name: string | null; member_count: number; open_tasks: number | null; is_member: boolean; can_view: boolean };
 
 export const metadata: Metadata = { title: 'Nhóm và Dự án' };
 
@@ -40,7 +40,11 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
     ? await supabase.from('tasks').select('*').in('group_id', personalIds).neq('status', 'done').order('due_date', { ascending: true, nullsFirst: false }).limit(500).returns<Task[]>()
     : { data: [] as Task[] };
   const pending = new Set((myRequests ?? []).map((r) => r.group_id));
-  const others = loai === 'ca-nhan' ? [] : ((dir ?? []) as DirRow[]).filter((g) => !g.can_view && (!loai || g.kind === loai));
+  // Nhóm đã hiện trong bảng (kể cả Hiệu trưởng thấy mọi nhóm để xem tổng quan) không lặp lại ở dưới.
+  const listed = new Set((groups ?? []).map((g) => g.id));
+  const others = loai === 'ca-nhan' ? [] : ((dir ?? []) as DirRow[]).filter((g) => !g.can_view && !listed.has(g.id) && (!loai || g.kind === loai));
+  // Số liệu từ danh bạ (đếm đủ cả khi mình không xem được chi tiết bên trong).
+  const dirById = new Map(((dir ?? []) as DirRow[]).map((g) => [g.id, g]));
   const { data: taskRows } = await supabase.from('tasks').select('group_id').neq('status', 'done');
   const openTasks = new Map<string, number>();
   (taskRows ?? []).forEach((t) => openTasks.set(t.group_id, (openTasks.get(t.group_id) ?? 0) + 1));
@@ -51,7 +55,9 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
 
   return (
     <>
-      <PageHead title="Nhóm và Dự án" sub="Nhóm bạn tham gia ở trên; các đơn vị và dự án khác ở dưới để xin tham gia." />
+      <PageHead title="Nhóm và Dự án" sub={ctx.role === 'principal'
+        ? 'Các đơn vị, dự án và sự kiện đang có. Bấm vào tên để xem thông tin chung, lãnh đạo và đầu mối liên hệ.'
+        : 'Nhóm bạn tham gia ở trên; các đơn vị và dự án khác ở dưới để xin tham gia.'} />
       {tb && <p role="status" className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{tb}</p>}
       {loi && <p role="alert" className="mb-4 rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">{loi}</p>}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -78,14 +84,14 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
         )}
         {ctx.can_create_group && !luu_tru && loai !== 'ca-nhan' && <CreateGroupForm units={((dir ?? []) as DirRow[]).filter((g) => g.kind === 'unit').map((g) => ({ id: g.id, name: g.name }))} />}
         {groups?.length ? (
-          <GroupTable rows={groups.map((g) => ({
+          <GroupTable hideTasks={ctx.role === 'principal' && !ctx.is_admin} rows={groups.map((g) => ({
             id: g.id,
             name: g.name,
             parent: (g.parent_id && parentName.get(g.parent_id)) || '',
             kind: g.owner_id ? 'ca-nhan' : g.kind === 'unit' && g.unit_category ? `unit:${g.unit_category}` : g.kind,
             kindLabel: groupTypeLabel(g),
-            openTasks: openTasks.get(g.id) ?? 0,
-            members: memberCount.get(g.id) ?? 0,
+            openTasks: dirById.get(g.id)?.open_tasks ?? openTasks.get(g.id) ?? 0,
+            members: dirById.get(g.id)?.member_count ?? memberCount.get(g.id) ?? 0,
             role: role.get(g.id) ?? '',
             updatedAt: g.updated_at,
             updatedLabel: fmtDateTime(g.updated_at),
@@ -111,7 +117,7 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
                     <div className="text-xs muted">
                       {groupTypeLabel(g)}
                       {g.parent_id && <> · thuộc <Link href={`/nhom/${g.parent_id}`} className="link">{g.parent_name}</Link></>}
-                      {` · ${g.member_count} thành viên · ${g.open_tasks} việc đang mở`}
+                      {` · ${g.member_count} thành viên${g.open_tasks == null ? '' : ` · ${g.open_tasks} việc đang mở`}`}
                     </div>
                     {g.description && <p className="truncate text-xs muted">{g.description}</p>}
                   </div>

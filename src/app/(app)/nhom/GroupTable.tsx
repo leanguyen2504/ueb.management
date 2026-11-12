@@ -32,7 +32,8 @@ const NO_ROLE = 'Xem theo phạm vi';
 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 
-export function GroupTable({ rows }: { rows: GroupRow[] }) {
+// hideTasks: Hiệu trưởng không xem số việc của nhóm.
+export function GroupTable({ rows, hideTasks = false }: { rows: GroupRow[]; hideTasks?: boolean }) {
   const [hidden, setHidden] = useState<ColKey[]>([]);
   const [f, setF] = useState<Record<ColKey, string>>({ name: '', kind: '', openTasks: '', members: '', role: '', updatedAt: '' });
   const [showFilters, setShowFilters] = useState(false);
@@ -80,7 +81,7 @@ export function GroupTable({ rows }: { rows: GroupRow[] }) {
     });
   }, [rows, f, sort]);
 
-  const cols = COLS.filter((c) => !hidden.includes(c.key));
+  const cols = COLS.filter((c) => !hidden.includes(c.key) && !(hideTasks && c.key === 'openTasks'));
   const active = Object.values(f).some(Boolean);
   const set = (k: ColKey, v: string) => setF((p) => ({ ...p, [k]: v }));
 
@@ -103,7 +104,7 @@ export function GroupTable({ rows }: { rows: GroupRow[] }) {
         <details className="relative">
           <summary className="btn-secondary cursor-pointer list-none px-3 py-1">Cột hiển thị</summary>
           <div className="absolute right-0 z-10 mt-1 w-52 space-y-1 rounded-lg border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
-            {COLS.map((c) => (
+            {COLS.filter((c) => !(hideTasks && c.key === 'openTasks')).map((c) => (
               <label key={c.key} className="flex items-center gap-2 px-1 py-0.5">
                 <input type="checkbox" checked={!hidden.includes(c.key)} disabled={c.key === 'name'} onChange={() => toggle(c.key)} />
                 {c.label}

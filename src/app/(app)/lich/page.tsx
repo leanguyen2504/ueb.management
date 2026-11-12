@@ -128,7 +128,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   }
   const pendingAssigned = personal ? (await supabase.from('personal_items').select('id', { count: 'exact', head: true }).eq('owner_id', userId).not('assigned_by', 'is', null).eq('status', 'pending')).count ?? 0 : 0;
 
-  const creatable = (groups ?? []).filter((g) => ctx.is_admin || ctx.role === 'principal' || ctx.all_groups_secretary || (mine ?? []).some((m) => m.group_id === g.id && m.can_create));
+  const creatable = (groups ?? []).filter((g) => ctx.is_admin || ctx.all_groups_secretary || (mine ?? []).some((m) => m.group_id === g.id && m.can_create));
   const extraQuery = all ? '&tat_ca=1' : '';
 
   const { count: pendingCount } = await supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('host_id', userId).eq('status', 'pending');
