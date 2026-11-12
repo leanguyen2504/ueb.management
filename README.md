@@ -22,6 +22,7 @@ Web app tiếng Việt để Hiệu trưởng và tổ thư ký theo dõi nhóm,
 - [Phân quyền](docs/phan-quyen.md): vai trò, quyền theo nhóm và cách cơ sở dữ liệu kiểm tra.
 - [Vận hành](docs/van-hanh.md): mời người dùng, khóa tài khoản, xem nhật ký, sao lưu.
 - [Jira của tôi](docs/jira.md): mỗi người xem dữ liệu Jira của chính mình (worklog, sản phẩm đã nộp, giờ quy đổi, mã việc liên quan, comment nhắc tên).
+- [Soạn thảo](docs/soan-thao.md): rà soát thể thức file Word theo Nghị định 30/2020, ghi chú nhanh, tạo khung văn bản.
 - [Google Calendar](docs/google-calendar.md): đọc lịch Google dùng chung (ví dụ lịch tuần BGH), cách cấp quyền và bật/tắt module.
 
 ## Chạy trên máy

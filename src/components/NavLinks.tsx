@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 // match: các đường dẫn khác cũng tính là đang ở mục này (ví dụ Trang đặt lịch thuộc Lịch).
-export type NavItem = { href: string; label: string; icon: string; badge?: number; match?: string[] };
+// sideOnly: chỉ hiện ở thanh bên (thanh dưới trên điện thoại chỉ đủ chỗ cho năm mục).
+export type NavItem = { href: string; label: string; icon: string; badge?: number; match?: string[]; sideOnly?: boolean };
 
 export const ICONS: Record<string, React.ReactNode> = {
   today: <path d="M3.5 10.5 12 4l8.5 6.5V20h-5.5v-5.5h-6V20H3.5z" />,
@@ -15,6 +16,7 @@ export const ICONS: Record<string, React.ReactNode> = {
   bell: <><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
   search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>,
+  pen: <><path d="M14.5 5.5 18.5 9.5" /><path d="M4 20l1-4.5L15.5 5a2.1 2.1 0 0 1 3 0l.5.5a2.1 2.1 0 0 1 0 3L8.5 19z" /></>,
 };
 
 export function Icon({ name, className = 'h-5 w-5' }: { name: string; className?: string }) {
@@ -32,7 +34,7 @@ export function NavLinks({ items, variant }: { items: NavItem[]; variant: 'side'
   const path = usePathname();
   return (
     <>
-      {items.map((it) => {
+      {items.filter((it) => variant === 'side' || !it.sideOnly).map((it) => {
         const active = isActive(path, it);
         const badge = Boolean(it.badge) && (it.badge! > 99 ? '99+' : it.badge);
         return variant === 'side' ? (
