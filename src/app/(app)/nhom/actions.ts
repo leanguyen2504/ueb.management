@@ -211,3 +211,52 @@ export async function moveGroup(groupId: string, newParentId: string, fromId: st
   revalidatePath('/nhom');
   return {};
 }
+
+// ---- Xóa không gian, lịch, việc thừa ----
+// Trưởng nhóm xóa ngay; người khác gửi yêu cầu để Trưởng nhóm duyệt. Cơ sở dữ liệu quyết định.
+const DELETE_TYPES = ['group', 'task', 'event'] as const;
+type DeleteType = (typeof DELETE_TYPES)[number];
+const DELETE_DONE: Record<DeleteType, string> = { group: 'Đã xóa không gian.', task: 'Đã xóa việc.', event: 'Đã xóa lịch.' };
+const REQUEST_SENT = 'Đã gửi yêu cầu xóa. Trưởng nhóm sẽ duyệt và trả lời qua thông báo.';
+
+export async function requestDelete(type: DeleteType, itemId: string, fromId: string, reason?: string | null): Promise<{ error?: string; ok?: string }> {
+  if (!DELETE_TYPES.includes(type)) return { error: 'Loại mục không hợp lệ.' };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('request_delete', { p_type: type, p_id: itemId, p_reason: reason?.trim().slice(0, 500) || null });
+  if (error) return { error: errText(error) };
+  revalidatePath(`/nhom/${fromId}`);
+  revalidatePath('/nhom');
+  return { ok: data === 'deleted' ? DELETE_DONE[type] : REQUEST_SENT };
+}
+
+export async function requestDeleteForm(form: FormData) {
+  const groupId = String(form.get('group_id'));
+  const type = String(form.get('type')) as DeleteType;
+  const itemId = String(form.get('item_id') || '');
+  const tab = String(form.get('tab') || '');
+  const back = `/nhom/${groupId}${tab ? `?tab=${tab}&` : '?'}`;
+  if (!itemId) redirect(`${back}loi=${encodeURIComponent('Hãy chọn mục cần xóa.')}`);
+  const r = await requestDelete(type, itemId, groupId, String(form.get('reason') || ''));
+  if (r.error) redirect(`${back}loi=${encodeURIComponent(r.error)}`);
+  redirect(`${back}tb=${encodeURIComponent(r.ok!)}`);
+}
+
+export async function decideDelete(form: FormData) {
+  const id = String(form.get('id'));
+  const groupId = String(form.get('group_id'));
+  const approve = form.get('approve') === '1';
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('decide_delete_request', { p_id: id, p_approve: approve });
+  revalidatePath(`/nhom/${groupId}`);
+  revalidatePath('/nhom');
+  if (error) redirect(`/nhom/${groupId}?loi=${encodeURIComponent(errText(error))}`);
+  redirect(`/nhom/${groupId}?tb=${encodeURIComponent(approve ? 'Đã duyệt và xóa.' : 'Đã từ chối yêu cầu xóa.')}`);
+}
+
+export async function cancelDelete(form: FormData) {
+  const id = String(form.get('id'));
+  const groupId = String(form.get('group_id'));
+  const supabase = await createClient();
+  await supabase.rpc('cancel_delete_request', { p_id: id });
+  revalidatePath(`/nhom/${groupId}`);
+}
