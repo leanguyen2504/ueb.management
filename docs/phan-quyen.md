@@ -71,6 +71,14 @@ Người được giao việc phải là thành viên nhóm (hoặc Hiệu trư�
 - Dữ liệu Jira (`jira_issues`, `jira_worklogs`, `jira_mentions`) chỉ chủ tài khoản đọc được, kể cả quản trị và Hiệu trưởng cũng không.
 - Chủ tài khoản có thể tự bật chia sẻ (`jira_set_share`): cho Trưởng nhóm, Văn thư (`leads`) hoặc mọi thành viên (`members`) của các nhóm, dự án, đơn vị mình đang tham gia. Người được chia sẻ chỉ đọc qua `jira_related_*`, đã bỏ comment, lời nhắc tên và lịch sử trạng thái.
 
+## Tài liệu của không gian
+
+- Thẻ Tài liệu ở mỗi không gian gồm link Drive chung (`groups.drive_url`) và danh sách tệp, link tài liệu (`group_files`).
+- Xem: ai xem được không gian thì xem và tải tệp về (mở qua `/nhom/tep`, link ký tạm thời 5 phút). Hiệu trưởng ở nhóm không là thành viên không thấy.
+- Thêm tệp, thêm link, đặt hoặc gỡ link Drive chung (hàm `set_group_drive`): quyền "Tải/gắn tài liệu".
+- Gỡ tài liệu: người đã tải lên, hoặc người có quyền "Sửa".
+- Tệp lưu ở bucket riêng tư `group-files`, đường dẫn `<group_id>/<mã ngẫu nhiên>/<tên file>`, tối đa 50 MB mỗi tệp.
+
 ## Kiểm thử
 
 `supabase/tests/10_phan_quyen.sql` đăng nhập giả lập từng vai trò và kiểm tra các trường hợp được phép và bị chặn. Chạy bằng `npm run test:db`; CI chạy lại mỗi lần có pull request.
