@@ -33,8 +33,8 @@ Nằm trong schema `private` (không mở qua API):
 
 | Bảng | Xem | Tạo | Sửa / xóa |
 | --- | --- | --- | --- |
-| `tasks` | quyền xem nhóm, hoặc là người được giao | quyền tạo trong nhóm | quyền sửa trong nhóm; người được giao (không có quyền sửa) chỉ đổi được trạng thái |
-| `events` | quyền xem nhóm | quyền tạo trong nhóm | quyền sửa trong nhóm |
+| `tasks` | quyền xem nhóm, hoặc là người được giao | quyền tạo trong nhóm | sửa: quyền sửa trong nhóm; người được giao (không có quyền sửa) chỉ đổi được trạng thái. Xóa: chỉ Trưởng nhóm, người khác gửi yêu cầu xóa |
+| `events` | quyền xem nhóm | quyền tạo trong nhóm | sửa: quyền sửa trong nhóm. Xóa: chỉ Trưởng nhóm, người khác gửi yêu cầu xóa |
 | `booking_pages` | mọi người dùng đang hoạt động | chính chủ | chính chủ |
 | `bookings` | người đặt, người nhận, quản trị | người đặt (luôn ở trạng thái chờ) | người nhận đồng ý/từ chối; người đặt chỉ hủy; không sửa nội dung đã gửi; không đồng ý hai lịch trùng giờ |
 | `notifications` | chỉ người nhận | chỉ trigger | người nhận đánh dấu đã đọc hoặc xóa |
@@ -52,6 +52,13 @@ Người được giao việc phải là thành viên nhóm (hoặc Hiệu trư�
 - Giới hạn người dùng cùng lúc: `system_settings.max_online` (mặc định 200). Mỗi lần mở trang, hàm `enter_app()` ghi lại thời điểm vào bảng `presence`; người mở trang trong 10 phút qua tính là đang dùng. Khi đủ người, người mới thấy trang "Hệ thống đang đông"; người đang dùng dở, quản trị, Hiệu trưởng và thư ký luôn vào được.
 - Danh bạ nhóm: mọi người dùng đang hoạt động gọi được `group_directory()` (tên, mô tả, đơn vị quản lý, số thành viên, số việc mở), `group_contacts(id)` (Trưởng nhóm là lãnh đạo, Văn thư là đầu mối liên hệ, kèm email, điện thoại, phòng) và `group_open_task_titles(id)` (chỉ tên, hạn và đã có người phụ trách chưa). Tài liệu, mô tả việc, sản phẩm, lịch và danh sách thành viên vẫn do RLS giữ kín.
 - Xin tham gia: `request_join(nhóm, việc?, lời nhắn)` tạo yêu cầu trong `join_requests` và báo cho Trưởng nhóm, Văn thư. Người có quyền quản lý thành viên duyệt bằng `decide_join_request`: nhận thì người xin vào nhóm với quyền mặc định (luôn có quyền xem); nếu xin một việc chưa có người phụ trách và người duyệt có quyền sửa thì được giao luôn việc đó. Người xin tự hủy bằng `cancel_join_request`. Không ghi thẳng vào bảng được.
+
+## Xóa không gian, lịch, việc thừa
+
+- Chỉ Trưởng nhóm (cùng quản trị, thư ký toàn trường; ở không gian cá nhân là chủ sở hữu) xóa thẳng (`private.can_delete_in`). Người có quyền sửa không còn tự xóa việc, lịch.
+- Thành viên khác gửi `request_delete(loại, id, lý do)` với loại `group | task | event`; yêu cầu nằm trong `delete_requests` và Trưởng nhóm nhận thông báo. Trưởng nhóm gọi hàm này thì mục bị xóa ngay.
+- Không gian được duyệt ở nhóm cấp trên (Trưởng nhóm nhóm cấp trên). Không gian còn không gian con thì phải chuyển hoặc xóa con trước; nhóm gốc không xóa được, chỉ lưu trữ.
+- Trưởng nhóm duyệt bằng `decide_delete_request`; người gửi tự rút bằng `cancel_delete_request`. Mục bị xóa bằng cách khác thì yêu cầu đang chờ tự đóng.
 
 ## Dự án và việc chung nhiều đơn vị
 

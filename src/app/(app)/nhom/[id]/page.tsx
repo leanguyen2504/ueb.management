@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireSession } from '@/lib/session';
 import { AddMemberForm, EditGroupForm, GroupUnitsForm } from '../GroupForms';
-import { cancelInvitation, decideJoin, removeMember, setArchived, updateMember } from '../actions';
+import { cancelDelete, cancelInvitation, decideDelete, decideJoin, removeMember, requestDeleteForm, setArchived, updateMember } from '../actions';
 import { PublicGroup, type DirGroup } from './PublicGroup';
 import { PrincipalGroup } from './PrincipalGroup';
 import { OpenFromHash } from '@/components/OpenFromHash';
@@ -74,7 +74,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     return <PublicGroup group={pub} contacts={contacts ?? []} tasks={open ?? []} requests={reqs ?? []} units={units} projects={projects} tb={tb} loi={loi} />;
   }
 
-  const [{ data: members }, { data: invites }, { data: log }, { data: tasks }, { data: events }, { data: joinReqs }] = await Promise.all([
+  const [{ data: members }, { data: invites }, { data: log }, { data: tasks }, { data: events }, { data: joinReqs }, { data: delReqs }] = await Promise.all([
     supabase.from('group_members').select('*').eq('group_id', id).returns<GroupMember[]>(),
     supabase.from('invitations').select('id, email, is_manager, is_clerk, created_at, expires_at').eq('group_id', id).is('accepted_at', null),
     supabase.from('activity_log').select('id, at, actor_id, action, entity_type').eq('group_id', id).order('at', { ascending: false }).limit(15),
@@ -82,6 +82,8 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     supabase.from('events').select('*').eq('group_id', id).gte('ends_at', new Date(Date.now() - 86400000).toISOString()).order('starts_at').limit(30).returns<CalEvent[]>(),
     // RLS: chỉ người quản lý thành viên thấy yêu cầu của người khác.
     supabase.from('join_requests').select('id, task_id, requester_id, message, created_at').eq('group_id', id).eq('status', 'pending').neq('requester_id', userId).order('created_at'),
+    // RLS: Trưởng nhóm thấy mọi yêu cầu xóa của nhóm; người khác chỉ thấy yêu cầu mình gửi.
+    supabase.from('delete_requests').select('id, item_type, item_id, item_title, reason, requester_id, created_at').eq('group_id', id).eq('status', 'pending').order('created_at').returns<DeleteRequest[]>(),
   ]);
   const taskIds = (tasks ?? []).map((t) => t.id);
   const [{ data: linkRows }, { data: children }, { data: parent }] = await Promise.all([
@@ -119,7 +121,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const { data: childTasks } = childIds.length
     ? await supabase.from('tasks').select('group_id, status, due_date').in('group_id', childIds)
     : { data: [] as { group_id: string; status: Task['status']; due_date: string | null }[] };
-  const ids = [...new Set([...(members ?? []).map((m) => m.user_id), ...(log ?? []).map((l) => l.actor_id).filter(Boolean) as string[], ...(tasks ?? []).map((t) => t.assignee_id).filter(Boolean) as string[], ...(joinReqs ?? []).map((r) => r.requester_id), group.created_by, group.updated_by].filter(Boolean) as string[])];
+  const ids = [...new Set([...(members ?? []).map((m) => m.user_id), ...(log ?? []).map((l) => l.actor_id).filter(Boolean) as string[], ...(tasks ?? []).map((t) => t.assignee_id).filter(Boolean) as string[], ...(joinReqs ?? []).map((r) => r.requester_id), ...(delReqs ?? []).map((r) => r.requester_id), group.created_by, group.updated_by].filter(Boolean) as string[])];
   const { data: people } = await supabase.from('profiles').select('id, email, full_name, system_role, is_active, position, phone, office, avatar_path').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).returns<Profile[]>();
   const person = new Map((people ?? []).map((p) => [p.id, p]));
   const avatars = await avatarUrls(supabase, (members ?? []).map((m) => person.get(m.user_id)?.avatar_path));
@@ -157,6 +159,11 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const tab = TABS.some((t) => t.key === tabParam) ? tabParam! : 'tong-quan';
   const tabHref = (k: string) => (k === 'tong-quan' ? `/nhom/${group.id}` : `/nhom/${group.id}?tab=${k}`);
   const canAddTask = canCreate && !group.archived_at;
+  // Xóa: Trưởng nhóm (hoặc chủ không gian cá nhân) xóa ngay; người khác gửi đề nghị để Trưởng nhóm duyệt.
+  const canDeleteHere = isPersonal ? group.owner_id === userId : isLead;
+  const pendingDel = new Set((delReqs ?? []).map((r) => `${r.item_type}:${r.item_id}`));
+  const othersDelReqs = canDeleteHere ? (delReqs ?? []).filter((r) => r.requester_id !== userId) : [];
+  const myDelReqs = (delReqs ?? []).filter((r) => r.requester_id === userId);
 
   // Kéo thả để chuyển không gian; cơ sở dữ liệu kiểm tra quyền ở cả hai nơi.
   const canMoveSpaces = canSub;
@@ -164,17 +171,20 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     <SpaceGrid
       groupId={group.id}
       canMove={canMoveSpaces}
+      canDelete={canDeleteHere}
       up={canMoveSpaces && parentLink ? { id: parentLink.id, name: parentLink.name } : null}
       items={(children ?? []).map((c) => {
         const p = progressOf((childTasks ?? []).filter((t) => t.group_id === c.id));
         return {
           id: c.id,
           name: c.name,
+          pendingDelete: !canDeleteHere && pendingDel.has(`group:${c.id}`),
           card: (
             <Link href={`/nhom/${c.id}`} draggable={false} className="block h-full rounded-xl border border-slate-200 bg-white p-3.5 hover:border-brand-600 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-brand-300">
               <div className="flex items-baseline justify-between gap-2 pr-6">
                 <span className="font-semibold">{c.name}</span>
                 {c.archived_at && <span className="chip">Đã lưu trữ</span>}
+                {pendingDel.has(`group:${c.id}`) && <span className="chip bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300">Chờ duyệt xóa</span>}
               </div>
               {c.description && <p className="truncate text-xs muted">{c.description}</p>}
               <ProgressBar pct={p.pct} className="mt-2.5 h-1.5" />
@@ -214,12 +224,22 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
             <div className="font-medium">{e.title}</div>
             <div className="text-xs muted">{EVENT_KIND_LABEL[e.kind]} · đến {fmtTime(e.ends_at)}{e.location ? ` · ${e.location}` : ''}</div>
           </div>
-          {canEdit && tab === 'lich' && (
+          {tab === 'lich' && (canDeleteHere ? (
             <form action={deleteEvent}>
               <input type="hidden" name="id" value={e.id} />
               <button className="text-xs text-orange-700 hover:underline dark:text-orange-400">Xóa</button>
             </form>
-          )}
+          ) : pendingDel.has(`event:${e.id}`) ? (
+            <span className="chip shrink-0 text-xs">Chờ duyệt xóa</span>
+          ) : (
+            <form action={requestDeleteForm}>
+              <input type="hidden" name="group_id" value={group.id} />
+              <input type="hidden" name="type" value="event" />
+              <input type="hidden" name="item_id" value={e.id} />
+              <input type="hidden" name="tab" value="lich" />
+              <button className="text-xs text-orange-700 hover:underline dark:text-orange-400" title="Gửi Trưởng nhóm duyệt xóa lịch này">Đề nghị xóa</button>
+            </form>
+          ))}
         </li>
       ))}
     </ul>
@@ -261,6 +281,44 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         ))}
       </nav>
 
+      {tab === 'tong-quan' && (othersDelReqs.length > 0 || myDelReqs.length > 0) && (
+        <section id="yeu-cau-xoa" className="card mb-5 scroll-mt-20 border-orange-300/60 dark:border-orange-900" aria-labelledby="yeu-cau-xoa-h">
+          <h2 id="yeu-cau-xoa-h" className="mb-1 text-lg font-semibold">{othersDelReqs.length ? `Yêu cầu xóa chờ duyệt (${othersDelReqs.length})` : 'Yêu cầu xóa bạn đã gửi'}</h2>
+          <p className="mb-3 text-sm muted">{othersDelReqs.length ? 'Đồng ý thì mục bị xóa hẳn, kể cả việc, lịch và thành viên bên trong không gian. Không hoàn tác được.' : 'Trưởng nhóm sẽ duyệt và trả lời qua thông báo.'}</p>
+          <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">
+            {[...othersDelReqs, ...myDelReqs].map((r) => {
+              const p = person.get(r.requester_id);
+              const mine = r.requester_id === userId;
+              return (
+                <li key={r.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    {mine ? <span className="font-semibold">Bạn</span> : <Link href={`/nguoi/${r.requester_id}`} className="font-semibold hover:underline">{p?.full_name || p?.email || 'Người dùng'}</Link>}
+                    <span className="muted"> đề nghị xóa {DELETE_ITEM_LABEL[r.item_type]} </span>
+                    <span className="font-medium">{r.item_title}</span>
+                    <span className="muted"> · {fmtDateTime(r.created_at)}</span>
+                    {r.reason && <p className="mt-1 rounded-lg bg-slate-100 px-2.5 py-1.5 dark:bg-slate-800">“{r.reason}”</p>}
+                  </div>
+                  {mine ? (
+                    <form action={cancelDelete}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <input type="hidden" name="group_id" value={group.id} />
+                      <button className="btn-secondary px-3 py-1 text-xs">Rút yêu cầu</button>
+                    </form>
+                  ) : (
+                    <form action={decideDelete} className="flex gap-2">
+                      <input type="hidden" name="id" value={r.id} />
+                      <input type="hidden" name="group_id" value={group.id} />
+                      <button name="approve" value="1" className="btn px-3 py-1 text-xs">Đồng ý xóa</button>
+                      <button name="approve" value="0" className="btn-secondary px-3 py-1 text-xs">Giữ lại</button>
+                    </form>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       {tab === 'tong-quan' && (
         <div className="grid items-start gap-5 lg:grid-cols-[1.5fr_1fr]">
           <div className="min-w-0">
@@ -292,20 +350,44 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         <div className="grid items-start gap-5 lg:grid-cols-[1fr_360px]">
           <section className="card">
             <h2 className="mb-3 text-lg font-semibold">Đầu việc ({openTasks.length} đang mở)</h2>
-            <TaskList tasks={openTasks} name={name} canDelete={canEdit} empty="Chưa có việc đang mở." links={links} canNudge={canNudge} canAttach={canAttach} me={userId} />
+            <TaskList tasks={openTasks} name={name} canDelete={canDeleteHere} empty="Chưa có việc đang mở." links={links} canNudge={canNudge} canAttach={canAttach} me={userId} />
             {doneTasks.length > 0 && (
               <details className="mt-3">
                 <summary className="cursor-pointer text-sm muted">Đã hoàn thành ({doneTasks.length})</summary>
-                <TaskList tasks={doneTasks} name={name} canDelete={canEdit} links={links} canAttach={canAttach} me={userId} />
+                <TaskList tasks={doneTasks} name={name} canDelete={canDeleteHere} links={links} canAttach={canAttach} me={userId} />
               </details>
             )}
           </section>
-          {canAddTask && (
+          {(canAddTask || (!canDeleteHere && Boolean(tasks?.length))) && (
             <div className="space-y-5">
+              {!canDeleteHere && Boolean(tasks?.length) && (
+                <details className="card">
+                  <summary className="cursor-pointer list-none font-semibold">Đề nghị xóa việc thừa</summary>
+                  <form action={requestDeleteForm} className="mt-3 space-y-2 text-sm">
+                    <input type="hidden" name="group_id" value={group.id} />
+                    <input type="hidden" name="type" value="task" />
+                    <input type="hidden" name="tab" value="viec" />
+                    <label className="block">
+                      <span className="mb-1 block muted">Việc cần xóa</span>
+                      <select name="item_id" required defaultValue="" className="input w-full">
+                        <option value="" disabled>Chọn việc…</option>
+                        {(tasks ?? []).filter((t) => !pendingDel.has(`task:${t.id}`)).map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block muted">Lý do (không bắt buộc)</span>
+                      <input name="reason" maxLength={500} className="input w-full" placeholder="Ví dụ: tạo trùng" />
+                    </label>
+                    <button className="btn-secondary">Gửi Trưởng nhóm duyệt</button>
+                  </form>
+                </details>
+              )}
+              {canAddTask && (
               <section id="tao-viec" data-hash-focus className="card scroll-mt-20 target:ring-2 target:ring-gold-500">
                 <h2 className="mb-3 text-lg font-semibold">Tạo việc mới</h2>
                 <TaskForm groupId={group.id} people={memberOptions} self={isPersonal ? userId : undefined} />
               </section>
+              )}
               {canSub && !isPersonal && (
                 <section className="card">
                   <h2 className="mb-1 text-lg font-semibold">Việc chung nhiều đơn vị</h2>
@@ -487,5 +569,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   );
 }
 
+type DeleteRequest = { id: string; item_type: 'group' | 'task' | 'event'; item_id: string; item_title: string; reason: string | null; requester_id: string; created_at: string };
+const DELETE_ITEM_LABEL: Record<DeleteRequest['item_type'], string> = { group: 'không gian', task: 'việc', event: 'lịch' };
 const ACTION: Record<string, string> = { insert: 'thêm', update: 'sửa', delete: 'xóa' };
 const ENTITY: Record<string, string> = { groups: 'thông tin nhóm', group_members: 'thành viên', invitations: 'lời mời', tasks: 'đầu việc', events: 'lịch' };

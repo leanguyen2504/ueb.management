@@ -2,16 +2,18 @@
 
 import { useState, useTransition, type DragEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { moveGroup } from '../actions';
+import { moveGroup, requestDelete } from '../actions';
 
-type Item = { id: string; name: string; card: ReactNode };
+type Item = { id: string; name: string; card: ReactNode; pendingDelete?: boolean };
 type Target = { id: string; name: string };
 
 const MIME = 'application/x-ueb-space';
+const DELETE = '__xoa';
 
 // Lưới thẻ không gian kéo thả được: thả một thẻ lên thẻ khác để đưa vào trong đó,
 // hoặc thả lên ô "Đưa lên" để chuyển ra nhóm cấp trên. Có thêm ô chọn cho bàn phím và điện thoại.
-export function SpaceGrid({ groupId, items, up, canMove }: { groupId: string; items: Item[]; up: Target | null; canMove: boolean }) {
+// Ô ⋯ còn có mục xóa: Trưởng nhóm xóa ngay, người khác gửi đề nghị để Trưởng nhóm duyệt.
+export function SpaceGrid({ groupId, items, up, canMove, canDelete }: { groupId: string; items: Item[]; up: Target | null; canMove: boolean; canDelete: boolean }) {
   const router = useRouter();
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
@@ -30,6 +32,22 @@ export function SpaceGrid({ groupId, items, up, canMove }: { groupId: string; it
       if (!r.error) router.refresh();
     });
   };
+
+  const remove = (it: Item) => {
+    let reason: string | null = null;
+    if (canDelete) {
+      if (!window.confirm(`Xóa vĩnh viễn “${it.name}” cùng mọi việc, lịch, thành viên bên trong? Không hoàn tác được.`)) return;
+    } else {
+      reason = window.prompt(`Đề nghị Trưởng nhóm xóa “${it.name}”.\nLý do (không bắt buộc):`, '');
+      if (reason === null) return;
+    }
+    start(async () => {
+      const r = await requestDelete('group', it.id, groupId, reason);
+      setMsg(r.error ? { ok: false, text: r.error } : { ok: true, text: r.ok! });
+      if (!r.error) router.refresh();
+    });
+  };
+  const choose = (it: Item, value: string) => (value === DELETE ? remove(it) : move(it.id, value));
 
   const dropProps = (dest: string) =>
     canMove
@@ -78,21 +96,22 @@ export function SpaceGrid({ groupId, items, up, canMove }: { groupId: string; it
             className={`relative rounded-xl ${dragging === it.id ? 'opacity-40' : ''} ${over === it.id ? 'ring-2 ring-brand-600 ring-offset-2 dark:ring-brand-300' : ''} ${canMove ? 'cursor-grab active:cursor-grabbing' : ''}`}
           >
             {it.card}
-            {canMove && (items.length > 1 || up) && (
+            {((canMove && (items.length > 1 || up)) || !it.pendingDelete) && (
               <label className="absolute right-2 top-2">
-                <span className="sr-only">Chuyển {it.name} vào</span>
+                <span className="sr-only">Thao tác với {it.name}</span>
                 <select
                   value=""
                   disabled={pending}
-                  onChange={(e) => move(it.id, e.target.value)}
-                  title="Chuyển vào…"
+                  onChange={(e) => choose(it, e.target.value)}
+                  title="Chuyển, xóa…"
                   className="w-7 cursor-pointer appearance-none rounded-md border border-transparent bg-transparent px-1 text-center text-xs text-slate-500 hover:border-slate-300 dark:hover:border-slate-700"
                 >
                   <option value="">⋯</option>
-                  {up && <option value={up.id}>↑ Đưa lên {up.name}</option>}
-                  {items.filter((o) => o.id !== it.id).map((o) => (
+                  {canMove && up && <option value={up.id}>↑ Đưa lên {up.name}</option>}
+                  {canMove && items.filter((o) => o.id !== it.id).map((o) => (
                     <option key={o.id} value={o.id}>Vào {o.name}</option>
                   ))}
+                  {!it.pendingDelete && <option value={DELETE}>{canDelete ? 'Xóa không gian…' : 'Đề nghị xóa…'}</option>}
                 </select>
               </label>
             )}
