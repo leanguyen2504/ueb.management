@@ -5,9 +5,11 @@
 //   2. Lịch cá nhân: lịch dạy/giảng, sự kiện, việc tự tạo hoặc được phân công (personal_items).
 //   3. Đơn nghỉ phép và đăng ký làm ngoài giờ trên Jira (jira_issues) — tự cập nhật mỗi lần đồng bộ Jira.
 //   4. Worklog và sản phẩm hoàn thành trên Jira (jira_worklogs, jira_issues).
+//   5. Giờ vào/ra từ máy chấm công của trường (attendance_punches), khi người dùng đã đồng bộ.
 import { addDays, vnDay } from '@/lib/format';
 import { isMine, numberOf } from '@/lib/jira/report';
 import type { JiraIssueRow } from '@/lib/jira/types';
+import { hasPunch, type PunchRow } from '@/lib/punch';
 
 export type PersonalKind = 'giang_day' | 'su_kien' | 'cong_viec' | 'khac';
 export type PersonalRole = 'giang_vien_chinh' | 'tro_giang' | 'bao_cao_vien' | 'to_chuc' | 'tham_du' | 'thuc_hien';
@@ -186,7 +188,9 @@ export type DayRow = {
   // Nơi làm việc trong ngày (nhãn).
   place: string | null;
   // mac-dinh: ngày làm việc không có đơn nghỉ thì coi là có mặt (web không nhận dữ liệu chấm công khuôn mặt).
-  placeFrom: 'diem-danh' | 'lich' | 'jira' | 'mac-dinh' | null;
+  placeFrom: 'diem-danh' | 'lich' | 'jira' | 'may-cham-cong' | 'mac-dinh' | null;
+  // Dòng máy chấm công của ngày (null: chưa đồng bộ ngày này).
+  punch: PunchRow | null;
   worklogHours: number;
   teachHours: number;
   overtimeHours: number;
@@ -220,9 +224,11 @@ export function buildDays(input: {
   worklogs: { started_at: string; seconds: number }[];
   issues: JiraIssueRow[];
   convertedField: string | null;
+  punches?: PunchRow[];
 }): DayRow[] {
   const { from, to, today } = input;
   const checkin = new Map(input.checkins.map((c) => [c.day, c]));
+  const punchBy = new Map((input.punches ?? []).map((p) => [p.day, p]));
   const itemsBy = new Map<string, PersonalItem[]>();
   for (const it of input.items) {
     if (it.status === 'declined') continue;
@@ -294,6 +300,15 @@ export function buildDays(input: {
         placeFrom = 'lich';
       }
     }
+    const punch = punchBy.get(day) ?? null;
+    if ((!place || placeFrom === 'lich') && hasPunch(punch)) {
+      place = place ? `${place} · có chấm công` : 'Ở trường';
+      placeFrom = place === 'Ở trường' ? 'may-cham-cong' : placeFrom;
+    }
+    if (!place && punch && !weekend && day <= today) {
+      place = 'Không chấm công';
+      placeFrom = 'may-cham-cong';
+    }
     if (!place && !weekend && day <= today) {
       place = 'Có mặt';
       placeFrom = 'mac-dinh';
@@ -308,14 +323,14 @@ export function buildDays(input: {
     let verdict: DayVerdict;
     if (day > today) verdict = 'chua-den';
     else if (leaveFraction >= 1) verdict = approvedLeave.length === leave.length ? 'nghi-phep' : 'cho-duyet';
-    else if (weekend && !ci && !items.length && !worked && !overtime.length && !products.length) verdict = 'cuoi-tuan';
+    else if (weekend && !ci && !items.length && !worked && !overtime.length && !products.length && !hasPunch(punch)) verdict = 'cuoi-tuan';
     else if (worked >= target || converted >= target) verdict = weekend ? (worked || converted || products.length ? 'lam-cuoi-tuan' : 'cuoi-tuan') : 'dat';
     else if (day === today) verdict = 'hom-nay';
     else if (worked > 0 || converted > 0 || ci || items.length || products.length) verdict = 'mot-phan';
     else verdict = 'thieu';
 
     rows.push({
-      day, weekend, checkin: ci, items, leave, overtime, place, placeFrom, worklogHours, teachHours, overtimeHours,
+      day, weekend, checkin: ci, items, leave, overtime, place, placeFrom, punch, worklogHours, teachHours, overtimeHours,
       products, converted, leaveFraction, target, verdict,
     });
   }

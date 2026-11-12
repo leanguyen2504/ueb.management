@@ -62,3 +62,13 @@ Mỗi người có thể bấm **Ngắt kết nối và xóa dữ liệu Jira đ
 - Dữ liệu người khác chỉ có khi chính họ bật **Chia sẻ dữ liệu Jira của tôi**: cho Trưởng nhóm, Văn thư các nhóm mình tham gia (`leads`) hoặc mọi thành viên nhóm chung (`members`). Mặc định `none`. Không tính không gian cá nhân và nhóm đã lưu trữ.
 - Người được chia sẻ chỉ đọc qua các hàm `jira_related_people`, `jira_related_issues`, `jira_related_worklogs` (migration `20261112000001_chia_se_jira.sql`), không có comment, lời nhắc tên, lịch sử trạng thái. Bảng gốc vẫn chỉ chủ đọc được. Kiểm thử: `supabase/tests/99_chia_se_jira.sql`.
 - Mọi bảng trên trang (Tất cả mã Jira, Worklog, Sản phẩm, Chấm công, kiểu xem Bảng của Lịch) dùng chung `src/components/table/DataTable.tsx`: lọc từng cột, sắp xếp, chọn cột hiển thị (nhớ trên máy), mở rộng dòng, cộng tổng và tải Excel đúng phần đang lọc.
+
+## Dữ liệu máy chấm công của trường
+
+Hệ thống chấm công (`https://chamcong4lan.ueb.edu.vn/ChamCong/BaoCao`) nằm trong mạng của trường, máy chủ web không gọi tới được. Vì vậy dùng lại nút "Đồng bộ Jira → UEB":
+
+- Bấm nút khi đang mở trang Báo cáo chấm công (đã đăng nhập). Mã `/api/jira/nut` nhận ra trang chấm công, gọi `GET /api/chamcong/bao-cao?tu=&den=` của chính trang đó theo từng tháng (3 tháng gần nhất), chỉ giữ dòng của người đăng nhập (theo email ở `#userEmailDisplay` hoặc họ tên ở `#userNameDisplay`), rồi gửi về `POST /api/jira/cham-cong` kèm mã đồng bộ.
+- Máy chủ chọn lại đúng tài khoản chấm công (trùng tên đăng nhập Jira, phần trước @ của email, hoặc họ tên khớp hồ sơ nếu chỉ một người trùng tên) trước khi lưu, nên không lưu dữ liệu của người khác. Lưu bằng `attendance_save_punches` (chỉ service role), ghi đè đúng khoảng ngày vừa gửi.
+- Bảng `attendance_punches` (mỗi ngày một dòng: giờ vào/ra sáng chiều, vi phạm, giải trình, phút quy đổi, số lỗi) và `attendance_punch_sync` (lần đồng bộ gần nhất, cờ `excuse_error` khi hệ thống chấm công báo không đọc được đơn nghỉ). RLS: chỉ chủ đọc và xóa.
+- Để tab chấm công mở thì nút tự đồng bộ lại tháng hiện tại mỗi 10 phút; trang Lịch → Chấm công tự làm mới mỗi phút. Muốn thật sự thời gian thực mà không cần mở tab thì cần trường mở API cho máy chủ web, hoặc một máy trong mạng trường chạy đồng bộ định kỳ.
+- Trang Chấm công cảnh báo: ngày có lỗi chưa giải trình (kèm đối chiếu đơn nghỉ trên Jira: đã duyệt nhưng máy chưa ghi nhận, đang chờ duyệt, hay chưa có đơn), hệ thống chấm công không đọc được đơn nghỉ, dữ liệu máy chấm công cũ hơn 1 ngày.
