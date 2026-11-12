@@ -91,30 +91,48 @@ export async function deleteOrRequestTask(form: FormData) {
 
 // ---- Lịch nhóm ----
 
-export async function createEvent(_prev: FormState, form: FormData): Promise<FormState> {
-  const group_id = uuidOrNull(text(form, 'group_id'));
+// Đọc các ô của biểu mẫu lịch nhóm (dùng chung cho thêm và sửa).
+function eventFields(form: FormData) {
   const title = text(form, 'title');
   const kind = (text(form, 'kind') || 'meeting') as EventKind;
   const starts_at = fromLocalInput(text(form, 'starts_at'));
   const ends_at = fromLocalInput(text(form, 'ends_at')) ?? starts_at;
+  if (!title) return { error: 'Hãy nhập tiêu đề.' } as const;
+  if (!EVENT_KINDS.includes(kind)) return { error: 'Loại lịch không hợp lệ.' } as const;
+  if (!starts_at || !ends_at) return { error: 'Hãy chọn thời gian bắt đầu.' } as const;
+  if (ends_at < starts_at) return { error: 'Giờ kết thúc phải sau giờ bắt đầu.' } as const;
+  return {
+    row: {
+      title, kind, starts_at, ends_at,
+      location: text(form, 'location') || null,
+      description: text(form, 'description') || null,
+    },
+  } as const;
+}
+
+export async function createEvent(_prev: FormState, form: FormData): Promise<FormState> {
+  const group_id = uuidOrNull(text(form, 'group_id'));
   if (!group_id) return { error: 'Thiếu nhóm.' };
-  if (!title) return { error: 'Hãy nhập tiêu đề.' };
-  if (!EVENT_KINDS.includes(kind)) return { error: 'Loại lịch không hợp lệ.' };
-  if (!starts_at || !ends_at) return { error: 'Hãy chọn thời gian bắt đầu.' };
-  if (ends_at < starts_at) return { error: 'Giờ kết thúc phải sau giờ bắt đầu.' };
+  const f = eventFields(form);
+  if ('error' in f) return { error: f.error };
   const supabase = await createClient();
-  const { error } = await supabase.from('events').insert({
-    group_id,
-    title,
-    kind,
-    starts_at,
-    ends_at,
-    location: text(form, 'location') || null,
-    description: text(form, 'description') || null,
-  });
+  const { error } = await supabase.from('events').insert({ group_id, ...f.row });
   if (error) return { error: errText(error) };
   refresh(group_id);
   return { ok: 'Đã thêm lịch.' };
+}
+
+export async function updateEvent(_prev: FormState, form: FormData): Promise<FormState> {
+  const id = uuidOrNull(text(form, 'id'));
+  if (!id) return { error: 'Thiếu lịch cần sửa.' };
+  const f = eventFields(form);
+  if ('error' in f) return { error: f.error };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('events').update(f.row).eq('id', id).select('group_id');
+  if (error) return { error: errText(error) };
+  if (!data?.length) return { error: 'Bạn không có quyền sửa lịch này.' };
+  refresh(data[0].group_id);
+  return { ok: 'Đã lưu thay đổi.' };
 }
 
 export async function deleteEvent(form: FormData) {

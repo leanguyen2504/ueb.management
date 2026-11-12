@@ -15,6 +15,7 @@ import { rangeOf } from '@/components/calendar/range';
 import { LichTabs } from '../tabs';
 import { PersonalItemForm } from './PersonalForms';
 import { deletePersonalItem, respondPersonalItem } from './actions';
+import { moveCalendarItem } from '@/lib/calendar-actions';
 
 export const metadata: Metadata = { title: 'Lịch cá nhân' };
 
@@ -72,6 +73,9 @@ export default async function PersonalCalendarPage({ searchParams }: { searchPar
         location: i.location, description: i.description,
         links: i.assigned_by && i.status === 'pending' ? [{ href: '#duoc-giao', label: 'Nhận hoặc từ chối việc này' }] : [],
         deleteId: i.assigned_by ? undefined : i.id,
+        // Việc người khác giao cho mình thì không sửa được (chỉ nhận / từ chối / báo xong).
+        editId: i.assigned_by ? undefined : `personal:${i.id}`,
+        edit: i.assigned_by ? undefined : { title: i.title, kind: i.kind, role: i.role, place: i.place },
       })),
     ...data.checkins.map((c): CalItem => ({
       key: `c-${c.day}`, source: 'diem_danh', title: `Điểm danh: ${CHECKIN_LABEL[c.place]}`,
@@ -115,6 +119,8 @@ export default async function PersonalCalendarPage({ searchParams }: { searchPar
         createTitle="Thêm lịch cá nhân hoặc giao việc"
         deleteAction={deletePersonalItem}
         createForm={<PersonalItemForm people={colleagues} defaultDay={anchor < today ? today : anchor} />}
+        editForm={<PersonalItemForm people={[]} defaultDay={anchor} />}
+        moveAction={moveCalendarItem}
         sideExtra={
           <div className="space-y-2 text-sm">
             <Link href="/lich/cham-cong" className="block font-medium text-brand-600 hover:underline dark:text-brand-300">
