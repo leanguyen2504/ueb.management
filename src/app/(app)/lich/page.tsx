@@ -6,13 +6,18 @@ import { EventForm } from '@/components/WorkForms';
 import { deleteEvent } from '@/lib/work';
 import { EVENT_KIND_LABEL, type Booking, type CalEvent, type Group } from '@/lib/types';
 import { loadPeople } from '@/lib/people';
-import { getGoogleCalendarEvents, isGoogleCalendarEnabled } from '@/lib/google-calendar';
+import { isGoogleCalendarEnabled } from '@/lib/google-calendar';
+import { areasOf, isMyCalendarMeeting, loadAreas, loadMeetings } from '@/lib/meetings';
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { PALETTE, VIEW_LABEL, type CalItem, type CalSource, type CalView } from '@/components/calendar/types';
 import { meetingAnchor } from '@/lib/meeting-anchor';
 import { dayStart, vnDayOf } from '@/components/calendar/time';
 import { rangeOf } from '@/components/calendar/range';
 import { LichTabs } from './tabs';
+import { loadPersonal } from '@/lib/personal-data';
+import { KIND_LABEL, ROLE_LABEL, PLACE_LABEL, STATUS_LABEL } from '@/lib/attendance';
+import { isMine } from '@/lib/jira/report';
+import { addDay } from '@/components/calendar/time';
 
 export const metadata: Metadata = { title: 'Lịch trường và nhóm' };
 
@@ -32,24 +37,38 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const toIso = new Date(dayStart(to)).toISOString();
   const all = Boolean(sp.tat_ca);
 
-  const { supabase, userId, ctx } = await requireSession();
-  const [{ data: events }, { data: bookings }, { data: groups }, { data: mine }, google, { data: gSources }] = await Promise.all([
+  const { supabase, userId, ctx, profile } = await requireSession();
+  const [{ data: events }, { data: bookings }, { data: groups }, { data: mine }, meetings, { data: gSources }, areas] = await Promise.all([
     supabase.from('events').select('*').lt('starts_at', toIso).gte('ends_at', fromIso).order('starts_at').returns<CalEvent[]>(),
     supabase.from('bookings').select('*').eq('status', 'accepted').or(`host_id.eq.${userId},requester_id.eq.${userId}`).lt('starts_at', toIso).gte('ends_at', fromIso).returns<Booking[]>(),
     supabase.from('groups').select('id, name').is('archived_at', null).order('name').returns<Pick<Group, 'id' | 'name'>[]>(),
     supabase.from('group_members').select('group_id, can_create').eq('user_id', userId),
-    getGoogleCalendarEvents(supabase, userId, fromIso, toIso),
+    isGoogleCalendarEnabled() ? loadMeetings(supabase, userId, fromIso, toIso).catch(() => []) : Promise.resolve([]),
     isGoogleCalendarEnabled()
       ? supabase.from('calendar_sources').select('id, label').eq('is_enabled', true).order('created_at')
       : Promise.resolve({ data: [] as { id: string; label: string }[] }),
+    loadAreas(supabase),
   ]);
+  // Lịch cá nhân (việc của tôi, việc được giao, nghỉ phép/ngoài giờ, hạn Jira) là một ô chọn
+  // trong "Lịch của tôi". Hiệu trưởng không dùng lịch cá nhân.
+  const isPrincipal = ctx.role === 'principal';
+  const personal = isPrincipal ? null : await loadPersonal(supabase, userId, fromIso, toIso).catch(() => null);
   const memberOf = new Set((mine ?? []).map((m) => m.group_id));
   const groupName = new Map((groups ?? []).map((g) => [g.id, g.name]));
+  // "Lịch của tôi": lịch Google chỉ giữ buổi họp liên quan tới tôi (tên tôi, nhóm tôi,
+  // mảng tôi phụ trách, việc tôi được giao đôn đốc). "Xem mọi lịch" thì hiện tất cả.
+  const me = {
+    userId, fullName: profile.full_name, isPrincipal: ctx.role === 'principal',
+    groups: (groups ?? []).filter((g) => memberOf.has(g.id)), areas: areasOf(areas, profile.email),
+  };
+  const google = meetings.filter((m) => !m.gone && (all || isMyCalendarMeeting(m, me)));
+  const hiddenGoogle = meetings.filter((m) => !m.gone).length - google.length;
   const { name } = await loadPeople(supabase, (bookings ?? []).flatMap((b) => [b.host_id, b.requester_id]));
 
   const sources: CalSource[] = [
     { key: 'nhom', label: 'Lịch nhóm', color: '#039be5' },
     { key: 'gap', label: 'Lịch gặp', color: '#33b679' },
+    ...(personal ? [{ key: 'ca_nhan', label: 'Lịch cá nhân', color: '#8e24aa' }] : []),
   ];
   // Mỗi lịch Google một màu cố định theo thứ tự thêm vào.
   (gSources ?? []).forEach((g, i) => sources.push({ key: `g:${g.id}`, label: g.label, color: PALETTE[(i + 2) % PALETTE.length] }));
@@ -69,8 +88,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       sub: b.host_id === userId ? `Với ${name(b.requester_id)}` : `Với ${name(b.host_id)}`,
       links: [{ href: '/dat-lich', label: 'Mở trang đặt lịch' }],
     })),
+    ...personalItems(),
     ...google.map((g) => ({
-      key: g.id, source: `g:${g.source_id}`, title: g.title, starts_at: g.starts_at, ends_at: g.ends_at, all_day: g.all_day,
+      key: `g-${g.source_id}-${g.event_key}`, source: `g:${g.source_id}`, title: g.title, starts_at: g.starts_at, ends_at: g.ends_at, all_day: g.all_day,
       location: g.location, description: g.description,
       links: [
         { href: `/hop?ngay=${vnDayOf(g.starts_at)}#${meetingAnchor(g.source_id, g.event_key)}`, label: 'Hồ sơ cuộc họp' },
@@ -80,6 +100,34 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     })),
   ];
 
+  function personalItems(): CalItem[] {
+    if (!personal) return [];
+    const dayIso = (d: string) => new Date(dayStart(d)).toISOString();
+    const open = [{ href: `/lich/ca-nhan?xem=${view}&ngay=${anchor}`, label: 'Mở lịch cá nhân' }];
+    return [
+      ...personal.items.filter((i) => i.status !== 'declined').map((i): CalItem => ({
+        key: `p-${i.id}`, source: 'ca_nhan',
+        title: `${i.status === 'pending' ? '[Chờ nhận] ' : i.status === 'done' ? '✓ ' : ''}${i.title}`,
+        starts_at: i.starts_at, ends_at: i.ends_at, all_day: i.all_day,
+        sub: [KIND_LABEL[i.kind], i.role && ROLE_LABEL[i.role], i.place && PLACE_LABEL[i.place],
+          i.assigned_by && `Giao bởi ${personal.assignerName(i.assigned_by)} · ${STATUS_LABEL[i.status]}`].filter(Boolean).join(' · '),
+        location: i.location, description: i.description, links: open,
+      })),
+      ...personal.requests.filter((r) => r.state !== 'rejected' && r.to >= from && r.from < to).map((r): CalItem => ({
+        key: `r-${r.key}`, source: 'ca_nhan',
+        title: `${r.kind === 'leave' ? 'Nghỉ' : 'Ngoài giờ'}: ${r.title}${r.state === 'pending' ? ' (chờ duyệt)' : ''}`,
+        starts_at: dayIso(r.from), ends_at: dayIso(addDay(r.to, 1)), all_day: true,
+        sub: [r.key, r.leaveType, r.status].filter(Boolean).join(' · '), links: open,
+      })),
+      ...personal.issues.filter((i) => isMine(i) && i.status_category !== 'done' && i.due_date && i.due_date >= from && i.due_date < to).map((i): CalItem => ({
+        key: `j-${i.issue_key}`, source: 'ca_nhan', title: `Hạn: ${i.summary}`,
+        starts_at: dayIso(i.due_date!), ends_at: dayIso(addDay(i.due_date!, 1)), all_day: true,
+        sub: [i.issue_key, i.status, i.project_name].filter(Boolean).join(' · '), links: [{ href: '/jira', label: 'Jira của tôi' }],
+      })),
+    ];
+  }
+  const pendingAssigned = personal ? (await supabase.from('personal_items').select('id', { count: 'exact', head: true }).eq('owner_id', userId).not('assigned_by', 'is', null).eq('status', 'pending')).count ?? 0 : 0;
+
   const creatable = (groups ?? []).filter((g) => ctx.is_admin || ctx.role === 'principal' || ctx.all_groups_secretary || (mine ?? []).some((m) => m.group_id === g.id && m.can_create));
   const extraQuery = all ? '&tat_ca=1' : '';
 
@@ -87,7 +135,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-    <LichTabs current="lich" pendingBookings={pendingCount ?? 0} />
+    <LichTabs current="lich" pendingBookings={pendingCount ?? 0} isPrincipal={isPrincipal} />
     <CalendarView
       view={view}
       anchor={anchor}
@@ -100,9 +148,19 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       createForm={creatable.length > 0 ? <EventForm groups={creatable.map((g) => ({ id: g.id, label: g.name }))} /> : undefined}
       sideExtra={
         <div className="space-y-2 text-sm">
+          {personal && (
+            <Link href={`/lich/ca-nhan?xem=${view}&ngay=${anchor}`} className="block font-medium text-brand-600 hover:underline dark:text-brand-300">
+              Lịch cá nhân, giao việc{pendingAssigned > 0 ? ` (${pendingAssigned} việc chờ nhận)` : ''}
+            </Link>
+          )}
           <Link href={`/lich?xem=${view}&ngay=${anchor}${all ? '' : '&tat_ca=1'}`} className="block text-brand-600 hover:underline dark:text-brand-300">
-            {all ? 'Chỉ lịch nhóm của tôi' : 'Lịch của mọi nhóm tôi xem được'}
+            {all ? 'Chỉ lịch của tôi' : 'Xem mọi lịch tôi được xem'}
           </Link>
+          <p className="text-xs muted">
+            {all
+              ? 'Đang hiện mọi lịch nhóm và toàn bộ lịch Google dùng chung.'
+              : `Đang hiện lịch của tôi: nhóm tôi tham gia, lịch gặp, và buổi họp có tên tôi, nhóm hoặc mảng tôi phụ trách${hiddenGoogle > 0 ? ` (ẩn ${hiddenGoogle} buổi họp không liên quan)` : ''}.`}
+          </p>
           {ctx.is_admin && <Link href="/quan-tri/lich-google" className="block text-brand-600 hover:underline dark:text-brand-300">Cấu hình lịch Google</Link>}
         </div>
       }
