@@ -200,3 +200,18 @@ export function areaOfItem(areas: WorkArea[], it: Pick<MeetingItem, 'area_id' | 
   const p = (it.party ?? '').trim().toLowerCase();
   return p ? areas.find((a) => a.name.trim().toLowerCase() === p) ?? null : null;
 }
+
+// Buổi họp có nhắc tới tôi: họ tên đầy đủ của tôi xuất hiện trong tên/thành phần; Hiệu trưởng
+// thì thêm "HT" hoặc "Hiệu trưởng" (không tính "Phó Hiệu trưởng").
+export function mentionsMe(m: Pick<Meeting, 'title' | 'description'>, fullName: string | null | undefined, isPrincipal: boolean): boolean {
+  const text = `${m.title}\n${m.description ?? ''}`.normalize('NFC');
+  const name = (fullName ?? '').normalize('NFC').trim().replace(/\s+/g, ' ');
+  if (name.split(' ').length >= 2 && text.toLowerCase().replace(/\s+/g, ' ').includes(name.toLowerCase())) return true;
+  if (isPrincipal && (/(^|[^\p{L}])HT([^\p{L}]|$)/u.test(text) || /(^|[^\p{L}])(?<!Phó\s)Hiệu trưởng/iu.test(text))) return true;
+  return false;
+}
+
+// Lịch Google "của tôi": buổi họp liên quan tới tôi, nhóm tôi hoặc mảng tôi phụ trách.
+export function isMyCalendarMeeting(m: Meeting, me: { userId: string; fullName: string | null; isPrincipal: boolean; groups: { id: string; name: string }[]; areas: WorkArea[] }): boolean {
+  return isMyMeeting(m, me.userId, me.groups, me.areas) || mentionsMe(m, me.fullName, me.isPrincipal);
+}

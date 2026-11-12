@@ -6,7 +6,8 @@ import { EventForm } from '@/components/WorkForms';
 import { deleteEvent } from '@/lib/work';
 import { EVENT_KIND_LABEL, type Booking, type CalEvent, type Group } from '@/lib/types';
 import { loadPeople } from '@/lib/people';
-import { getGoogleCalendarEvents, isGoogleCalendarEnabled } from '@/lib/google-calendar';
+import { isGoogleCalendarEnabled } from '@/lib/google-calendar';
+import { areasOf, isMyCalendarMeeting, loadAreas, loadMeetings } from '@/lib/meetings';
 import { CalendarView } from '@/components/calendar/CalendarView';
 import { PALETTE, VIEW_LABEL, type CalItem, type CalSource, type CalView } from '@/components/calendar/types';
 import { meetingAnchor } from '@/lib/meeting-anchor';
@@ -32,19 +33,28 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const toIso = new Date(dayStart(to)).toISOString();
   const all = Boolean(sp.tat_ca);
 
-  const { supabase, userId, ctx } = await requireSession();
-  const [{ data: events }, { data: bookings }, { data: groups }, { data: mine }, google, { data: gSources }] = await Promise.all([
+  const { supabase, userId, ctx, profile } = await requireSession();
+  const [{ data: events }, { data: bookings }, { data: groups }, { data: mine }, meetings, { data: gSources }, areas] = await Promise.all([
     supabase.from('events').select('*').lt('starts_at', toIso).gte('ends_at', fromIso).order('starts_at').returns<CalEvent[]>(),
     supabase.from('bookings').select('*').eq('status', 'accepted').or(`host_id.eq.${userId},requester_id.eq.${userId}`).lt('starts_at', toIso).gte('ends_at', fromIso).returns<Booking[]>(),
     supabase.from('groups').select('id, name').is('archived_at', null).order('name').returns<Pick<Group, 'id' | 'name'>[]>(),
     supabase.from('group_members').select('group_id, can_create').eq('user_id', userId),
-    getGoogleCalendarEvents(supabase, userId, fromIso, toIso),
+    isGoogleCalendarEnabled() ? loadMeetings(supabase, userId, fromIso, toIso).catch(() => []) : Promise.resolve([]),
     isGoogleCalendarEnabled()
       ? supabase.from('calendar_sources').select('id, label').eq('is_enabled', true).order('created_at')
       : Promise.resolve({ data: [] as { id: string; label: string }[] }),
+    loadAreas(supabase),
   ]);
   const memberOf = new Set((mine ?? []).map((m) => m.group_id));
   const groupName = new Map((groups ?? []).map((g) => [g.id, g.name]));
+  // "Lịch của tôi": lịch Google chỉ giữ buổi họp liên quan tới tôi (tên tôi, nhóm tôi,
+  // mảng tôi phụ trách, việc tôi được giao đôn đốc). "Xem mọi lịch" thì hiện tất cả.
+  const me = {
+    userId, fullName: profile.full_name, isPrincipal: ctx.role === 'principal',
+    groups: (groups ?? []).filter((g) => memberOf.has(g.id)), areas: areasOf(areas, profile.email),
+  };
+  const google = meetings.filter((m) => !m.gone && (all || isMyCalendarMeeting(m, me)));
+  const hiddenGoogle = meetings.filter((m) => !m.gone).length - google.length;
   const { name } = await loadPeople(supabase, (bookings ?? []).flatMap((b) => [b.host_id, b.requester_id]));
 
   const sources: CalSource[] = [
@@ -70,7 +80,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       links: [{ href: '/dat-lich', label: 'Mở trang đặt lịch' }],
     })),
     ...google.map((g) => ({
-      key: g.id, source: `g:${g.source_id}`, title: g.title, starts_at: g.starts_at, ends_at: g.ends_at, all_day: g.all_day,
+      key: `g-${g.source_id}-${g.event_key}`, source: `g:${g.source_id}`, title: g.title, starts_at: g.starts_at, ends_at: g.ends_at, all_day: g.all_day,
       location: g.location, description: g.description,
       links: [
         { href: `/hop?ngay=${vnDayOf(g.starts_at)}#${meetingAnchor(g.source_id, g.event_key)}`, label: 'Hồ sơ cuộc họp' },
@@ -101,8 +111,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       sideExtra={
         <div className="space-y-2 text-sm">
           <Link href={`/lich?xem=${view}&ngay=${anchor}${all ? '' : '&tat_ca=1'}`} className="block text-brand-600 hover:underline dark:text-brand-300">
-            {all ? 'Chỉ lịch nhóm của tôi' : 'Lịch của mọi nhóm tôi xem được'}
+            {all ? 'Chỉ lịch của tôi' : 'Xem mọi lịch tôi được xem'}
           </Link>
+          <p className="text-xs muted">
+            {all
+              ? 'Đang hiện mọi lịch nhóm và toàn bộ lịch Google dùng chung.'
+              : `Đang hiện lịch của tôi: nhóm tôi tham gia, lịch gặp, và buổi họp có tên tôi, nhóm hoặc mảng tôi phụ trách${hiddenGoogle > 0 ? ` (ẩn ${hiddenGoogle} buổi họp không liên quan)` : ''}.`}
+          </p>
           {ctx.is_admin && <Link href="/quan-tri/lich-google" className="block text-brand-600 hover:underline dark:text-brand-300">Cấu hình lịch Google</Link>}
         </div>
       }
