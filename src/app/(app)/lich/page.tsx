@@ -135,7 +135,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-    <LichTabs current="lich" pendingBookings={pendingCount ?? 0} isPrincipal={isPrincipal} />
+    <LichTabs current="lich" pendingBookings={pendingCount ?? 0} pendingAssigned={pendingAssigned} isPrincipal={isPrincipal} />
     <CalendarView
       view={view}
       anchor={anchor}
@@ -148,11 +148,6 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       createForm={creatable.length > 0 ? <EventForm groups={creatable.map((g) => ({ id: g.id, label: g.name }))} /> : undefined}
       sideExtra={
         <div className="space-y-2 text-sm">
-          {personal && (
-            <Link href={`/lich/ca-nhan?xem=${view}&ngay=${anchor}`} className="block font-medium text-brand-600 hover:underline dark:text-brand-300">
-              Lịch cá nhân, giao việc{pendingAssigned > 0 ? ` (${pendingAssigned} việc chờ nhận)` : ''}
-            </Link>
-          )}
           <Link href={`/lich?xem=${view}&ngay=${anchor}${all ? '' : '&tat_ca=1'}`} className="block text-brand-600 hover:underline dark:text-brand-300">
             {all ? 'Chỉ lịch của tôi' : 'Xem mọi lịch tôi được xem'}
           </Link>
