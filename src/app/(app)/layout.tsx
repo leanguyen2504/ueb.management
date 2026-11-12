@@ -15,14 +15,15 @@ export const dynamic = 'force-dynamic';
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase, profile, ctx } = await requireSession();
   // Giới hạn số người dùng cùng lúc (mặc định 200). Người đang dùng dở và quản trị luôn được vào.
-  const { data: gate } = await supabase.rpc('enter_app');
-  const g = gate as { allowed: boolean; online: number; max: number } | null;
-  if (g && !g.allowed) return <Busy online={g.online} max={g.max} />;
-  const [{ count: unread }, { count: overdue }, avatars] = await Promise.all([
+  // Kiểm tra chỗ trống chạy song song với các số đếm trên thanh điều hướng để trang mở nhanh hơn.
+  const [{ data: gate }, { count: unread }, { count: overdue }, avatars] = await Promise.all([
+    supabase.rpc('enter_app'),
     supabase.from('notifications').select('id', { count: 'exact', head: true }).is('read_at', null),
     supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('assignee_id', profile.id).neq('status', 'done').lt('due_date', vnDay()),
     avatarUrls(supabase, [profile.avatar_path]),
   ]);
+  const g = gate as { allowed: boolean; online: number; max: number } | null;
+  if (g && !g.allowed) return <Busy online={g.online} max={g.max} />;
   // Năm mục chính. Trang đặt lịch nằm trong Lịch; Bảng tổng hợp, Mảng và đầu mối nằm trong Họp.
   const items: NavItem[] = [
     { href: '/', label: 'Hôm nay', icon: 'today' },

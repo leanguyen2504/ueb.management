@@ -38,7 +38,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const all = Boolean(sp.tat_ca);
 
   const { supabase, userId, ctx, profile } = await requireSession();
-  const [{ data: events }, { data: bookings }, { data: groups }, { data: mine }, meetings, { data: gSources }, areas] = await Promise.all([
+  // Lịch cá nhân (việc của tôi, việc được giao, nghỉ phép/ngoài giờ, hạn Jira) là một ô chọn
+  // trong "Lịch của tôi". Hiệu trưởng không dùng lịch cá nhân.
+  const isPrincipal = ctx.role === 'principal';
+  // Mọi truy vấn độc lập chạy song song để trang mở nhanh hơn.
+  const [{ data: events }, { data: bookings }, { data: groups }, { data: mine }, meetings, { data: gSources }, areas, personal, pendingAssigned, { count: pendingCount }] = await Promise.all([
     supabase.from('events').select('*').lt('starts_at', toIso).gte('ends_at', fromIso).order('starts_at').returns<CalEvent[]>(),
     supabase.from('bookings').select('*').eq('status', 'accepted').or(`host_id.eq.${userId},requester_id.eq.${userId}`).lt('starts_at', toIso).gte('ends_at', fromIso).returns<Booking[]>(),
     supabase.from('groups').select('id, name').is('archived_at', null).order('name').returns<Pick<Group, 'id' | 'name'>[]>(),
@@ -48,11 +52,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       ? supabase.from('calendar_sources').select('id, label').eq('is_enabled', true).order('created_at')
       : Promise.resolve({ data: [] as { id: string; label: string }[] }),
     loadAreas(supabase),
+    isPrincipal ? Promise.resolve(null) : loadPersonal(supabase, userId, fromIso, toIso).catch(() => null),
+    isPrincipal
+      ? Promise.resolve(0)
+      : supabase.from('personal_items').select('id', { count: 'exact', head: true }).eq('owner_id', userId).not('assigned_by', 'is', null).eq('status', 'pending').then((r) => r.count ?? 0),
+    supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('host_id', userId).eq('status', 'pending'),
   ]);
-  // Lịch cá nhân (việc của tôi, việc được giao, nghỉ phép/ngoài giờ, hạn Jira) là một ô chọn
-  // trong "Lịch của tôi". Hiệu trưởng không dùng lịch cá nhân.
-  const isPrincipal = ctx.role === 'principal';
-  const personal = isPrincipal ? null : await loadPersonal(supabase, userId, fromIso, toIso).catch(() => null);
   const memberOf = new Set((mine ?? []).map((m) => m.group_id));
   const groupName = new Map((groups ?? []).map((g) => [g.id, g.name]));
   // "Lịch của tôi": lịch Google chỉ giữ buổi họp liên quan tới tôi (tên tôi, nhóm tôi,
@@ -126,12 +131,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       })),
     ];
   }
-  const pendingAssigned = personal ? (await supabase.from('personal_items').select('id', { count: 'exact', head: true }).eq('owner_id', userId).not('assigned_by', 'is', null).eq('status', 'pending')).count ?? 0 : 0;
 
   const creatable = (groups ?? []).filter((g) => ctx.is_admin || ctx.all_groups_secretary || (mine ?? []).some((m) => m.group_id === g.id && m.can_create));
   const extraQuery = all ? '&tat_ca=1' : '';
-
-  const { count: pendingCount } = await supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('host_id', userId).eq('status', 'pending');
 
   return (
     <>
