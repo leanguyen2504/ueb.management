@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { groupDirectory } from '@/lib/directory';
+import { coWorkOptions, groupDirectory } from '@/lib/directory';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireSession } from '@/lib/session';
@@ -112,7 +112,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const myUnits = (tagRows ?? []).filter((r) => r.group_id === id).map((r) => dirById.get(r.unit_id)).filter(Boolean) as DirGroup[];
   // Không gian con của chính đơn vị này đã nằm trong mục Không gian, không lặp lại.
   const sharedProjects = ((tagRows ?? []).filter((r) => r.unit_id === id).map((r) => dirById.get(r.group_id)).filter(Boolean) as (DirGroup & { can_view: boolean })[]).filter((p) => p.parent_id !== id);
-  const unitOptions = dirAll.filter((g) => g.kind === 'unit' && g.id !== id).map((g) => ({ id: g.id, name: g.name }));
+  const unitOptions = coWorkOptions(dirAll, id);
   const links = new Map<string, TaskLink[]>();
   (linkRows ?? []).forEach((l) => links.set(l.task_id, [...(links.get(l.task_id) ?? []), l]));
   const childIds = (children ?? []).map((c) => c.id);
@@ -252,7 +252,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
       {tb && <p role="status" className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{tb}</p>}
       {loi && <p role="alert" className="mb-4 rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">{loi}</p>}
 
-      <nav className="mb-5 flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800" aria-label="Các phần của nhóm">
+      <nav className="mb-5 flex gap-1 overflow-x-auto overflow-y-hidden scrollbar-none border-b border-slate-200 dark:border-slate-800" aria-label="Các phần của nhóm">
         {TABS.map((t) => (
           <Link key={t.key} href={tabHref(t.key)} aria-current={tab === t.key ? 'page' : undefined}
             className={`-mb-px whitespace-nowrap border-b-2 px-3.5 py-2.5 text-sm ${tab === t.key ? 'border-gold-500 font-semibold text-slate-900 dark:text-white' : 'border-transparent font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'}`}>

@@ -64,3 +64,9 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.01em; text-wra
 
 /* Thẻ <details> dùng làm nút mở menu: bỏ tam giác mặc định. */
 summary.list-none::-webkit-details-marker { display: none; }
+
+/* Thanh tab: vẫn cuộn ngang trên màn hẹp nhưng không hiện thanh cuộn. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}

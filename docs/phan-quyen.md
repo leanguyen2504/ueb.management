@@ -55,7 +55,7 @@ Người được giao việc phải là thành viên nhóm (hoặc Hiệu trư�
 
 ## Dự án và việc chung nhiều đơn vị
 
-- Bảng `group_units` gắn một dự án, sự kiện hoặc không gian với nhiều đơn vị/tổ cùng làm. Ai sửa được dự án thì gắn, gỡ được đơn vị; chỉ gắn vào nhóm loại Đơn vị đang hoạt động. Trưởng nhóm, Văn thư của đơn vị được gắn nhận thông báo.
+- Bảng `group_units` gắn một dự án, sự kiện hoặc không gian với nhiều đơn vị, nhóm, dự án cùng làm (không chỉ nhóm loại Đơn vị, ví dụ "Tổ công tác trọng điểm" là một không gian chung). Ai sửa được dự án thì gắn, gỡ được; chỉ gắn vào nhóm đang hoạt động, không gắn không gian cá nhân, và nhóm loại Đơn vị không tự gắn nhóm khác. Trưởng nhóm, Văn thư của nhóm được gắn nhận thông báo; dự án hiện trong mục "Dự án liên đơn vị" của nhóm đó.
 - Dự án tự hiện trong mục "Dự án liên đơn vị" của từng đơn vị được gắn. Việc gắn không cấp quyền xem: người của đơn vị thấy thông tin như danh bạ và xin tham gia được.
 - Trong trang đơn vị, "Việc chung nhiều đơn vị" tạo một không gian con (`create_subgroup`) rồi gắn đơn vị đó cùng các đơn vị đã chọn.
 
