@@ -9,6 +9,9 @@ import { loadPeople } from '@/lib/people';
 import { isGoogleCalendarEnabled } from '@/lib/google-calendar';
 import { areasOf, isMyCalendarMeeting, loadAreas, loadMeetings } from '@/lib/meetings';
 import { CalendarView } from '@/components/calendar/CalendarView';
+import { EditSwitch } from '@/components/calendar/draft';
+import { moveCalendarItem } from '@/lib/calendar-actions';
+import { PersonalItemForm } from './ca-nhan/PersonalForms';
 import { PALETTE, VIEW_LABEL, type CalItem, type CalSource, type CalView } from '@/components/calendar/types';
 import { meetingAnchor } from '@/lib/meeting-anchor';
 import { dayStart, vnDayOf } from '@/components/calendar/time';
@@ -87,6 +90,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         location: e.location, description: e.description,
         links: [{ href: `/nhom/${e.group_id}`, label: 'Mở nhóm' }],
         deleteId: e.created_by === userId ? e.id : undefined,
+        editId: e.created_by === userId ? `event:${e.id}` : undefined,
+        edit: e.created_by === userId ? { title: e.title, kind: e.kind } : undefined,
       })),
     ...(bookings ?? []).map((b) => ({
       key: `b-${b.id}`, source: 'gap', title: `Gặp: ${b.topic}`, starts_at: b.starts_at, ends_at: b.ends_at, all_day: false,
@@ -117,6 +122,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         sub: [KIND_LABEL[i.kind], i.role && ROLE_LABEL[i.role], i.place && PLACE_LABEL[i.place],
           i.assigned_by && `Giao bởi ${personal.assignerName(i.assigned_by)} · ${STATUS_LABEL[i.status]}`].filter(Boolean).join(' · '),
         location: i.location, description: i.description, links: open,
+        editId: i.assigned_by ? undefined : `personal:${i.id}`,
+        edit: i.assigned_by ? undefined : { title: i.title, kind: i.kind, role: i.role, place: i.place },
       })),
       ...personal.requests.filter((r) => r.state !== 'rejected' && r.to >= from && r.from < to).map((r): CalItem => ({
         key: `r-${r.key}`, source: 'ca_nhan',
@@ -148,6 +155,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       extraQuery={extraQuery}
       deleteAction={deleteEvent}
       createForm={creatable.length > 0 ? <EventForm groups={creatable.map((g) => ({ id: g.id, label: g.name }))} /> : undefined}
+      editForm={<EditSwitch forms={{ event: <EventForm />, personal: <PersonalItemForm people={[]} defaultDay={anchor} /> }} />}
+      moveAction={moveCalendarItem}
       sideExtra={
         <div className="space-y-2 text-sm">
           <Link href={`/lich?xem=${view}&ngay=${anchor}${all ? '' : '&tat_ca=1'}`} className="block text-brand-600 hover:underline dark:text-brand-300">

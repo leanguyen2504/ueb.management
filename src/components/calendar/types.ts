@@ -18,7 +18,14 @@ export type CalItem = {
   description?: string | null;
   links?: { href: string; label: string; external?: boolean }[];
   deleteId?: string;
+  // Sửa được: "loai:id" (ví dụ "personal:…", "event:…"); kéo để dời, kéo mép dưới để đổi giờ kết thúc.
+  editId?: string;
+  // Giá trị gốc cho biểu mẫu sửa (tiêu đề gốc, loại, vai trò, nơi làm việc…).
+  edit?: Record<string, string | boolean | null>;
 };
+
+// Dời hoặc đổi giờ một mục khi kéo thả. Trả về lỗi (nếu có) để lịch hoàn tác.
+export type MoveAction = (editId: string, starts_at: string, ends_at: string) => Promise<{ error?: string }>;
 
 // Bảng màu giống Google Calendar, dùng cho các nguồn lịch.
 export const PALETTE = ['#039be5', '#33b679', '#f4511e', '#8e24aa', '#e67c73', '#f6bf26', '#0b8043', '#3f51b5', '#d50000', '#616161'];

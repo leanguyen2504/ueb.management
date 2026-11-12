@@ -1,7 +1,8 @@
 'use client';
 
-import { useActionState } from 'react';
-import { createEvent, createPersonalProject, createTask } from '@/lib/work';
+import { useActionState, useEffect } from 'react';
+import { createEvent, createPersonalProject, createTask, updateEvent } from '@/lib/work';
+import { useCalDraft, vnLocalInput } from '@/components/calendar/draft';
 import { FormMessage } from '@/components/FormMessage';
 import { SubmitButton } from '@/components/SubmitButton';
 import { EVENT_KIND_LABEL, TASK_PRIORITY_LABEL } from '@/lib/types';
@@ -58,29 +59,39 @@ export function TaskForm({ groupId, groups, people, self }: { groupId?: string; 
   );
 }
 
+// Mở từ lịch: điền sẵn khung giờ vừa kéo chọn; mở bằng nút Sửa: sửa lịch đang chọn.
 export function EventForm({ groupId, groups, personal }: { groupId?: string; groups?: Option[]; personal?: boolean }) {
-  const [state, action] = useActionState(createEvent, null);
+  const draft = useCalDraft();
+  const ed = draft.edit;
+  const raw = ed?.edit ?? {};
+  const [state, action] = useActionState(ed ? updateEvent : createEvent, null);
+  const { close } = draft;
+  useEffect(() => { if (state?.ok && close) close(); }, [state, close]);
+  // Lịch nhóm luôn có giờ: chọn cả ngày (ở kiểu xem tháng) thì điền sẵn 08:00–09:00 ngày đó.
+  const day = draft.start ? vnLocalInput(draft.start).slice(0, 10) : '';
+  const startVal = ed ? vnLocalInput(ed.starts_at) : draft.start ? (draft.allDay ? `${day}T08:00` : vnLocalInput(draft.start)) : undefined;
+  const endVal = ed ? vnLocalInput(ed.ends_at) : draft.end ? (draft.allDay ? `${day}T09:00` : vnLocalInput(draft.end)) : undefined;
   return (
     <form action={action} className="space-y-3">
-      <GroupField groupId={groupId} groups={groups} id="e-group" />
+      {ed ? <input type="hidden" name="id" value={ed.editId?.split(':')[1] ?? ''} /> : <GroupField groupId={groupId} groups={groups} id="e-group" />}
       <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
-        <div><label className="label" htmlFor="ev-title">Tiêu đề</label><input id="ev-title" name="title" required maxLength={300} className="input" placeholder="Ví dụ: Họp giao ban tuần" /></div>
+        <div><label className="label" htmlFor="ev-title">Tiêu đề</label><input id="ev-title" name="title" required maxLength={300} className="input" autoFocus={Boolean(close)} defaultValue={ed ? String(raw.title ?? ed.title) : ''} placeholder="Ví dụ: Họp giao ban tuần" /></div>
         <div>
           <label className="label" htmlFor="ev-kind">Loại</label>
-          <select id="ev-kind" name="kind" defaultValue="meeting" className="input">
+          <select id="ev-kind" name="kind" defaultValue={typeof raw.kind === 'string' ? raw.kind : 'meeting'} className="input">
             {Object.entries(EVENT_KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <div><label className="label" htmlFor="ev-start">Bắt đầu</label><input id="ev-start" name="starts_at" type="datetime-local" required className="input" /></div>
-        <div><label className="label" htmlFor="ev-end">Kết thúc</label><input id="ev-end" name="ends_at" type="datetime-local" className="input" /></div>
+        <div><label className="label" htmlFor="ev-start">Bắt đầu</label><input id="ev-start" name="starts_at" type="datetime-local" required defaultValue={startVal} className="input" /></div>
+        <div><label className="label" htmlFor="ev-end">Kết thúc</label><input id="ev-end" name="ends_at" type="datetime-local" defaultValue={endVal} className="input" /></div>
       </div>
-      <div><label className="label" htmlFor="ev-loc">Địa điểm</label><input id="ev-loc" name="location" maxLength={300} className="input" /></div>
-      <div><label className="label" htmlFor="ev-desc">Ghi chú</label><textarea id="ev-desc" name="description" rows={2} className="input" /></div>
+      <div><label className="label" htmlFor="ev-loc">Địa điểm</label><input id="ev-loc" name="location" maxLength={300} defaultValue={ed?.location ?? ''} className="input" /></div>
+      <div><label className="label" htmlFor="ev-desc">Ghi chú</label><textarea id="ev-desc" name="description" rows={2} defaultValue={ed?.description ?? ''} className="input" /></div>
       <FormMessage state={state} />
-      <SubmitButton pendingText="Đang lưu…">Thêm vào lịch</SubmitButton>
-      <p className="text-xs muted">{personal ? 'Lịch trong mục Cá nhân chỉ bạn thấy; lịch của nhóm sẽ báo cho thành viên.' : 'Thành viên của nhóm sẽ nhận thông báo.'} Giờ theo giờ Việt Nam.</p>
+      <SubmitButton pendingText="Đang lưu…">{ed ? 'Lưu thay đổi' : 'Thêm vào lịch'}</SubmitButton>
+      <p className="text-xs muted">{ed ? 'Trên lịch có thể kéo để dời giờ, kéo mép dưới để đổi giờ kết thúc.' : personal ? 'Lịch trong mục Cá nhân chỉ bạn thấy; lịch của nhóm sẽ báo cho thành viên.' : 'Thành viên của nhóm sẽ nhận thông báo.'} Giờ theo giờ Việt Nam.</p>
     </form>
   );
 }
