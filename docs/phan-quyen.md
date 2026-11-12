@@ -7,7 +7,7 @@ Quyền có hai lớp: vai trò hệ thống (gắn với người dùng) và qu
 | Vai trò | Phạm vi |
 | --- | --- |
 | Quản trị hệ thống (một người, lưu ở `system_settings.current_admin_id`) | Toàn bộ dữ liệu; mời người dùng, đổi vai trò, khóa tài khoản, cấp phạm vi thư ký; khởi tạo bàn giao |
-| Hiệu trưởng | Xem, tạo, sửa ở mọi nhóm; xem nhật ký; không quản lý thành viên |
+| Hiệu trưởng | Thấy danh sách mọi nhóm, dự án (tên, mô tả, loại, lãnh đạo, đầu mối) và tiến độ chung bằng số liệu (`progress_overview`); không xem chi tiết bên trong (đầu việc, lịch, tài liệu, thành viên), không tạo, sửa, không xem nhật ký. Ở nhóm được thêm làm thành viên thì có quyền như thành viên; việc được giao cho mình thì thấy việc đó |
 | Thư ký | Tạo nhóm mới (trở thành người quản lý nhóm đó); quản lý các nhóm mình là người quản lý. Nếu được cấp "toàn trường": quản lý mọi nhóm |
 | Thành viên | Theo quyền trong từng nhóm |
 
@@ -24,6 +24,7 @@ Nằm trong schema `private` (không mở qua API):
 
 - `private.is_admin()`, `private.is_principal()`, `private.is_all_scope_secretary()`
 - `private.has_group_perm(group_id, perm)`: quyền `view | create | edit | upload | manage_members` trong nhóm
+- `public.progress_overview()`: tiến độ chung theo nhóm (số thành viên, số việc theo trạng thái, quá hạn, hạn gần nhất), không có tên việc hay người làm. Hiệu trưởng, quản trị, thư ký toàn trường thấy mọi nhóm (trừ không gian cá nhân); người khác thấy nhóm mình xem được. Trang `/tien-do` dùng hàm này.
 - Tài khoản bị khóa (`profiles.is_active = false`) không có quyền nào.
 
 Đổi vai trò và phạm vi thư ký chỉ qua hàm `admin_set_user` và `admin_set_secretary_scope`, cả hai kiểm tra quyền quản trị. Người dùng chỉ tự sửa được họ tên, đơn vị, chức vụ của mình.
@@ -43,7 +44,7 @@ Người được giao việc phải là thành viên nhóm (hoặc Hiệu trư�
 ## Lịch sử và nhật ký
 
 - Mọi bảng có `created_by`, `created_at`, `updated_by`, `updated_at`, do trigger điền; người dùng không sửa được.
-- Mọi thêm/sửa/xóa được ghi vào `activity_log` kèm dữ liệu trước và sau. Không ai sửa hay xóa được nhật ký.
+- Mọi thêm/sửa/xóa được ghi vào `activity_log` kèm dữ liệu trước và sau. Không ai sửa hay xóa được nhật ký. Quản trị xem toàn bộ nhật ký; người khác chỉ xem nhật ký của nhóm mình xem được.
 
 ## Đăng nhập, danh bạ nhóm và xin tham gia
 

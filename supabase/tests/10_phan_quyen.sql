@@ -103,10 +103,12 @@ select t.ok(t.count('select * from public.groups') = 0, 'người ngoài nhóm k
 select t.ok(t.count('select * from public.activity_log') = 0, 'người ngoài nhóm không thấy nhật ký');
 select t.ok(t.count('select * from public.invitations') = 0, 'thành viên không thấy lời mời');
 
--- 8. Hiệu trưởng thấy mọi nhóm và nhật ký, sửa được nhóm? Không quản lý thành viên.
+-- 8. Hiệu trưởng thấy danh sách mọi nhóm nhưng không xem chi tiết, không xem nhật ký,
+--    không quản lý thành viên.
 select set_config('request.jwt.claim.sub', :hieutruong, false);
-select t.ok(t.count('select * from public.groups') = 1, 'Hiệu trưởng thấy mọi nhóm');
-select t.ok(t.count('select * from public.activity_log') > 0, 'Hiệu trưởng xem nhật ký');
+select t.ok(t.count('select * from public.groups') = 1, 'Hiệu trưởng thấy danh sách nhóm');
+select t.ok(t.count('select * from public.activity_log') = 0, 'Hiệu trưởng không xem nhật ký');
+select t.ok(t.count('select * from public.group_members') = 0, 'Hiệu trưởng không xem danh sách thành viên');
 select t.denied(format($$insert into public.group_members (group_id, user_id) values ('10000000-0000-0000-0000-000000000001', %L)$$, :tv2), 'Hiệu trưởng không quản lý thành viên');
 
 -- 9. Thư ký có phạm vi tất cả nhóm quản lý được nhóm do người khác tạo.

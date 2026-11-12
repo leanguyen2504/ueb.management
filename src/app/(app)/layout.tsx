@@ -29,7 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: '/viec', label: 'Việc', icon: 'tasks', badge: overdue ?? 0 },
     { href: '/lich', label: 'Lịch', icon: 'calendar', match: ['/dat-lich'] },
     { href: '/hop', label: 'Họp', icon: 'folder', match: ['/quan-tri/mang-cong-tac'] },
-    { href: '/nhom', label: 'Nhóm và Dự án', icon: 'explore', match: ['/nguoi'] },
+    { href: '/nhom', label: 'Nhóm và Dự án', icon: 'explore', match: ['/nguoi', '/tien-do'] },
   ];
   const canAdmin = ctx.is_admin || ctx.role === 'principal' || ctx.can_create_group;
   const name = profile.full_name || profile.email;

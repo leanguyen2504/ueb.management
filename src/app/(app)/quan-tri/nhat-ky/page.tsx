@@ -32,7 +32,7 @@ function changes(oldData: Record<string, unknown> | null, newData: Record<string
 
 export default async function LogPage({ searchParams }: { searchParams: Promise<{ loai?: string; trang?: string }> }) {
   const { supabase, ctx } = await requireSession();
-  if (!ctx.is_admin && ctx.role !== 'principal') redirect('/');
+  if (!ctx.is_admin) redirect('/');
   const { loai = '', trang = '1' } = await searchParams;
   const page = Math.max(1, Number(trang) || 1);
 

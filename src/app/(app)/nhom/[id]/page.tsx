@@ -6,6 +6,8 @@ import { requireSession } from '@/lib/session';
 import { AddMemberForm, EditGroupForm, GroupUnitsForm } from '../GroupForms';
 import { cancelInvitation, decideJoin, removeMember, setArchived, updateMember } from '../actions';
 import { PublicGroup, type DirGroup } from './PublicGroup';
+import { PrincipalGroup } from './PrincipalGroup';
+import { progressOverview } from '@/lib/progress';
 import { OpenFromHash } from '@/components/OpenFromHash';
 import { KIND_LABEL, PERMS, groupTypeLabel, ROLE_LABEL, type Group, type GroupMember, type Profile } from '@/lib/types';
 import { fmtDateTime, fmtTime } from '@/lib/format';
@@ -29,6 +31,19 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const { loi, tb, tab: tabParam } = await searchParams;
   const { supabase, userId, ctx } = await requireSession();
   const { data: group } = await supabase.from('groups').select('*').eq('id', id).maybeSingle<Group>();
+  // Hiệu trưởng thấy mọi nhóm trong danh sách nhưng chỉ xem tổng quan và tiến độ chung;
+  // chi tiết bên trong chỉ hiện ở nhóm mà Hiệu trưởng được thêm làm thành viên.
+  if (group && !group.owner_id && ctx.role === 'principal' && !ctx.is_admin) {
+    const { data: mine } = await supabase.from('group_members').select('can_view').eq('group_id', id).eq('user_id', userId).maybeSingle();
+    if (!mine?.can_view) {
+      const [{ rows }, { data: contacts }, { data: parent }] = await Promise.all([
+        progressOverview(supabase),
+        supabase.rpc('group_contacts', { p_group: id }),
+        group.parent_id ? supabase.from('groups').select('id, name').eq('id', group.parent_id).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      return <PrincipalGroup group={group} parent={parent} contacts={contacts ?? []} rows={rows} />;
+    }
+  }
   if (!group) {
     // Chưa tham gia: hiện trang công khai (lãnh đạo, đầu mối, tên việc) để xin tham gia.
     if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
@@ -105,7 +120,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   // Trưởng nhóm (và quản trị, thư ký toàn trường) bổ nhiệm vai trò; Văn thư chỉ quản lý thành viên thường.
   const isLead = ctx.is_admin || ctx.all_groups_secretary || Boolean(me?.is_manager);
   const EDIT_PERMS = PERMS.filter(([k]) => k !== 'can_manage_members');
-  const seesAll = ctx.is_admin || ctx.all_groups_secretary || ctx.role === 'principal';
+  const seesAll = ctx.is_admin || ctx.all_groups_secretary;
   const canCreate = seesAll || Boolean(me?.can_create);
   const canEdit = seesAll || Boolean(me?.can_edit);
   const memberOptions = (members ?? []).map((m) => ({ id: m.user_id, label: person.get(m.user_id)?.full_name || person.get(m.user_id)?.email || 'Người dùng' }));
