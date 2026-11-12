@@ -322,6 +322,81 @@ const isNameLine = (t: string) => {
 const upSym = (s: string) => s.toUpperCase().replace(/QYĐ/g, 'QyĐ').replace(/TTR/g, 'TTr').replace(/CTR/g, 'CTr');
 const DASH_LINE = /^\s*[-–—+•]/;
 
+// ---------------------------------------------------------------- giữ phần ký liền nội dung
+const TRPR_ORDER = ['w:cnfStyle', 'w:divId', 'w:gridBefore', 'w:gridAfter', 'w:wBefore', 'w:wAfter', 'w:cantSplit', 'w:trHeight', 'w:tblHeader', 'w:tblCellSpacing', 'w:jc', 'w:hidden', 'w:ins', 'w:del', 'w:trPrChange'];
+const isBlankPara = (p: XEl) => !norm(paraText(p)) && !findAll([p], (e) => e.name === 'w:drawing' || e.name === 'w:pict' || e.name === 'w:object').length;
+function dropPageBreaks(p: XEl): number {
+  let n = 0;
+  const pPr = child(p, 'w:pPr');
+  const pb = child(pPr, 'w:pageBreakBefore');
+  if (pPr && pb && !['0', 'false', 'off'].includes(attr(pb, 'w:val') ?? '')) { removeChild(pPr, 'w:pageBreakBefore'); n++; }
+  for (const r of findAll([p], (e) => e.name === 'w:r')) {
+    const before = r.kids.length;
+    r.kids = r.kids.filter((k) => !(isEl(k, 'w:br') && attr(k, 'w:type') === 'page'));
+    n += before - r.kids.length;
+  }
+  return n;
+}
+function setKeep(p: XEl, lines = true): boolean {
+  const pPr = pPrOf(p);
+  const had = !!child(pPr, 'w:keepNext') && !['0', 'false', 'off'].includes(attr(child(pPr, 'w:keepNext'), 'w:val') ?? '');
+  setAttr(ensure(pPr, 'w:keepNext', PPR_ORDER), 'w:val', '1');
+  if (lines) setAttr(ensure(pPr, 'w:keepLines', PPR_ORDER), 'w:val', '1');
+  return !had;
+}
+// Đánh dấu "giữ với đoạn sau" cho 2 đoạn nội dung cuối và mọi dòng trống trước phần ký, bỏ ngắt trang,
+// bớt dòng trống thừa và không cho bảng chữ ký tách qua hai trang.
+function keepSignWithBody(body: XEl, signEls: XEl[]) {
+  const res = { breaks: 0, empties: 0, kept: false };
+  const tops = body.kids.filter((k): k is XEl => isEl(k) && k.name !== 'w:sectPr');
+  const holds = (t: XEl, e: XEl) => t === e || findAll([t], (x) => x === e).length > 0;
+  const signTops = tops.filter((t) => signEls.some((e) => holds(t, e)));
+  if (!signTops.length) return res;
+  const first = tops.indexOf(signTops[0]);
+  const last = tops.indexOf(signTops[signTops.length - 1]);
+  // Khối ký: không ngắt trang, bảng không tách dòng, các đoạn rời giữ liền nhau.
+  for (let i = first; i <= last; i++) {
+    const t = tops[i];
+    res.breaks += t.name === 'w:p' ? dropPageBreaks(t) : findAll([t], (e) => e.name === 'w:p').reduce((a, p) => a + dropPageBreaks(p), 0);
+    if (t.name === 'w:tbl') {
+      for (const tr of children(t, 'w:tr')) {
+        const trPr = ensure(tr, 'w:trPr', ['w:tblPrEx', 'w:trPr', 'w:tc'], true);
+        if (!child(trPr, 'w:cantSplit')) { ensure(trPr, 'w:cantSplit', TRPR_ORDER); res.kept = true; }
+      }
+    } else if (t.name === 'w:p' && i < last) {
+      if (setKeep(t, false)) res.kept = true;
+    }
+  }
+  // Ngược lên trên: các dòng trống và 2 đoạn có chữ gần nhất.
+  let content = 0;
+  let blanks: XEl[] = [];
+  for (let i = first - 1; i >= 0 && content < 2; i--) {
+    const t = tops[i];
+    if (t.name === 'w:tbl') {
+      const rows = children(t, 'w:tr');
+      const lastRow = rows[rows.length - 1];
+      if (lastRow) for (const p of findAll([lastRow], (e) => e.name === 'w:p')) if (setKeep(p, false)) res.kept = true;
+      break;
+    }
+    if (t.name !== 'w:p') continue;
+    if (child(child(t, 'w:pPr'), 'w:sectPr')) break; // ngắt phần: không đụng tới
+    res.breaks += dropPageBreaks(t);
+    if (isBlankPara(t)) { blanks.push(t); continue; }
+    if (content === 0 && blanks.length > 1) {
+      // Giữ lại 1 dòng trống (dòng sát phần ký), xóa các dòng còn lại.
+      const extra = blanks.slice(1);
+      body.kids = body.kids.filter((k) => !extra.includes(k as XEl));
+      res.empties += extra.length;
+      blanks = blanks.slice(0, 1);
+    }
+    for (const b of blanks) setKeep(b, false);
+    blanks = [];
+    if (setKeep(t, content > 0)) res.kept = true;
+    content++;
+  }
+  return res;
+}
+
 // ---------------------------------------------------------------- rà soát
 export async function reviewDocx(input: Uint8Array): Promise<ReviewResult> {
   let entries: ZipEntry[];
@@ -829,6 +904,14 @@ export async function reviewDocx(input: Uint8Array): Promise<ReviewResult> {
         add('nho', 'Chữ ký', 'Họ tên đặt ngay dưới chức vụ, không có chỗ ký', 'Để trống 4 dòng giữa chức vụ và họ tên', 'Cần chỗ để chữ ký và đóng dấu.', true);
       }
     }
+  }
+
+  // ---- 11c. Phần ký không bị tách riêng sang trang: giữ liền với các đoạn nội dung cuối.
+  if (!loose && (signParas.length || noiNhan)) {
+    const r = keepSignWithBody(body, [...signParas, ...(noiNhan ? [noiNhan] : [])].map((p) => p.el));
+    if (r.breaks) add('nghiem-trong', 'Phần ký', `Có ${r.breaks} chỗ ngắt trang ngay trước phần ký`, 'Bỏ ngắt trang để phần ký nằm dưới nội dung', 'Ngắt trang trước phần ký làm trang chữ ký không có nội dung, dễ bị thay trang.', true);
+    if (r.empties) add('trung-binh', 'Phần ký', `${r.empties + 1} dòng trống liền nhau trước phần ký`, 'Giữ 1 dòng trống', 'Nhiều dòng trống dễ đẩy phần ký sang trang riêng.', true);
+    if (r.kept) add('trung-binh', 'Phần ký', 'Phần ký có thể bị đẩy sang trang mới mà không kèm nội dung', 'Giữ phần ký liền với 2 đoạn nội dung cuối (Keep with next), không tách bảng chữ ký', 'Trang có chữ ký phải có một phần nội dung văn bản phía trên, tránh trang chỉ có chữ ký.', true);
   }
 
   // ---- 12. Số trang

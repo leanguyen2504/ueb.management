@@ -1,10 +1,9 @@
 'use client';
 
-// Công cụ soạn thảo chạy trên trình duyệt: tạo khung văn bản .docx và rà soát nhanh một đoạn chữ.
+// Template văn bản hành chính: tạo khung .docx đúng thể thức ngay trên trình duyệt.
 import { useEffect, useState } from 'react';
 import { DOC_TYPES } from '@/lib/docx/review';
 import { dongNgay, soKyHieu, type TemplateInput } from '@/lib/docx/template';
-import { LEVEL_LABEL, checkText, fixText, wordCount } from '@/lib/docx/text-rules';
 import { download } from '../ReviewBox';
 
 const STORE = 'soan-thao:khung';
@@ -61,7 +60,7 @@ export function TemplateForm() {
           <span className="label">Loại văn bản</span>
           <select className="input" value={v.loai} onChange={(e) => set('loai', e.target.value)}>
             <option value="CÔNG VĂN">Công văn</option>
-            {DOC_TYPES.filter(([, a]) => a).map(([n]) => <option key={n} value={n}>{n.charAt(0) + n.slice(1).toLowerCase()}</option>)}
+            {DOC_TYPES.filter(([, a]) => a).map(([n, a]) => <option key={n} value={n}>{n.charAt(0) + n.slice(1).toLowerCase()} ({a})</option>)}
           </select>
         </label>
         {txt('so', 'Số', 'Để trống nếu văn thư cấp số')}
@@ -110,54 +109,6 @@ export function TemplateForm() {
         <span><b>{soKyHieu(v)}</b><span className="mx-2 muted">·</span><i>{dongNgay(v.diaDanh, v.ngay)}</i></span>
         <button type="button" className="btn" disabled={busy} onClick={make}>Tải khung văn bản (.docx)</button>
       </div>
-    </section>
-  );
-}
-
-export function QuickCheck() {
-  const [text, setText] = useState('');
-  const [result, setResult] = useState<ReturnType<typeof fixText> & { notes: ReturnType<typeof checkText> } | null>(null);
-  const [copied, setCopied] = useState(false);
-  const check = () => { setResult({ ...fixText(text), notes: checkText(text) }); setCopied(false); };
-  return (
-    <section className="card space-y-3">
-      <div>
-        <h2 className="text-base font-semibold">Rà soát nhanh đoạn chữ</h2>
-        <p className="mt-1 text-sm muted">Dán một đoạn văn bản để soát dấu cách, dấu câu, kiểu dấu thanh (hòa/hoà), viết hoa khi viện dẫn và các lỗi chính tả hay gặp. Không kiểm tra định dạng (cần file Word).</p>
-      </div>
-      <textarea className="input min-h-36" value={text} onChange={(e) => { setText(e.target.value); setResult(null); }} placeholder="Dán đoạn văn bản vào đây…" aria-label="Đoạn văn bản cần rà soát" />
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs muted">{wordCount(text)} chữ · {text.length} ký tự</p>
-        <button type="button" className="btn" disabled={!text.trim()} onClick={check}>Rà soát</button>
-      </div>
-      {result && (
-        <div className="space-y-3">
-          {!result.findings.length && !result.notes.length ? (
-            <p className="text-sm text-green-700 dark:text-green-400">Không thấy lỗi trong các điểm đã soát.</p>
-          ) : (
-            <ul className="space-y-1.5 text-sm">
-              {result.findings.map((f) => (
-                <li key={f.rule.label + f.rule.re.source}>
-                  <span className="chip mr-2">{LEVEL_LABEL[f.rule.level]}</span>
-                  <b>{f.rule.label}</b> ({f.count} chỗ): <span className="muted">&quot;{f.example.trim()}&quot; → &quot;{f.fixedExample.trim()}&quot;</span>
-                </li>
-              ))}
-              {result.notes.map((n) => (
-                <li key={n.label}><span className="chip mr-2">{LEVEL_LABEL[n.level]}</span><b>{n.label}</b>: <span className="muted">{n.detail}</span></li>
-              ))}
-            </ul>
-          )}
-          {result.text !== text && (
-            <div>
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="label mb-0">Bản đã sửa tự động</span>
-                <button type="button" className="link text-sm" onClick={async () => { await navigator.clipboard.writeText(result.text); setCopied(true); }}>{copied ? 'Đã sao chép' : 'Sao chép'}</button>
-              </div>
-              <textarea readOnly className="input min-h-36 bg-slate-50 dark:bg-slate-900" value={result.text} aria-label="Bản đã sửa" />
-            </div>
-          )}
-        </div>
-      )}
     </section>
   );
 }

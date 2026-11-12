@@ -1,8 +1,8 @@
 'use client';
 
 // Tạo slide bài giảng phong cách UEB ngay trên trình duyệt: nhập dàn ý, xem trước, tải file .pptx.
-import { useEffect, useMemo, useState } from 'react';
-import { H, PPTX_MIME, SAMPLE_OUTLINE, W, layoutDeck, parseOutline, type DeckInfo, type Para, type Shape, type SlideOut } from '@/lib/pptx/ueb-slides';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { H, PPTX_MIME, SAMPLE_OUTLINE, SNIPPETS, W, layoutDeck, parseOutline, type DeckInfo, type Para, type Shape, type SlideOut } from '@/lib/pptx/ueb-slides';
 import { download } from '../ReviewBox';
 
 const STORE = 'soan-thao:slide';
@@ -40,7 +40,15 @@ function Paras({ paras }: { paras: Para[] }) {
 function ShapeView({ s }: { s: Shape }) {
   const box = { position: 'absolute' as const, left: pct(s.x, W), top: pct(s.y, H), width: pct(s.w, W) };
   if (s.t === 'pic') return <img src={`/ueb-slide/${s.img}.png`} alt="" style={{ ...box, height: pct(s.h, H) }} />;
-  if (s.t === 'box') return <div style={{ ...box, height: pct(s.h, H), background: `#${s.fill}`, borderRadius: s.geom === 'roundRect' ? '1.2cqw' : 0 }} />;
+  if (s.t === 'box') {
+    const d = (Math.min(s.w, s.h) * 0.3 / s.w) * 100;
+    const clip = s.geom === 'homePlate' ? `polygon(0 0, ${100 - d}% 0, 100% 50%, ${100 - d}% 100%, 0 100%)`
+      : s.geom === 'chevron' ? `polygon(0 0, ${100 - d}% 0, 100% 50%, ${100 - d}% 100%, 0 100%, ${d}% 50%)` : undefined;
+    return <div style={{ ...box, height: pct(s.h, H), background: s.fill ? `#${s.fill}` : 'transparent', border: s.line ? `0.2cqw solid #${s.line}` : undefined, boxSizing: 'border-box', clipPath: clip, borderRadius: s.geom === 'roundRect' ? '1.2cqw' : s.geom === 'ellipse' ? '50%' : 0 }} />;
+  }
+  if (s.t === 'pie') {
+    return <div style={{ ...box, height: pct(s.h, H), borderRadius: '50%', background: `conic-gradient(transparent 0 ${s.a0}deg, #${s.fill} ${s.a0}deg ${s.a1}deg, transparent ${s.a1}deg 360deg)` }} />;
+  }
   if (s.t === 'text') {
     return (
       <div style={{ ...box, height: pct(s.h, H), display: 'flex', flexDirection: 'column', justifyContent: s.anchor === 'ctr' ? 'center' : s.anchor === 'b' ? 'flex-end' : 'flex-start', overflow: 'hidden' }}>
@@ -80,6 +88,13 @@ const HELP: [string, string][] = [
   ['| A | B |', 'Bảng; dòng đầu là tiêu đề cột (dán được bảng Markdown).'],
   ['! Câu chốt', 'Dòng nhấn mạnh màu đỏ cuối trang.'],
   ['@ NHÃN', 'Đổi nhãn đỏ nhỏ phía trên tiêu đề của riêng trang đó.'],
+  [':: bieu-do-cot', 'Biểu đồ cột; mỗi dòng "- Nhãn: số". Chữ sau tên loại là chú thích (đơn vị, nguồn). Thêm * cuối dòng để tô đỏ cột cần nhấn. Dòng không gạch đầu dòng thành khung giải thích bên phải. Tương tự: bieu-do-ngang (thanh ngang), bieu-do-tron (tròn, tự tính %).'],
+  [':: quy-trinh', 'Sơ đồ các bước nối tiếp; "- Bước: mô tả", ý phụ thụt lề bổ sung cho bước.'],
+  [':: dong-thoi-gian', 'Dòng thời gian; "- Năm: sự kiện".'],
+  [':: so-lieu', 'Ô số liệu lớn; "- 50,4 tỷ USD | giải thích", * để tô đỏ.'],
+  [':: cau-hoi', 'Câu hỏi lựa chọn A, B, C; dòng thường là tình huống (khung xanh bên trái).'],
+  [':: danh-sach-so', 'Danh sách đánh số; "- Từ khóa: phần còn lại" (từ khóa tô đỏ).'],
+  [':: trich-dan', 'Câu trích dẫn lớn; dòng thứ hai là nguồn.'],
 ];
 
 export function SlideMaker() {
@@ -88,6 +103,16 @@ export function SlideMaker() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const area = useRef<HTMLTextAreaElement>(null);
+  // Chèn mẫu một loại trang vào vị trí con trỏ (hoặc cuối dàn ý).
+  function insert(text: string) {
+    const el = area.current;
+    const at = el && document.activeElement === el ? el.selectionEnd : outline.length;
+    const before = outline.slice(0, at).replace(/\s*$/, '');
+    const next = (before ? before + '\n\n' : '') + text + '\n' + outline.slice(at).replace(/^\s*/, (m) => (m ? '\n' : ''));
+    setOutline(next);
+    requestAnimationFrame(() => { if (el) { el.focus(); el.selectionStart = el.selectionEnd = (before ? before.length + 2 : 0) + text.length; } });
+  }
 
   useEffect(() => {
     try {
@@ -160,11 +185,16 @@ export function SlideMaker() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-base font-semibold">Dàn ý</h2>
             <div className="flex gap-2">
-              {!outline.trim() && <button type="button" className="btn-secondary px-3 py-1 text-xs" onClick={() => setOutline(SAMPLE_OUTLINE)}>Dùng dàn ý mẫu</button>}
+              <button type="button" className="btn-secondary px-3 py-1 text-xs" onClick={() => { if (!outline.trim() || confirm('Thay dàn ý hiện tại bằng template mẫu (đủ các loại trang)?')) setOutline(SAMPLE_OUTLINE); }}>Dùng template mẫu</button>
               {outline.trim() && <button type="button" className="btn-secondary px-3 py-1 text-xs" onClick={() => { if (confirm('Xóa toàn bộ dàn ý?')) setOutline(''); }}>Xóa dàn ý</button>}
             </div>
           </div>
+          <div className="flex flex-wrap gap-1.5" aria-label="Thêm trang">
+            <span className="self-center text-xs muted">Thêm trang:</span>
+            {SNIPPETS.map((sn) => <button key={sn.key} type="button" className="btn-secondary px-2 py-1 text-xs" onClick={() => insert(sn.text)}>{sn.label}</button>)}
+          </div>
           <textarea
+            ref={area}
             className="input min-h-[420px] font-mono text-[13px] leading-relaxed"
             value={outline}
             onChange={(e) => setOutline(e.target.value)}

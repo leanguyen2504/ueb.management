@@ -44,7 +44,10 @@ type Bullet = { text: string; lvl: number; plain: boolean };
 type Card = { title: string; items: Bullet[] };
 export type SlideSpec =
   | { kind: 'section'; no: number; title: string }
-  | { kind: 'content'; kicker: string; title: string; items: Bullet[]; cards: Card[]; table: string[][]; note: string };
+  | { kind: 'content'; kicker: string; title: string; items: Bullet[]; cards: Card[]; table: string[][]; note: string; layout: Layout; arg: string };
+
+export const LAYOUTS = ['bieu-do-cot', 'bieu-do-ngang', 'bieu-do-tron', 'quy-trinh', 'so-lieu', 'cau-hoi', 'dong-thoi-gian', 'danh-sach-so', 'trich-dan'] as const;
+export type Layout = '' | (typeof LAYOUTS)[number];
 
 /**
  * Cú pháp dàn ý (mỗi dòng một ý):
@@ -55,6 +58,8 @@ export type SlideSpec =
  *   | cột | cột |       → bảng, dòng đầu là tiêu đề cột
  *   ! câu chốt          → dòng nhấn mạnh màu đỏ cuối trang
  *   @ NHÃN              → đổi nhãn đỏ nhỏ phía trên tiêu đề của trang này
+ *   :: loại [chú thích] → trang minh họa: bieu-do-cot, bieu-do-ngang, bieu-do-tron, quy-trinh,
+ *                          so-lieu, cau-hoi, dong-thoi-gian, danh-sach-so, trich-dan (xem LAYOUT_HELP)
  */
 export function parseOutline(src: string): SlideSpec[] {
   const out: SlideSpec[] = [];
@@ -64,7 +69,7 @@ export function parseOutline(src: string): SlideSpec[] {
   let card: Card | null = null;
   const ensure = () => {
     if (!cur) {
-      cur = { kind: 'content', kicker: section.toUpperCase(), title: '', items: [], cards: [], table: [], note: '' };
+      cur = { kind: 'content', kicker: section.toUpperCase(), title: '', items: [], cards: [], table: [], note: '', layout: '', arg: '' };
       out.push(cur);
       card = null;
     }
@@ -88,6 +93,11 @@ export function parseOutline(src: string): SlideSpec[] {
       const s = ensure();
       card = { title: m[1].trim(), items: [] };
       s.cards.push(card);
+    } else if ((m = line.match(/^::\s*([\w-]+)\s*(.*)$/))) {
+      const s = ensure();
+      const key = m[1].toLowerCase();
+      s.layout = (LAYOUTS as readonly string[]).includes(key) ? (key as Layout) : '';
+      s.arg = m[2].trim();
     } else if ((m = line.match(/^@\s*(.*)$/))) {
       ensure().kicker = m[1].trim().toUpperCase();
     } else if ((m = line.match(/^!\s*(.*)$/))) {
@@ -111,10 +121,12 @@ export type Run = { text: string; b?: boolean; i?: boolean; color?: string; sz: 
 export type Para = { runs: Run[]; align?: 'l' | 'ctr' | 'r'; bullet?: { char: string; color: string; lvl: number }; before?: number; line?: number };
 export type Shape =
   | { t: 'pic'; img: 'khung' | 'logo'; x: number; y: number; w: number; h: number }
-  | { t: 'box'; geom: 'rect' | 'roundRect'; fill: string; x: number; y: number; w: number; h: number }
+  | { t: 'box'; geom: Geom; fill: string; x: number; y: number; w: number; h: number; line?: string }
+  | { t: 'pie'; fill: string; x: number; y: number; w: number; h: number; a0: number; a1: number }
   | { t: 'text'; x: number; y: number; w: number; h: number; anchor?: 't' | 'ctr' | 'b'; paras: Para[]; title?: boolean }
   | { t: 'table'; x: number; y: number; w: number; rows: string[][]; sz: number; rowHs: number[] };
 export type SlideOut = { shapes: Shape[] };
+export type Geom = 'rect' | 'roundRect' | 'ellipse' | 'chevron' | 'homePlate';
 
 // Ước lượng số dòng khi xuống dòng tự động (Arial: bề ngang trung bình một ký tự ≈ 0,5 cỡ chữ).
 function lineCount(text: string, sz: number, widthEmu: number) {
@@ -182,6 +194,7 @@ function sectionSlide(s: Extract<SlideSpec, { kind: 'section' }>, n: number): Sl
 }
 
 function contentSlide(s: Extract<SlideSpec, { kind: 'content' }>, n: number): SlideOut {
+  if (s.layout) return illustrated(s, n);
   const sh: Shape[] = [];
   if (s.kicker) sh.push(kickerShape(s.kicker));
   const title = s.title || ' ';
@@ -240,6 +253,242 @@ function contentSlide(s: Extract<SlideSpec, { kind: 'content' }>, n: number): Sl
   return { shapes: sh };
 }
 
+// ---------- Trang minh họa (biểu đồ, sơ đồ, số liệu…) ----------
+const PALETTE = [UEB.teal, UEB.red, UEB.green, 'A6A6A6', '6E9C9C', 'C46A6D', '8FB27F', 'D9D9D9'];
+
+// "50,4" → 50.4; "1.234,5" → 1234.5; "1,234.5" → 1234.5
+export function parseNum(raw: string) {
+  let t = raw.replace(/\s/g, '').replace(/[^\d.,-]/g, '');
+  if (/,\d{1,2}$/.test(t) || (/,/.test(t) && !/\./.test(t) && !/,\d{3}$/.test(t))) t = t.replace(/\./g, '').replace(',', '.');
+  else t = t.replace(/,/g, '');
+  const n = parseFloat(t);
+  return Number.isFinite(n) ? n : 0;
+}
+// Tách "nhãn: giá trị" hoặc "nhãn | giá trị".
+function kv(text: string): [string, string] {
+  const i = text.indexOf(' | ');
+  if (i >= 0) return [text.slice(0, i).trim(), text.slice(i + 3).trim()];
+  const j = text.indexOf(':');
+  return j > 0 ? [text.slice(0, j).trim(), text.slice(j + 1).trim()] : [text.trim(), ''];
+}
+const starred = (t: string) => /\*\s*$/.test(t) || /\*\s*(\||:)/.test(t);
+const unstar = (t: string) => t.replace(/\s*\*\s*$/, '');
+
+type TOpt = { sz: number; b?: boolean; color?: string; align?: 'l' | 'ctr' | 'r'; anchor?: 't' | 'ctr' | 'b'; i?: boolean };
+const T = (x: number, y: number, w: number, h: number, text: string, o: TOpt): Shape => ({
+  t: 'text', x, y, w, h, anchor: o.anchor, paras: text.split('\n').map((line) => ({ align: o.align, line: 100, runs: [{ text: line, sz: o.sz, b: o.b, i: o.i, color: o.color ?? UEB.ink }] })),
+});
+const fitOne = (text: string, w: number, h: number, max: number, min: number) => fitSize([{ text }], w, h, max, min, 0);
+
+function illustrated(s: Extract<SlideSpec, { kind: 'content' }>, n: number): SlideOut {
+  const sh: Shape[] = [];
+  if (s.kicker) sh.push(kickerShape(s.kicker));
+  const title = s.title || ' ';
+  sh.push(titleShape(title, fitSize([{ text: title }], CW, 868680, 26, 20, 0)));
+  const top = BODY_TOP;
+  let bottom = BODY_BOTTOM;
+  if (s.note) {
+    const nh = Math.min(960120, lineCount(s.note, 18, CW) * 18 * 1.25 * PT + 120000);
+    bottom -= nh;
+    sh.push({ t: 'text', x: MX, y: bottom + 80000, w: CW, h: nh, paras: [{ runs: [{ text: s.note, b: true, color: UEB.red, sz: 18 }] }] });
+  }
+  const data = s.items.filter((b) => !b.plain);
+  const plain = s.items.filter((b) => b.plain).map((b) => b.text);
+  const H0 = bottom - top;
+
+  // Khối chữ phụ bên phải (nền xanh đậm, chữ trắng) cho trang biểu đồ / câu hỏi.
+  const sidePanel = (x: number, w: number, y = top, h = H0) => {
+    sh.push({ t: 'box', geom: 'roundRect', fill: UEB.teal, x, y, w, h });
+    const pad = 228600;
+    const sz = fitSize(plain.map((t) => ({ text: t })), w - pad * 2, h - pad * 2, 18, 11, 0.6);
+    sh.push({ t: 'text', x: x + pad, y: y + pad, w: w - pad * 2, h: h - pad * 2, paras: plain.map((t, i) => ({ before: i ? sz * 0.6 : 0, line: 105, runs: [{ text: t, sz: i === 0 && plain.length > 1 ? sz + 1 : sz, b: i === 0 && plain.length > 1, color: UEB.white }] })) });
+  };
+
+  const L = s.layout;
+  if (L === 'bieu-do-cot' || L === 'bieu-do-ngang' || L === 'bieu-do-tron') {
+    const rows = data.map((b) => { const [k, v] = kv(b.text); return { label: unstar(k), value: parseNum(v), raw: unstar(v) || '0', hi: starred(b.text) }; });
+    const aw = plain.length ? CW * 0.6 : CW;
+    if (plain.length) sidePanel(MX + aw + 365760, CW - aw - 365760);
+    const capH = s.arg ? 260000 : 0;
+    if (s.arg) sh.push(T(MX, bottom - capH, aw, capH, s.arg, { sz: 11, i: true, color: UEB.gray, anchor: 'b' }));
+    const ph = H0 - capH;
+    const max = Math.max(1e-9, ...rows.map((r) => Math.abs(r.value)));
+    const colorOf = (r: (typeof rows)[number], i: number) => (rows.some((x) => x.hi) ? (r.hi ? UEB.red : UEB.teal) : PALETTE[i % 3]);
+    if (!rows.length) sh.push(T(MX, top, aw, 400000, 'Thêm dữ liệu dạng "- Nhãn: số", ví dụ "- 2024: 36,6"', { sz: 14, color: UEB.gray, i: true }));
+    else if (L === 'bieu-do-cot') {
+      const slot = aw / rows.length;
+      const labSz = Math.min(14, ...rows.map((r) => fitOne(r.label, slot - 60000, 420000, 14, 9)));
+      const labH = 480000;
+      const valH = 330000;
+      const base = top + ph - labH;
+      const plotH = base - top - valH;
+      rows.forEach((r, i) => {
+        const bw = Math.min(slot * 0.6, 1600000);
+        const x = MX + i * slot + (slot - bw) / 2;
+        const h = Math.max(19050, (plotH * Math.abs(r.value)) / max);
+        sh.push({ t: 'box', geom: 'rect', fill: colorOf(r, i), x, y: base - h, w: bw, h });
+        sh.push(T(MX + i * slot, base - h - valH, slot, valH - 30000, r.raw, { sz: rows.length > 8 ? 11 : 14, b: true, align: 'ctr', anchor: 'b' }));
+        sh.push(T(MX + i * slot + 30000, base + 60000, slot - 60000, labH - 60000, r.label, { sz: labSz, color: UEB.gray, align: 'ctr' }));
+      });
+      sh.push({ t: 'box', geom: 'rect', fill: 'BFBFBF', x: MX, y: base, w: aw, h: 12700 });
+    } else if (L === 'bieu-do-ngang') {
+      const labW = aw * 0.3;
+      const valW = 900000;
+      const slot = Math.min(640000, ph / rows.length);
+      const bh = slot * 0.62;
+      const sz = Math.min(16, ...rows.map((r) => fitOne(r.label, labW - 120000, slot, 16, 9)));
+      rows.forEach((r, i) => {
+        const y = top + i * slot;
+        const w = Math.max(19050, ((aw - labW - valW) * Math.abs(r.value)) / max);
+        sh.push(T(MX, y, labW - 120000, slot, r.label, { sz, align: 'r', anchor: 'ctr' }));
+        sh.push({ t: 'box', geom: 'rect', fill: colorOf(r, i), x: MX + labW, y: y + (slot - bh) / 2, w, h: bh });
+        sh.push(T(MX + labW + w + 80000, y, valW, slot, r.raw, { sz: Math.min(sz, 14), b: true, anchor: 'ctr' }));
+      });
+      sh.push({ t: 'box', geom: 'rect', fill: 'BFBFBF', x: MX + labW - 6350, y: top, w: 12700, h: slot * rows.length });
+    } else {
+      const total = rows.reduce((a, r) => a + Math.abs(r.value), 0) || 1;
+      const d = Math.min(ph, aw * 0.48);
+      const cx = MX + 100000;
+      const cy = top + (ph - d) / 2;
+      let a = 0;
+      rows.forEach((r, i) => {
+        const span = (Math.abs(r.value) / total) * 360;
+        if (span > 0) sh.push({ t: 'pie', fill: PALETTE[i % PALETTE.length], x: cx, y: cy, w: d, h: d, a0: a, a1: a + span });
+        a += span;
+      });
+      const lx = cx + d + 400000;
+      const lw = MX + aw - lx;
+      const rowH = Math.min(520000, ph / rows.length);
+      const sz = Math.min(18, ...rows.map((r) => fitOne(`${r.label}  ${r.raw}`, lw - 380000, rowH, 18, 10)));
+      const y0 = top + (ph - rowH * rows.length) / 2;
+      rows.forEach((r, i) => {
+        const y = y0 + i * rowH;
+        sh.push({ t: 'box', geom: 'rect', fill: PALETTE[i % PALETTE.length], x: lx, y: y + rowH / 2 - 100000, w: 200000, h: 200000 });
+        const pctTxt = `${String(Math.round((Math.abs(r.value) / total) * 1000) / 10).replace('.', ',')}%`;
+        sh.push({ t: 'text', x: lx + 320000, y, w: lw - 320000, h: rowH, anchor: 'ctr', paras: [{ line: 100, runs: [{ text: r.label + '  ', sz, color: UEB.ink }, { text: r.raw === pctTxt ? pctTxt : `${r.raw} (${pctTxt})`, sz, b: true, color: UEB.ink }] }] });
+      });
+    }
+  } else if (L === 'quy-trinh' || L === 'dong-thoi-gian') {
+    const steps: { head: string; body: string[]; hi: boolean }[] = [];
+    for (const b of data) {
+      if (b.lvl && steps.length) steps[steps.length - 1].body.push(b.text);
+      else { const [k, v] = kv(b.text); steps.push({ head: unstar(k), body: v ? [unstar(v)] : [], hi: starred(b.text) }); }
+    }
+    let y = top;
+    if (plain.length) {
+      const sz = fitSize(plain.map((t) => ({ text: t })), CW, 700000, 18, 12, 0.3);
+      const h = Math.min(800000, plain.reduce((a, t) => a + lineCount(t, sz, CW) * sz * 1.3, 0) * PT + 80000);
+      sh.push({ t: 'text', x: MX, y, w: CW, h, paras: plain.map((t) => ({ line: 105, runs: [{ text: t, sz, color: UEB.gray }] })) });
+      y += h + 120000;
+    }
+    const k = Math.max(1, steps.length);
+    if (L === 'quy-trinh') {
+      const gap = 45720;
+      const slot = (CW - gap * (k - 1)) / k;
+      const ch = Math.min(900000, (bottom - y) * 0.32);
+      const headSz = Math.min(...steps.map((st) => fitOne(st.head, slot - 380000, ch - 60000, 20, 10)), 20);
+      steps.forEach((st, i) => {
+        const x = MX + i * (slot + gap);
+        sh.push({ t: 'box', geom: i === 0 ? 'homePlate' : 'chevron', fill: st.hi ? UEB.red : i % 2 ? '1D5A5A' : UEB.teal, x, y, w: slot, h: ch });
+        sh.push(T(x + (i ? 300000 : 120000), y, slot - (i ? 520000 : 360000), ch, st.head, { sz: headSz, b: true, color: UEB.white, align: 'ctr', anchor: 'ctr' }));
+      });
+      const by = y + ch + 200000;
+      const bodySz = Math.min(16, ...steps.map((st) => fitSize(st.body.map((t) => ({ text: t, indent: 0 })), slot - 120000, bottom - by, 16, 10, 0.4)));
+      steps.forEach((st, i) => {
+        const x = MX + i * (slot + gap);
+        sh.push({ t: 'box', geom: 'ellipse', fill: st.hi ? UEB.red : UEB.teal, x: x + 60000, y: by - 60000, w: 330000, h: 330000 });
+        sh.push(T(x + 60000, by - 60000, 330000, 330000, String(i + 1), { sz: 13, b: true, color: UEB.white, align: 'ctr', anchor: 'ctr' }));
+        if (st.body.length) sh.push({ t: 'text', x: x + 60000, y: by + 360000, w: slot - 120000, h: bottom - by - 360000, paras: st.body.map((t, j) => ({ before: j ? bodySz * 0.4 : 0, line: 105, runs: [{ text: t, sz: bodySz }] })) });
+      });
+    } else {
+      const slot = CW / k;
+      const ly = y + (bottom - y) * 0.42;
+      sh.push({ t: 'box', geom: 'rect', fill: UEB.teal, x: MX, y: ly - 19050, w: CW, h: 38100 });
+      const headSz = Math.min(22, ...steps.map((st) => fitOne(st.head, slot - 80000, ly - y - 260000, 22, 11)));
+      const bodySz = Math.min(15, ...steps.map((st) => fitSize(st.body.map((t) => ({ text: t })), slot - 120000, bottom - ly - 300000, 15, 9, 0.4)));
+      steps.forEach((st, i) => {
+        const cx = MX + i * slot + slot / 2;
+        sh.push({ t: 'box', geom: 'ellipse', fill: st.hi ? UEB.red : UEB.white, line: st.hi ? UEB.red : UEB.teal, x: cx - 120000, y: ly - 120000, w: 240000, h: 240000 });
+        sh.push(T(MX + i * slot + 40000, y, slot - 80000, ly - y - 200000, st.head, { sz: headSz, b: true, color: st.hi ? UEB.red : UEB.teal, align: 'ctr', anchor: 'b' }));
+        if (st.body.length) sh.push({ t: 'text', x: MX + i * slot + 60000, y: ly + 260000, w: slot - 120000, h: bottom - ly - 260000, paras: st.body.map((t, j) => ({ align: 'ctr', before: j ? bodySz * 0.4 : 0, line: 105, runs: [{ text: t, sz: bodySz }] })) });
+      });
+    }
+  } else if (L === 'so-lieu') {
+    const tiles = data.map((b) => { const [k, v] = kv(b.text); return { big: unstar(k), small: unstar(v), hi: starred(b.text) }; });
+    let y = top;
+    if (plain.length) {
+      const sz = fitSize(plain.map((t) => ({ text: t })), CW, 900000, 18, 12, 0.3);
+      sh.push({ t: 'text', x: MX, y, w: CW, h: 900000, paras: plain.map((t) => ({ line: 105, runs: [{ text: t, sz, color: UEB.ink }] })) });
+      y += 1000000;
+    }
+    const per = tiles.length <= 4 ? Math.max(1, tiles.length) : Math.ceil(tiles.length / 2);
+    const rowsN = Math.ceil(tiles.length / per) || 1;
+    const gap = 228600;
+    const tw = (CW - gap * (per - 1)) / per;
+    const th = Math.min(2300000, (bottom - y - gap * (rowsN - 1)) / rowsN);
+    const pad = 228600;
+    const bigSz = Math.min(...tiles.map((t) => fitOne(t.big, tw - pad * 2, th * 0.45, per <= 2 ? 54 : 40, 18)), 54);
+    const smallSz = Math.min(...tiles.map((t) => fitOne(t.small, tw - pad * 2, th * 0.45, 16, 10)), 16);
+    tiles.forEach((t, i) => {
+      const x = MX + (i % per) * (tw + gap);
+      const ty = y + Math.floor(i / per) * (th + gap);
+      sh.push({ t: 'box', geom: 'roundRect', fill: t.hi ? UEB.red : UEB.light, x, y: ty, w: tw, h: th });
+      sh.push(T(x + pad, ty + pad, tw - pad * 2, th * 0.5 - pad, t.big, { sz: bigSz, b: true, color: t.hi ? UEB.white : UEB.teal, anchor: 'b' }));
+      if (t.small) sh.push(T(x + pad, ty + th * 0.5 + 60000, tw - pad * 2, th * 0.5 - pad - 60000, t.small, { sz: smallSz, color: t.hi ? UEB.white : UEB.gray }));
+    });
+  } else if (L === 'cau-hoi') {
+    const ow = plain.length ? CW * 0.52 : CW;
+    if (plain.length) sidePanel(MX, CW - ow - 365760);
+    const ox = MX + CW - ow;
+    const gap = 160000;
+    const rh = Math.min(900000, (H0 - gap * (data.length - 1)) / Math.max(1, data.length));
+    const sz = Math.min(20, ...data.map((b) => fitOne(b.text, ow - 1000000, rh - 80000, 20, 11)));
+    const y0 = top + (H0 - (rh * data.length + gap * (data.length - 1))) / 2;
+    data.forEach((b, i) => {
+      const y = y0 + i * (rh + gap);
+      const hi = starred(b.text);
+      sh.push({ t: 'box', geom: 'roundRect', fill: hi ? 'F7EAEA' : UEB.light, x: ox, y, w: ow, h: rh });
+      const d = Math.min(420000, rh - 120000);
+      sh.push({ t: 'box', geom: 'ellipse', fill: UEB.red, x: ox + 200000, y: y + (rh - d) / 2, w: d, h: d });
+      sh.push(T(ox + 200000, y + (rh - d) / 2, d, d, String.fromCharCode(65 + i), { sz: 16, b: true, color: UEB.white, align: 'ctr', anchor: 'ctr' }));
+      sh.push(T(ox + 200000 + d + 240000, y, ow - d - 640000, rh, unstar(b.text), { sz, b: true, anchor: 'ctr' }));
+    });
+  } else if (L === 'danh-sach-so') {
+    const cols = data.length > 6 ? 2 : 1;
+    const per = Math.ceil(data.length / cols);
+    const gap = 140000;
+    const cg = 274320;
+    const cw = (CW - cg * (cols - 1)) / cols;
+    let y = top;
+    if (plain.length) {
+      sh.push(T(MX, y, CW, 330000, plain.join(' '), { sz: 12, b: true, color: UEB.gray }));
+      y += 420000;
+    }
+    const rh = Math.min(1000000, (bottom - y - gap * (per - 1)) / Math.max(1, per));
+    const sz = Math.min(20, ...data.map((b) => fitOne(b.text, cw - 900000, rh - 100000, 20, 11)));
+    data.forEach((b, i) => {
+      const x = MX + Math.floor(i / per) * (cw + cg);
+      const ry = y + (i % per) * (rh + gap);
+      sh.push({ t: 'box', geom: 'roundRect', fill: 'F4F1E8', x, y: ry, w: cw, h: rh });
+      const d = Math.min(400000, rh - 140000);
+      sh.push({ t: 'box', geom: 'ellipse', fill: UEB.green, x: x + 180000, y: ry + (rh - d) / 2, w: d, h: d });
+      sh.push(T(x + 180000, ry + (rh - d) / 2, d, d, String(i + 1), { sz: 14, b: true, color: UEB.white, align: 'ctr', anchor: 'ctr' }));
+      const [k, v] = kv(b.text);
+      sh.push({ t: 'text', x: x + 180000 + d + 220000, y: ry, w: cw - d - 560000, h: rh, anchor: 'ctr', paras: [{ line: 105, runs: v ? [{ text: k + ' ', sz: sz + 2, b: true, color: UEB.red }, { text: v, sz, color: UEB.ink }] : [{ text: k, sz, color: UEB.ink }] }] });
+    });
+  } else if (L === 'trich-dan') {
+    const lines = s.items.map((b) => b.text);
+    const quote = lines[0] ?? '';
+    const by = lines.slice(1).join('\n');
+    sh.push(T(MX, top - 200000, 1200000, 1400000, '“', { sz: 120, b: true, color: UEB.red }));
+    const qh = H0 - (by ? 700000 : 0) - 200000;
+    sh.push(T(MX + 1100000, top + 200000, CW - 1300000, qh, quote, { sz: fitOne(quote, CW - 1300000, qh, 32, 16), b: true, color: UEB.green, anchor: 'ctr' }));
+    if (by) sh.push(T(MX + 1100000, top + 200000 + qh, CW - 1300000, 600000, by, { sz: 16, color: UEB.gray }));
+  }
+  sh.push(numShape(n));
+  return { shapes: sh };
+}
+
 function thanksSlide(text: string): SlideOut {
   const t = text.trim();
   return {
@@ -286,7 +535,12 @@ function shapeXml(s: Shape, id: number, rel: Record<string, string>) {
     return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${s.img === 'logo' ? 'Logo UEB' : 'Khung'} ${id}" descr="${s.img === 'logo' ? 'Logo Trường Đại học Kinh tế - ĐHQGHN' : ''}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${rel[s.img]}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${xfrm(s.x, s.y, s.w, s.h)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
   }
   if (s.t === 'box') {
-    return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Hình ${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(s.x, s.y, s.w, s.h)}<a:prstGeom prst="${s.geom}"><a:avLst>${s.geom === 'roundRect' ? '<a:gd name="adj" fmla="val 6000"/>' : ''}</a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="${s.fill}"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="vi-VN"/></a:p></p:txBody></p:sp>`;
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Hình ${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(s.x, s.y, s.w, s.h)}<a:prstGeom prst="${s.geom}"><a:avLst>${s.geom === 'roundRect' ? '<a:gd name="adj" fmla="val 6000"/>' : s.geom === 'chevron' || s.geom === 'homePlate' ? '<a:gd name="adj" fmla="val 30000"/>' : ''}</a:avLst></a:prstGeom>${s.fill ? `<a:solidFill><a:srgbClr val="${s.fill}"/></a:solidFill>` : '<a:noFill/>'}${s.line ? `<a:ln w="19050"><a:solidFill><a:srgbClr val="${s.line}"/></a:solidFill></a:ln>` : '<a:ln><a:noFill/></a:ln>'}</p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="vi-VN"/></a:p></p:txBody></p:sp>`;
+  }
+  if (s.t === 'pie') {
+    // Góc của PowerPoint tính theo chiều kim đồng hồ từ hướng 3 giờ, đơn vị 1/60000 độ.
+    const ang = (d: number) => R((((d - 90) % 360) + 360) % 360 * 60000);
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Lát ${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(s.x, s.y, s.w, s.h)}<a:prstGeom prst="${s.a1 - s.a0 >= 359.99 ? 'ellipse' : 'pie'}"><a:avLst>${s.a1 - s.a0 >= 359.99 ? '' : `<a:gd name="adj1" fmla="val ${ang(s.a0)}"/><a:gd name="adj2" fmla="val ${ang(s.a1)}"/>`}</a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="${s.fill}"/></a:solidFill><a:ln w="19050"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="vi-VN"/></a:p></p:txBody></p:sp>`;
   }
   if (s.t === 'text') {
     const ph = s.title ? '<p:ph type="title"/>' : '';
@@ -355,15 +609,34 @@ export async function buildDeckPptx(slides: SlideOut[], images: { khung: Uint8Ar
   return writeZip(await Promise.all(files.map(([name, data]) => makeEntry(name, data))));
 }
 
-export const SAMPLE_OUTLINE = `## Khái niệm FDI
-# FDI là gì?
+// Mẫu chèn nhanh từng loại trang (nút "Thêm trang" trên giao diện).
+export const SNIPPETS: { key: string; label: string; text: string }[] = [
+  { key: 'phan', label: 'Chuyển phần', text: '## Tên phần' },
+  { key: 'noi-dung', label: 'Nội dung', text: '# Tiêu đề trang\n- Ý chính thứ nhất\n  - Ý phụ\n- Ý chính thứ hai\n! Câu chốt cuối trang' },
+  { key: 'the', label: 'Thẻ (2-4 cột)', text: '# So sánh hai phương án\n### Phương án A\n- Ưu điểm\n- Nhược điểm\n### Phương án B\n- Ưu điểm\n- Nhược điểm' },
+  { key: 'bang', label: 'Bảng', text: '# Bảng so sánh\n| Tiêu chí | Cột 1 | Cột 2 |\n| Dòng 1 | ... | ... |\n| Dòng 2 | ... | ... |' },
+  { key: 'cot', label: 'Biểu đồ cột', text: '# Vốn FDI 9 tháng năm 2026\n:: bieu-do-cot Đơn vị: tỷ USD. Nguồn: Cục Thống kê\n- Đăng ký: 50,4\n- Thực hiện: 21,1 *\n- Chế biến, chế tạo: 17,4\nĐăng ký là cam kết, thực hiện mới là vốn đã giải ngân.' },
+  { key: 'ngang', label: 'Biểu đồ thanh', text: '# Đối tác đầu tư lớn nhất\n:: bieu-do-ngang Đơn vị: tỷ USD\n- Singapore: 7,6 *\n- Hàn Quốc: 4,1\n- Trung Quốc: 3,8\n- Nhật Bản: 2,9' },
+  { key: 'tron', label: 'Biểu đồ tròn', text: '# Cơ cấu vốn theo ngành\n:: bieu-do-tron\n- Chế biến, chế tạo: 64\n- Bất động sản: 18\n- Năng lượng: 9\n- Khác: 9' },
+  { key: 'quy-trinh', label: 'Sơ đồ quy trình', text: '# Quy trình cấp phép dự án\n:: quy-trinh\n- Đề xuất: nhà đầu tư nộp hồ sơ\n- Thẩm định: cơ quan chuyên môn xem xét\n- Chấp thuận *: cấp chủ trương đầu tư\n- Triển khai: xây dựng, vận hành' },
+  { key: 'so-lieu', label: 'Số liệu nổi bật', text: '# Những con số đáng chú ý\n:: so-lieu\n- 50,4 tỷ USD | vốn đăng ký 9 tháng\n- 21,1 tỷ USD * | vốn thực hiện, cao nhất 5 năm\n- 10.000 | việc làm mới trong 3 năm' },
+  { key: 'cau-hoi', label: 'Câu hỏi lựa chọn', text: '# Bạn có ký không?\n:: cau-hoi\nDỰ ÁN X\nMột tập đoàn điện tử đề xuất đầu tư 1 tỷ USD, đổi lại miễn thuế 4 năm.\n- Ký ngay\n- Ký, nhưng kèm điều kiện\n- Cần thêm thông tin' },
+  { key: 'thoi-gian', label: 'Dòng thời gian', text: '# Các mốc chính sách\n:: dong-thoi-gian\n- 1987: Luật Đầu tư nước ngoài đầu tiên\n- 2005: Luật Đầu tư chung\n- 2014: Luật Đầu tư sửa đổi\n- 2020 *: Luật Đầu tư hiện hành' },
+  { key: 'muc-tieu', label: 'Danh sách đánh số', text: '# Mục tiêu buổi học\n:: danh-sach-so\nKẾT THÚC BUỔI HỌC, CÁC EM CÓ THỂ\n- Định nghĩa: FDI và phân biệt với đầu tư gián tiếp\n- Giải thích: FDI thúc đẩy phát triển như thế nào\n- Đánh giá: một dự án thực tế bằng bằng chứng' },
+  { key: 'trich-dan', label: 'Trích dẫn', text: '# Một câu để nhớ\n:: trich-dan\nCâu hỏi không phải là có bao nhiêu vốn vào, mà là bao nhiêu năng lực ở lại.\n— Ghi chú bài giảng' },
+];
+
+export const SAMPLE_OUTLINE = [
+  '## Khái niệm FDI',
+  SNIPPETS.find((x) => x.key === 'muc-tieu')!.text,
+  `# FDI là gì?
 - Đầu tư trực tiếp nước ngoài: nhà đầu tư nắm quyền kiểm soát hoặc ảnh hưởng đáng kể tới doanh nghiệp ở nước khác
   - Chuẩn quốc tế (IMF BPM6, OECD BD4): sở hữu từ 10% quyền biểu quyết
   - Luật Đầu tư 2020: thành lập tổ chức kinh tế, góp vốn, mua cổ phần, hợp đồng BCC
 - Khác với đầu tư gián tiếp (FPI): chỉ hưởng cổ tức, không tham gia quản lý
-! FDI là về ảnh hưởng, không chỉ là dòng tiền qua biên giới.
-
-# Bốn cách phân loại dự án FDI
+! FDI là về ảnh hưởng, không chỉ là dòng tiền qua biên giới.`,
+  SNIPPETS.find((x) => x.key === 'cau-hoi')!.text,
+  `# Bốn cách phân loại dự án FDI
 ### Hình thức vào
 - Xây mới (greenfield)
 - Mua lại, sáp nhập (M&A)
@@ -372,12 +645,19 @@ export const SAMPLE_OUTLINE = `## Khái niệm FDI
 ### Chuỗi giá trị
 - Theo chiều ngang hoặc chiều dọc
 ### Ngành và đối tác
-- Chế tạo, năng lượng, bất động sản, dịch vụ
-
-## Tác động của FDI
-# Ba kênh dòng vốn FDI
+- Chế tạo, năng lượng, bất động sản, dịch vụ`,
+  '## Số liệu và tác động',
+  SNIPPETS.find((x) => x.key === 'cot')!.text,
+  SNIPPETS.find((x) => x.key === 'so-lieu')!.text,
+  SNIPPETS.find((x) => x.key === 'tron')!.text,
+  SNIPPETS.find((x) => x.key === 'ngang')!.text,
+  `# Ba kênh dòng vốn
 | | FDI | Đầu tư gián tiếp | Vay thương mại |
 | Ai chịu rủi ro? | Nhà đầu tư | Nhà đầu tư | Bên vay |
 | Rút nhanh được không? | Khó | Dễ | Theo kỳ hạn |
-| Chi phí về sau | Lợi nhuận chuyển về | Cổ tức | Lãi vay |
-`;
+| Chi phí về sau | Lợi nhuận chuyển về | Cổ tức | Lãi vay |`,
+  '## Chính sách',
+  SNIPPETS.find((x) => x.key === 'thoi-gian')!.text,
+  SNIPPETS.find((x) => x.key === 'quy-trinh')!.text,
+  SNIPPETS.find((x) => x.key === 'trich-dan')!.text,
+].join('\n\n') + '\n';
