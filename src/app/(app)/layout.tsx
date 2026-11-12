@@ -24,13 +24,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
   const g = gate as { allowed: boolean; online: number; max: number } | null;
   if (g && !g.allowed) return <Busy online={g.online} max={g.max} />;
-  // Năm mục chính. Trang đặt lịch nằm trong Lịch; Bảng tổng hợp, Mảng và đầu mối nằm trong Họp.
+  // Năm mục chính (và Soạn thảo trên thanh bên). Trang đặt lịch nằm trong Lịch; Bảng tổng hợp, Mảng và đầu mối nằm trong Họp.
   const items: NavItem[] = [
     { href: '/', label: 'Hôm nay', icon: 'today' },
     { href: '/viec', label: 'Việc', icon: 'tasks', badge: overdue ?? 0 },
     { href: '/lich', label: 'Lịch', icon: 'calendar', match: ['/dat-lich'] },
     { href: '/hop', label: 'Họp', icon: 'folder', match: ['/quan-tri/mang-cong-tac'] },
     { href: '/nhom', label: 'Nhóm và Dự án', icon: 'explore', match: ['/nguoi'] },
+    { href: '/soan-thao', label: 'Soạn thảo', icon: 'pen', sideOnly: true },
   ];
   const canAdmin = ctx.is_admin || ctx.role === 'principal' || ctx.can_create_group;
   const name = profile.full_name || profile.email;
@@ -81,6 +82,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             button={<>{me}<span className="hidden text-left leading-tight sm:block"><span className="block max-w-40 truncate text-[13px] font-semibold">{name}</span><span className="block text-[11px] muted">{roleText}</span></span></>}>
             <Link role="menuitem" href="/tai-khoan" className="menu-item">Hồ sơ cá nhân</Link>
             <Link role="menuitem" href="/jira" className="menu-item">Jira của tôi</Link>
+            <Link role="menuitem" href="/soan-thao" className="menu-item">Soạn thảo văn bản</Link>
             <Link role="menuitem" href="/moi" className="menu-item">Mời đồng nghiệp</Link>
             {canAdmin && <Link role="menuitem" href="/quan-tri" className="menu-item">Quản trị danh mục</Link>}
             <hr className="my-1 border-slate-200 dark:border-slate-700" />
