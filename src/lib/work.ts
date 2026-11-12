@@ -74,6 +74,21 @@ export async function deleteTask(form: FormData) {
   refresh(data?.group_id);
 }
 
+// Xóa việc từ trang Việc: Trưởng nhóm (hoặc chủ mục Cá nhân) xóa ngay; người khác gửi
+// đề nghị để Trưởng nhóm duyệt. Hàm request_delete trong cơ sở dữ liệu quyết định.
+export async function deleteOrRequestTask(form: FormData) {
+  const id = uuidOrNull(text(form, 'id'));
+  const back = text(form, 'back');
+  const to = back.startsWith('/') && !back.startsWith('//') ? back : '/viec';
+  const sep = to.includes('?') ? '&' : '?';
+  if (!id) return;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('request_delete', { p_type: 'task', p_id: id, p_reason: text(form, 'reason') || null });
+  refresh(uuidOrNull(text(form, 'group_id')) ?? undefined);
+  if (error) redirect(`${to}${sep}loi=${encodeURIComponent(errText(error))}`);
+  redirect(`${to}${sep}tb=${encodeURIComponent(data === 'deleted' ? 'Đã xóa việc.' : 'Đã gửi đề nghị xóa. Trưởng nhóm sẽ duyệt và trả lời qua thông báo.')}`);
+}
+
 // ---- Lịch nhóm ----
 
 export async function createEvent(_prev: FormState, form: FormData): Promise<FormState> {

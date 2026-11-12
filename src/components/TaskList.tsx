@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { TaskDropBox } from '@/components/TaskDropBox';
-import { deleteTask, deleteTaskLink, nudgeTask, setTaskStatus } from '@/lib/work';
+import { deleteOrRequestTask, deleteTask, deleteTaskLink, nudgeTask, setTaskStatus } from '@/lib/work';
+import { ConfirmButton } from '@/components/ConfirmButton';
 import { fmtDate, vnDay } from '@/lib/format';
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, type Task, type TaskLink } from '@/lib/types';
 
@@ -38,6 +39,8 @@ export function TaskList({
   canAttach = false,
   me,
   showProgress = false,
+  deleteState,
+  back,
 }: {
   tasks: Task[];
   name: (id: string | null) => string;
@@ -52,6 +55,10 @@ export function TaskList({
   me?: string;
   /** Hiện ô % tiến độ cạnh trạng thái (trang Việc). */
   showProgress?: boolean;
+  /** Nút xóa trên từng dòng (trang Việc): xóa ngay, đề nghị Trưởng nhóm xóa, hoặc đang chờ duyệt. */
+  deleteState?: (t: Task) => 'delete' | 'request' | 'pending' | null;
+  /** Trang quay về sau khi xóa hoặc gửi đề nghị. */
+  back?: string;
 }) {
   if (!tasks.length) return <p className="text-sm muted">{empty}</p>;
   const today = vnDay();
@@ -98,7 +105,26 @@ export function TaskList({
               </select>
               <button className="btn-secondary px-2 py-1 text-xs">Lưu</button>
             </form>
-            {canDelete && (
+            {deleteState && (() => {
+              const st = deleteState(t);
+              if (st === 'pending') return <span className="chip px-2 py-1 text-xs" title="Đã gửi đề nghị xóa, chờ Trưởng nhóm duyệt">Chờ duyệt xóa</span>;
+              if (!st) return null;
+              return (
+                <form action={deleteOrRequestTask}>
+                  <input type="hidden" name="id" value={t.id} />
+                  <input type="hidden" name="group_id" value={t.group_id} />
+                  {back && <input type="hidden" name="back" value={back} />}
+                  <ConfirmButton
+                    className="px-2 py-1 text-xs text-orange-600 hover:underline dark:text-orange-400"
+                    title={st === 'delete' ? 'Xóa hẳn việc này' : 'Gửi Trưởng nhóm duyệt xóa việc này'}
+                    message={st === 'delete' ? `Xóa hẳn việc “${t.title}”? Không hoàn tác được.` : `Gửi Trưởng nhóm đề nghị xóa việc “${t.title}”?`}
+                  >
+                    {st === 'delete' ? 'Xóa' : 'Đề nghị xóa'}
+                  </ConfirmButton>
+                </form>
+              );
+            })()}
+            {!deleteState && canDelete && (
               <form action={deleteTask}>
                 <input type="hidden" name="id" value={t.id} />
                 <button className="px-2 py-1 text-xs text-orange-600 hover:underline dark:text-orange-400">Xóa</button>
