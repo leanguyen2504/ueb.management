@@ -252,10 +252,9 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
       {tb && <p role="status" className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{tb}</p>}
       {loi && <p role="alert" className="mb-4 rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">{loi}</p>}
 
-      <nav className="mb-5 flex gap-1 overflow-x-auto overflow-y-hidden scrollbar-none border-b border-slate-200 dark:border-slate-800" aria-label="Các phần của nhóm">
+      <nav className="tabs mt-0" aria-label="Các phần của nhóm">
         {TABS.map((t) => (
-          <Link key={t.key} href={tabHref(t.key)} aria-current={tab === t.key ? 'page' : undefined}
-            className={`-mb-px whitespace-nowrap border-b-2 px-3.5 py-2.5 text-sm ${tab === t.key ? 'border-gold-500 font-semibold text-slate-900 dark:text-white' : 'border-transparent font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'}`}>
+          <Link key={t.key} href={tabHref(t.key)} aria-current={tab === t.key ? 'page' : undefined}>
             {t.label}{t.count ? <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 text-xs dark:bg-slate-800">{t.count}</span> : null}
           </Link>
         ))}

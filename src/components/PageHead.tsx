@@ -16,10 +16,9 @@ export function PageHead({ title, sub, actions, eyebrow }: { title: string; sub?
 // Thẻ chuyển giữa các trang cùng một mục (Lịch ↔ Trang đặt lịch; Họp ↔ Bảng tổng hợp ↔ Mảng và đầu mối).
 export function SectionTabs({ tabs, current }: { tabs: { href: string; label: string; key: string; count?: number }[]; current: string }) {
   return (
-    <nav className="-mt-2 mb-5 flex gap-1 overflow-x-auto overflow-y-hidden scrollbar-none border-b border-slate-200 dark:border-slate-800" aria-label="Các trang trong mục">
+    <nav className="tabs" aria-label="Các trang trong mục">
       {tabs.map((t) => (
-        <Link key={t.key} href={t.href} aria-current={t.key === current ? 'page' : undefined}
-          className={`-mb-px whitespace-nowrap border-b-2 px-3.5 py-2.5 text-sm ${t.key === current ? 'border-gold-500 font-semibold text-slate-900 dark:text-white' : 'border-transparent font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'}`}>
+        <Link key={t.key} href={t.href} aria-current={t.key === current ? 'page' : undefined}>
           {t.label}
           {Boolean(t.count) && <span className="ml-1.5 rounded-full bg-gold-100 px-1.5 text-xs font-semibold text-gold-600 dark:bg-gold-600/20 dark:text-gold-500">{t.count}</span>}
         </Link>

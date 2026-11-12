@@ -58,6 +58,10 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.01em; text-wra
   .seg { @apply inline-flex flex-wrap gap-0.5 rounded-xl bg-slate-100 p-1 dark:bg-slate-800; }
   .seg > * { @apply rounded-lg px-3 py-1 text-sm font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white; }
   .seg > [aria-current] { @apply bg-white font-semibold text-slate-900 shadow-sm dark:bg-slate-950 dark:text-white; }
+  /* Thanh tab đầu trang (Lịch / Lịch cá nhân / Chấm công...): thẻ đang chọn là ô nền màu, không gạch chân. */
+  .tabs { @apply -mx-0.5 -mt-2 mb-5 flex p-0.5 gap-1 overflow-x-auto overflow-y-hidden scrollbar-none; }
+  .tabs > * { @apply whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white; }
+  .tabs > [aria-current] { @apply bg-brand-100 font-semibold text-brand-700 hover:bg-brand-100 hover:text-brand-800 dark:bg-brand-300/15 dark:text-brand-100 dark:hover:bg-brand-300/25 dark:hover:text-white; }
   .menu { @apply absolute right-0 z-30 mt-2 min-w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-900; }
   .menu-item { @apply flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800; }
 }
