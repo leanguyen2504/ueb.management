@@ -4,7 +4,6 @@ import { PageHead } from '@/components/PageHead';
 import { TaskList } from '@/components/TaskList';
 import { ProgressBar, progressOf } from '@/components/TaskProgress';
 import { CalendarFilter } from '@/components/CalendarFilter';
-import { loadPeople } from '@/lib/people';
 import { addDays, dayStartIso, fmtDate, fmtDateTime, fmtTime, greeting, todayLabel, vnDay, weekdayShort } from '@/lib/format';
 import { isGoogleCalendarEnabled } from '@/lib/google-calendar';
 import { loadMeetings, meetingProgress } from '@/lib/meetings';
@@ -70,7 +69,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const groupName = new Map((groups ?? []).map((g) => [g.id, g.name]));
   const openTasks = tasks ?? [];
   const overdue = openTasks.filter((t) => t.due_date && t.due_date < today).length;
-  const { name } = await loadPeople(supabase, [userId]);
+  // Việc ở đây đều giao cho tôi: tên lấy từ hồ sơ trong phiên, không cần đọc lại.
+  const myName = profile.full_name || profile.email;
+  const name = (id: string | null | undefined) => (id ? (id === userId ? myName : 'Người dùng') : '');
 
   // Họp hôm nay: buổi họp lịch Google (kèm tiến độ hồ sơ) và lịch nhóm của tôi. Một buổi họp
   // có cả trong lịch nhóm và lịch Google (cùng giờ, cùng tên) chỉ hiện một dòng theo lịch Google.

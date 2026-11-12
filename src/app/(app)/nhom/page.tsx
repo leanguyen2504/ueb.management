@@ -25,7 +25,7 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
     await supabase.rpc('my_personal_group');
     query = query.eq('owner_id', userId);
   } else if (loai && loai in KIND_LABEL) query = query.eq('kind', loai).is('owner_id', null);
-  const [{ data: groups }, { data: mine }, { data: counts }, { data: allNames }, { data: dir }, { data: myRequests }] = await Promise.all([
+  const [{ data: groups }, { data: mine }, { data: counts }, { data: allNames }, { data: dir }, { data: myRequests }, { data: taskRows }] = await Promise.all([
     query.returns<Group[]>(),
     supabase.from('group_members').select('group_id, is_manager, is_clerk').eq('user_id', userId),
     supabase.from('group_members').select('group_id'),
@@ -33,6 +33,7 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
     // Danh bạ: mọi nhóm đang hoạt động, kể cả nhóm mình chưa tham gia (chỉ tên, mô tả, đơn vị quản lý, số liệu).
     luu_tru ? Promise.resolve({ data: [] as DirRow[] }) : groupDirectory(supabase),
     supabase.from('join_requests').select('group_id').eq('requester_id', userId).eq('status', 'pending').is('task_id', null),
+    supabase.from('tasks').select('group_id').neq('status', 'done'),
   ]);
   // Thẻ Cá nhân: hiện luôn mọi việc chưa xong trong mục Cá nhân.
   const personalIds = loai === 'ca-nhan' ? (groups ?? []).map((g) => g.id) : [];
@@ -45,7 +46,6 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
   const others = loai === 'ca-nhan' ? [] : ((dir ?? []) as DirRow[]).filter((g) => !g.can_view && !listed.has(g.id) && (!loai || g.kind === loai));
   // Số liệu từ danh bạ (đếm đủ cả khi mình không xem được chi tiết bên trong).
   const dirById = new Map(((dir ?? []) as DirRow[]).map((g) => [g.id, g]));
-  const { data: taskRows } = await supabase.from('tasks').select('group_id').neq('status', 'done');
   const openTasks = new Map<string, number>();
   (taskRows ?? []).forEach((t) => openTasks.set(t.group_id, (openTasks.get(t.group_id) ?? 0) + 1));
   const role = new Map((mine ?? []).map((m) => [m.group_id, m.is_manager ? 'Trưởng nhóm' : m.is_clerk ? 'Văn thư' : 'Thành viên']));

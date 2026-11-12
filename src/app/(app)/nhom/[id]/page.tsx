@@ -31,7 +31,26 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const { id } = await params;
   const { loi, tb, tab: tabParam } = await searchParams;
   const { supabase, userId, ctx } = await requireSession();
-  const { data: group } = await supabase.from('groups').select('*').eq('id', id).maybeSingle<Group>();
+  // Đọc cùng lúc với thông tin nhóm, không chờ lần lượt: danh bạ, đơn vị cùng làm và phần chi tiết
+  // (RLS lọc, người không xem được chi tiết nhận danh sách rỗng).
+  const uuidOk = /^[0-9a-f-]{36}$/i.test(id);
+  const dirPromise = groupDirectory(supabase);
+  const tagPromise = supabase.from('group_units').select('group_id, unit_id').or(`group_id.eq.${id},unit_id.eq.${id}`).then((r) => r);
+  const detailPromise = uuidOk ? Promise.all([
+    supabase.from('group_members').select('*').eq('group_id', id).returns<GroupMember[]>(),
+    supabase.from('invitations').select('id, email, is_manager, is_clerk, created_at, expires_at').eq('group_id', id).is('accepted_at', null),
+    supabase.from('activity_log').select('id, at, actor_id, action, entity_type').eq('group_id', id).order('at', { ascending: false }).limit(15),
+    supabase.from('tasks').select('*').eq('group_id', id).order('status').order('due_date', { ascending: true, nullsFirst: false }).limit(200).returns<Task[]>(),
+    supabase.from('events').select('*').eq('group_id', id).gte('ends_at', new Date(Date.now() - 86400000).toISOString()).order('starts_at').limit(30).returns<CalEvent[]>(),
+    // RLS: chỉ người quản lý thành viên thấy yêu cầu của người khác.
+    supabase.from('join_requests').select('id, task_id, requester_id, message, created_at').eq('group_id', id).eq('status', 'pending').neq('requester_id', userId).order('created_at'),
+    // RLS: Trưởng nhóm thấy mọi yêu cầu xóa của nhóm; người khác chỉ thấy yêu cầu mình gửi.
+    supabase.from('delete_requests').select('id, item_type, item_id, item_title, reason, requester_id, created_at').eq('group_id', id).eq('status', 'pending').order('created_at').returns<DeleteRequest[]>(),
+    // Mục Tài liệu. Lỗi (chưa chạy SQL 20261112800001) thì mục hiện lời nhắc thay vì làm hỏng trang.
+    supabase.from('group_files').select('*').eq('group_id', id).order('created_at', { ascending: false }).limit(300).returns<GroupFile[]>(),
+    supabase.from('groups').select('id, name, description, archived_at').eq('parent_id', id).order('created_at', { ascending: false }),
+  ]) : null;
+  const { data: group } = uuidOk ? await supabase.from('groups').select('*').eq('id', id).maybeSingle<Group>() : { data: null as Group | null };
   // Hiệu trưởng thấy mọi nhóm trong danh sách nhưng chỉ xem thông tin chung, sự kiện, dự án con,
   // lãnh đạo và đầu mối; không xem tiến độ, đầu việc, lịch, tài liệu, thành viên. Chi tiết chỉ hiện
   // ở nhóm mà Hiệu trưởng được thêm làm thành viên.
@@ -39,9 +58,9 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     const { data: mine } = await supabase.from('group_members').select('can_view').eq('group_id', id).eq('user_id', userId).maybeSingle();
     if (!mine?.can_view) {
       const [{ data: dir }, { data: contacts }, { data: tagRows }] = await Promise.all([
-        groupDirectory(supabase),
+        dirPromise,
         supabase.rpc('group_contacts', { p_group: id }),
-        supabase.from('group_units').select('group_id, unit_id').or(`group_id.eq.${id},unit_id.eq.${id}`),
+        tagPromise,
       ]);
       const all = (dir ?? []) as DirGroup[];
       const byId = new Map(all.map((g) => [g.id, g]));
@@ -59,13 +78,13 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   }
   if (!group) {
     // Chưa tham gia: hiện trang công khai (lãnh đạo, đầu mối, tên việc) để xin tham gia.
-    if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
+    if (!uuidOk) notFound();
     const [{ data: dir }, { data: contacts }, { data: open }, { data: reqs }, { data: tagRows }] = await Promise.all([
-      groupDirectory(supabase),
+      dirPromise,
       supabase.rpc('group_contacts', { p_group: id }),
       supabase.rpc('group_open_task_titles', { p_group: id }),
       supabase.from('join_requests').select('id, task_id, created_at').eq('group_id', id).eq('requester_id', userId).eq('status', 'pending'),
-      supabase.from('group_units').select('group_id, unit_id').or(`group_id.eq.${id},unit_id.eq.${id}`),
+      tagPromise,
     ]);
     const all = (dir ?? []) as (DirGroup & { can_view: boolean })[];
     const pub = all.find((g) => g.id === id);
@@ -76,29 +95,20 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     return <PublicGroup group={pub} contacts={contacts ?? []} tasks={open ?? []} requests={reqs ?? []} units={units} projects={projects} tb={tb} loi={loi} />;
   }
 
-  const [{ data: members }, { data: invites }, { data: log }, { data: tasks }, { data: events }, { data: joinReqs }, { data: delReqs }, { data: docs, error: docsErr }] = await Promise.all([
-    supabase.from('group_members').select('*').eq('group_id', id).returns<GroupMember[]>(),
-    supabase.from('invitations').select('id, email, is_manager, is_clerk, created_at, expires_at').eq('group_id', id).is('accepted_at', null),
-    supabase.from('activity_log').select('id, at, actor_id, action, entity_type').eq('group_id', id).order('at', { ascending: false }).limit(15),
-    supabase.from('tasks').select('*').eq('group_id', id).order('status').order('due_date', { ascending: true, nullsFirst: false }).limit(200).returns<Task[]>(),
-    supabase.from('events').select('*').eq('group_id', id).gte('ends_at', new Date(Date.now() - 86400000).toISOString()).order('starts_at').limit(30).returns<CalEvent[]>(),
-    // RLS: chỉ người quản lý thành viên thấy yêu cầu của người khác.
-    supabase.from('join_requests').select('id, task_id, requester_id, message, created_at').eq('group_id', id).eq('status', 'pending').neq('requester_id', userId).order('created_at'),
-    // RLS: Trưởng nhóm thấy mọi yêu cầu xóa của nhóm; người khác chỉ thấy yêu cầu mình gửi.
-    supabase.from('delete_requests').select('id, item_type, item_id, item_title, reason, requester_id, created_at').eq('group_id', id).eq('status', 'pending').order('created_at').returns<DeleteRequest[]>(),
-    // Mục Tài liệu. Lỗi (chưa chạy SQL 20261112800001) thì mục hiện lời nhắc thay vì làm hỏng trang.
-    supabase.from('group_files').select('*').eq('group_id', id).order('created_at', { ascending: false }).limit(300).returns<GroupFile[]>(),
-  ]);
+  const [{ data: members }, { data: invites }, { data: log }, { data: tasks }, { data: events }, { data: joinReqs }, { data: delReqs }, { data: docs, error: docsErr }, { data: children }] = await detailPromise!;
   const taskIds = (tasks ?? []).map((t) => t.id);
-  const [{ data: linkRows }, { data: children }, { data: parent }] = await Promise.all([
-    taskIds.length ? supabase.from('task_links').select('*').in('task_id', taskIds).order('created_at').returns<TaskLink[]>() : Promise.resolve({ data: [] as TaskLink[] }),
-    supabase.from('groups').select('id, name, description, archived_at').eq('parent_id', id).order('created_at', { ascending: false }),
-    group.parent_id ? supabase.from('groups').select('id, name').eq('id', group.parent_id).maybeSingle() : Promise.resolve({ data: null }),
-  ]);
+  const childIds = (children ?? []).map((c) => c.id);
+  const ids = [...new Set([...(members ?? []).map((m) => m.user_id), ...(log ?? []).map((l) => l.actor_id).filter(Boolean) as string[], ...(tasks ?? []).map((t) => t.assignee_id).filter(Boolean) as string[], ...(joinReqs ?? []).map((r) => r.requester_id), ...(delReqs ?? []).map((r) => r.requester_id), ...(docs ?? []).map((d) => d.created_by), group.created_by, group.updated_by].filter(Boolean) as string[])];
   // Danh bạ để hiện tên đơn vị quản lý, đơn vị cùng làm và dự án liên đơn vị, kể cả nhóm mình chưa tham gia.
-  const [{ data: dirData }, { data: tagRows }] = await Promise.all([
-    groupDirectory(supabase),
-    supabase.from('group_units').select('group_id, unit_id').or(`group_id.eq.${id},unit_id.eq.${id}`),
+  const [{ data: linkRows }, { data: parent }, { data: childTasks }, { data: people }, { data: dirData }, { data: tagRows }] = await Promise.all([
+    taskIds.length ? supabase.from('task_links').select('*').in('task_id', taskIds).order('created_at').returns<TaskLink[]>() : Promise.resolve({ data: [] as TaskLink[] }),
+    group.parent_id ? supabase.from('groups').select('id, name').eq('id', group.parent_id).maybeSingle() : Promise.resolve({ data: null }),
+    childIds.length
+      ? supabase.from('tasks').select('group_id, status, due_date').in('group_id', childIds)
+      : Promise.resolve({ data: [] as { group_id: string; status: Task['status']; due_date: string | null }[] }),
+    supabase.from('profiles').select('id, email, full_name, system_role, is_active, position, phone, office, avatar_path').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).returns<Profile[]>(),
+    dirPromise,
+    tagPromise,
   ]);
   const dirAll = (dirData ?? []) as (DirGroup & { can_view: boolean })[];
   const dirById = new Map(dirAll.map((g) => [g.id, g]));
@@ -121,12 +131,6 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const unitOptions = coWorkOptions(dirAll, id);
   const links = new Map<string, TaskLink[]>();
   (linkRows ?? []).forEach((l) => links.set(l.task_id, [...(links.get(l.task_id) ?? []), l]));
-  const childIds = (children ?? []).map((c) => c.id);
-  const { data: childTasks } = childIds.length
-    ? await supabase.from('tasks').select('group_id, status, due_date').in('group_id', childIds)
-    : { data: [] as { group_id: string; status: Task['status']; due_date: string | null }[] };
-  const ids = [...new Set([...(members ?? []).map((m) => m.user_id), ...(log ?? []).map((l) => l.actor_id).filter(Boolean) as string[], ...(tasks ?? []).map((t) => t.assignee_id).filter(Boolean) as string[], ...(joinReqs ?? []).map((r) => r.requester_id), ...(delReqs ?? []).map((r) => r.requester_id), ...(docs ?? []).map((d) => d.created_by), group.created_by, group.updated_by].filter(Boolean) as string[])];
-  const { data: people } = await supabase.from('profiles').select('id, email, full_name, system_role, is_active, position, phone, office, avatar_path').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).returns<Profile[]>();
   const person = new Map((people ?? []).map((p) => [p.id, p]));
   const avatars = await avatarUrls(supabase, (members ?? []).map((m) => person.get(m.user_id)?.avatar_path));
   const name = (uid: string | null) => (uid ? person.get(uid)?.full_name || person.get(uid)?.email || 'Người dùng' : 'Hệ thống');

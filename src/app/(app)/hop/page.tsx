@@ -92,7 +92,10 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Pro
   if (mineOnly) shown = shown.filter((m) => isMyMeeting(m, userId, myGroups, myAreas));
   if (missingOnly) shown = shown.filter((m) => meetingProgress(m).missing > 0);
 
-  const { name } = await loadPeople(supabase, meetings.flatMap((m) => m.items.map((i) => i.assignee_id)));
+  const known = new Map((people ?? []).map((p) => [p.id as string, (p.full_name || p.email) as string]));
+  const missing = meetings.flatMap((m) => m.items.map((i) => i.assignee_id)).filter((id): id is string => Boolean(id) && !known.has(id!));
+  const extra = missing.length ? (await loadPeople(supabase, missing)).name : () => 'Người dùng';
+  const name = (id: string | null | undefined) => (id ? known.get(id) || extra(id) : '');
   const personOptions: PersonOption[] = (people ?? []).filter((p) => p.id !== userId).map((p) => ({ id: p.id, label: p.full_name || p.email }));
   const partyNames = [...new Set([...areas.map((a) => a.name), ...(groups ?? []).map((g) => g.name as string), ...meetings.flatMap((m) => m.items.map((i) => i.party ?? ''))].filter(Boolean))];
   const byEmail = new Map((people ?? []).map((p) => [String(p.email).toLowerCase(), p.full_name || p.email]));
