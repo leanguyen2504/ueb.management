@@ -23,6 +23,10 @@ export type MeetingItem = {
   note: string | null;
   doc_type: DocType | null;
   area_id: string | null;
+  // Tệp tải lên (Supabase Storage, bucket meeting-files); url khi đó là /hop/tep?p=...
+  file_path: string | null;
+  file_name: string | null;
+  file_size: number | null;
   created_by: string | null;
   updated_by: string | null;
   updated_at: string;
@@ -72,7 +76,7 @@ export type Meeting = {
   gone?: boolean;
 };
 
-const ITEM_COLS = 'id, source_id, event_key, meeting_title, meeting_starts_at, kind, party, party_group_id, assignee_id, title, url, note, doc_type, area_id, created_by, updated_by, updated_at';
+const ITEM_COLS = 'id, source_id, event_key, meeting_title, meeting_starts_at, kind, party, party_group_id, assignee_id, title, url, note, doc_type, area_id, file_path, file_name, file_size, created_by, updated_by, updated_at';
 const RECORD_COLS = 'source_id, event_key, jira_key, drive_folder_url, status, follow_up, updated_by, updated_at, meeting_title, meeting_starts_at';
 
 export async function loadAreas(supabase: SupabaseClient): Promise<WorkArea[]> {

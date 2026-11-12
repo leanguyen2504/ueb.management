@@ -71,7 +71,7 @@ export function AddItemForm({ meeting, people, partiesListId, uid }: { meeting: 
   );
 }
 
-export type ItemValues = { id: string; party: string | null; title: string | null; url: string | null; note: string | null; assignee_id: string | null; doc_type: string | null };
+export type ItemValues = { id: string; party: string | null; title: string | null; url: string | null; note: string | null; assignee_id: string | null; doc_type: string | null; file_name?: string | null };
 
 export function EditItemForm({ item, people, partiesListId }: { item: ItemValues; people: PersonOption[]; partiesListId: string }) {
   const [state, action] = useActionState(updateMeetingItem, null);
@@ -80,7 +80,15 @@ export function EditItemForm({ item, people, partiesListId }: { item: ItemValues
     <form action={action} className="space-y-3">
       <input type="hidden" name="id" value={item.id} />
       <div className="grid gap-3 sm:grid-cols-2">
-        <div><label className="label" htmlFor={`${uid}-url`}>Link Google Drive</label><input id={`${uid}-url`} name="url" type="url" className="input" defaultValue={item.url ?? ''} placeholder="https://drive.google.com/..." /></div>
+        {item.file_name ? (
+          <div>
+            <span className="label">Tệp đã tải lên</span>
+            <input type="hidden" name="url" value={item.url ?? ''} />
+            <p className="truncate py-2 text-sm">📎 {item.file_name}</p>
+          </div>
+        ) : (
+          <div><label className="label" htmlFor={`${uid}-url`}>Link Google Drive</label><input id={`${uid}-url`} name="url" type="url" className="input" defaultValue={item.url ?? ''} placeholder="https://drive.google.com/..." /></div>
+        )}
         <div><label className="label" htmlFor={`${uid}-title`}>Tên tài liệu</label><input id={`${uid}-title`} name="title" maxLength={200} className="input" defaultValue={item.title ?? ''} /></div>
         <div><label className="label" htmlFor={`${uid}-party`}>Bên gửi</label><input id={`${uid}-party`} name="party" maxLength={120} className="input" list={partiesListId} defaultValue={item.party ?? ''} /></div>
         <AssigneeSelect id={`${uid}-as`} people={people} value={item.assignee_id} />

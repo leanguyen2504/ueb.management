@@ -3,6 +3,9 @@
 // tài liệu sau họp muộn nhất 24 giờ sau khi họp xong.
 
 export const DEADLINE_HOURS = 24;
+// Tệp kéo thả vào hồ sơ họp (khớp giới hạn bucket meeting-files).
+export const MAX_FILE_BYTES = 25 * 1024 * 1024;
+export const ACCEPT_FILES = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.txt,.csv,.jpg,.jpeg,.png,.webp,.zip';
 
 export const DOC_TYPES = {
   giay_moi: 'Giấy mời / Thông báo',

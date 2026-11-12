@@ -101,3 +101,12 @@ Quyền: ai xem được lịch thì xem được hồ sơ. Hiệu trưởng, th
 - Mảng công tác và đầu mối: `/quan-tri/mang-cong-tac` (Hiệu trưởng, thư ký, quản trị sửa). Đầu mối lưu bằng email nên có thể phân công trước khi người đó đăng nhập.
 - Bảng tổng hợp 7 cột: `/hop/tong-hop`, lọc theo tuần/tháng, mảng, đầu mối; nút "Xuất Excel" tải file CSV.
 - Link Jira: đặt biến môi trường `JIRA_BASE_URL` (địa chỉ máy chủ Jira nội bộ) trên Vercel. Hệ thống chỉ tạo link `…/browse/MÃ`, không gọi Jira. Không đặt thì mã Jira hiện dạng chữ.
+
+### Kéo thả tệp vào hồ sơ họp
+
+- Mỗi buổi họp có hai ô kéo thả: "A. Tài liệu trước họp" và "B. Biên bản và tài liệu sau họp". Thả tệp từ máy, bấm để chọn tệp, hoặc thả/dán link Google Drive.
+- Tệp lưu trong Supabase Storage, bucket riêng tư `meeting-files` (migration `20261112200001_tep_dinh_kem_hop.sql`), tối đa 25 MB mỗi tệp; nhận PDF, Word, Excel, PowerPoint, OpenDocument, ảnh, TXT/CSV, ZIP.
+- Trình duyệt tải thẳng lên Storage bằng link tải lên ký tạm thời (không đi qua máy chủ web, nên không vướng giới hạn dung lượng request của Vercel).
+- Mở tệp qua `/hop/tep?p=…`: máy chủ kiểm tra quyền xem buổi họp rồi chuyển tới link ký 5 phút. Ai xem được lịch thì xem được tệp; ai gắn được tài liệu cho lịch thì tải lên và gỡ được.
+- Có thể chọn "Gắn cho: <bên đang chờ>" để tệp điền vào dòng "chờ gửi" có sẵn.
+- Gói Supabase miễn phí có 1 GB lưu trữ; tài liệu nặng hoặc lưu lâu dài nên để trên Google Drive và gắn link.
