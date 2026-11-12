@@ -63,7 +63,7 @@ export function CreateGroupForm({ units = [] }: { units?: UnitOption[] }) {
       <form action={action} className="mt-3 space-y-3">
         <div className="grid gap-3 md:grid-cols-[2fr_1fr_3fr]">
           <div><label className="label" htmlFor="g-name">Tên nhóm</label><input id="g-name" name="name" required maxLength={200} className="input" placeholder="Ví dụ: Phòng Hành chính" /></div>
-          <div><label className="label" htmlFor="g-kind">Loại</label><KindSelect onChange={setKind} personal /></div>
+          <div><label className="label" htmlFor="g-kind">Loại</label><KindSelect value={kind} onChange={setKind} personal /></div>
           <div><label className="label" htmlFor="g-desc">Mô tả</label><input id="g-desc" name="description" maxLength={2000} className="input" /></div>
         </div>
         {kind === 'unit' && <div className="md:w-1/3"><CategorySelect id="g-cat" /></div>}
