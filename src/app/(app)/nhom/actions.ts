@@ -29,11 +29,12 @@ export async function createGroup(_prev: FormState, form: FormData): Promise<For
     redirect(`/nhom/${pid}`);
   }
   if (!KINDS.includes(kind)) return { error: 'Loại nhóm không hợp lệ.' };
-  const { data, error } = await supabase
+  // Tự tạo mã nhóm, không đọc lại dòng vừa thêm: quyền xem (RLS) tính danh sách nhóm một lần
+  // trước khi thêm nên chưa có nhóm mới, đọc lại sẽ bị báo "không có quyền".
+  const data = { id: crypto.randomUUID() };
+  const { error } = await supabase
     .from('groups')
-    .insert({ name, kind, unit_category: category(form, kind), description: String(form.get('description') || '').trim() || null })
-    .select('id')
-    .single();
+    .insert({ id: data.id, name, kind, unit_category: category(form, kind), description: String(form.get('description') || '').trim() || null });
   if (error) return { error: errText(error) };
   // Dự án liên đơn vị: gắn các đơn vị/tổ cùng làm ngay khi tạo.
   const units = form.getAll('unit_ids').map(String).filter(Boolean);
