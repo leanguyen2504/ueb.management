@@ -215,7 +215,7 @@ export function CalendarView(props: Props) {
         </aside>
 
         <div className="min-w-0 flex-1">
-          <div className="flex gap-2 overflow-x-auto border-b border-slate-200 px-4 py-2 lg:hidden dark:border-slate-800">
+          <div className="flex gap-2 overflow-x-auto overflow-y-hidden scrollbar-none border-b border-slate-200 px-4 py-2 lg:hidden dark:border-slate-800">
             {sources.map((s) => (
               <button key={s.key} type="button" onClick={() => toggle(s.key)}
                 className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${hidden.has(s.key) ? 'border-slate-300 muted dark:border-slate-700' : 'border-transparent text-white'}`}
