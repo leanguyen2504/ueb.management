@@ -136,6 +136,11 @@ export async function loadMeetings(supabase: SupabaseClient, userId: string, fro
   const keys = [...new Set(events.map((e) => e.event_key))];
   const chunks: string[][] = [];
   for (let i = 0; i < keys.length; i += 150) chunks.push(keys.slice(i, i + 150));
+  // Hồ sơ (meeting_items) và thông tin chung (meeting_records) được đọc cùng lúc.
+  const recPromise = Promise.all([
+    ...chunks.map((c) => supabase.from('meeting_records').select(RECORD_COLS).in('event_key', c).returns<(MeetingRecord & { meeting_title: string; meeting_starts_at: string })[]>()),
+    supabase.from('meeting_records').select(RECORD_COLS).gte('meeting_starts_at', fromIso).lt('meeting_starts_at', toIso).returns<(MeetingRecord & { meeting_title: string; meeting_starts_at: string })[]>(),
+  ]);
   const results = await Promise.all([
     ...chunks.map((c) => supabase.from('meeting_items').select(ITEM_COLS).in('event_key', c).order('created_at').returns<MeetingItem[]>()),
     supabase.from('meeting_items').select(ITEM_COLS).gte('meeting_starts_at', fromIso).lt('meeting_starts_at', toIso).order('created_at').returns<MeetingItem[]>(),
@@ -164,10 +169,7 @@ export async function loadMeetings(supabase: SupabaseClient, userId: string, fro
     }
   }
   // Thông tin chung của buổi họp.
-  const recResults = await Promise.all([
-    ...chunks.map((c) => supabase.from('meeting_records').select(RECORD_COLS).in('event_key', c).returns<(MeetingRecord & { meeting_title: string; meeting_starts_at: string })[]>()),
-    supabase.from('meeting_records').select(RECORD_COLS).gte('meeting_starts_at', fromIso).lt('meeting_starts_at', toIso).returns<(MeetingRecord & { meeting_title: string; meeting_starts_at: string })[]>(),
-  ]);
+  const recResults = await recPromise;
   for (const r of recResults) {
     for (const rec of r.data ?? []) {
       const m = byKey.get(keyOf(rec.source_id, rec.event_key))
