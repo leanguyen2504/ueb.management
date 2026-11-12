@@ -43,7 +43,7 @@ export default async function NotificationsPage() {
             ))}
           </ul>
         ) : (
-          <p className="p-4 text-sm muted">Chưa có thông báo nào. Bạn sẽ nhận thông báo khi được giao việc, có lịch mới trong nhóm hoặc có yêu cầu đặt lịch.</p>
+          <p className="p-4 text-sm muted">Chưa có thông báo nào. Bạn sẽ nhận thông báo khi được giao việc, có lịch mới trong nhóm, có yêu cầu đặt lịch hoặc có người xin tham gia nhóm bạn phụ trách.</p>
         )}
       </section>
     </>
