@@ -37,6 +37,7 @@ export type DeckInfo = {
   dienThoai: string;
   email: string;
   loiCamOn: string; // để trống thì không thêm trang cuối
+  kieu?: 'bai-giang' | 'hoi-thao';
 };
 
 // ---------- Phân tích dàn ý ----------
@@ -172,7 +173,7 @@ function titleSlide(d: DeckInfo): SlideOut {
   sh.push({ t: 'text', title: true, x, y, w, h: 1463040, paras: [{ runs: [{ text: title, b: true, color: UEB.green, sz: tsz }], line: 95 }] });
   y += 1508760;
   if (d.phuDe.trim()) sh.push({ t: 'text', x, y, w, h: 600000, paras: [{ runs: [{ text: d.phuDe.trim(), color: UEB.gray, sz: 16 }] }] });
-  const info = ([['Giảng viên:', d.giangVien], ['Điện thoại:', d.dienThoai], ['Email:', d.email]] as const).filter(([, v]) => v.trim());
+  const info = ([[d.kieu === 'hoi-thao' ? 'Báo cáo viên:' : 'Giảng viên:', d.giangVien], ['Điện thoại:', d.dienThoai], ['Email:', d.email]] as const).filter(([, v]) => v.trim());
   info.forEach(([k, v], n) => {
     const ry = 4300000 + n * 320000;
     sh.push({ t: 'text', x: 2000000, y: ry, w: 1500000, h: 300000, paras: [{ runs: [{ text: k, b: true, color: UEB.red, sz: 14 }] }] });
@@ -660,4 +661,64 @@ export const SAMPLE_OUTLINE = [
   SNIPPETS.find((x) => x.key === 'thoi-gian')!.text,
   SNIPPETS.find((x) => x.key === 'quy-trinh')!.text,
   SNIPPETS.find((x) => x.key === 'trich-dan')!.text,
+].join('\n\n') + '\n';
+
+// Template báo cáo hội thảo khoa học: đặt vấn đề, phương pháp, kết quả, kết luận.
+export const SAMPLE_CONFERENCE = [
+  '## Đặt vấn đề',
+  `# Câu hỏi nghiên cứu
+:: danh-sach-so
+BÀI VIẾT TRẢ LỜI BA CÂU HỎI
+- Thực trạng: chuyển đổi số của doanh nghiệp nhỏ và vừa đang ở đâu?
+- Tác động: chuyển đổi số ảnh hưởng thế nào tới năng suất?
+- Chính sách: cần hỗ trợ gì để lan tỏa?`,
+  `# Tổng quan nghiên cứu
+### Nghiên cứu quốc tế
+- Bằng chứng về tác động năng suất
+- Vai trò của kỹ năng số
+### Nghiên cứu tại Việt Nam
+- Chủ yếu là khảo sát mô tả
+- Thiếu dữ liệu bảng
+### Khoảng trống
+- Chưa ước lượng tác động nhân quả
+! Bài viết lấp khoảng trống bằng dữ liệu bảng 2019-2025.`,
+  '## Dữ liệu và phương pháp',
+  `# Khung phân tích
+:: quy-trinh
+- Dữ liệu: điều tra doanh nghiệp 2019-2025
+- Biến số: chỉ số chuyển đổi số, năng suất lao động
+- Mô hình *: hồi quy tác động cố định, biến công cụ
+- Kiểm định: độ vững, nhóm ngành`,
+  `# Mẫu nghiên cứu
+:: so-lieu
+- 3.214 | doanh nghiệp trong mẫu
+- 7 năm | dữ liệu bảng 2019-2025
+- 18 ngành * | chế biến, dịch vụ, thương mại`,
+  '## Kết quả',
+  `# Mức độ chuyển đổi số theo quy mô
+:: bieu-do-cot Điểm chỉ số (0-100). Nguồn: tính toán của tác giả
+- Siêu nhỏ: 28
+- Nhỏ: 41
+- Vừa: 57 *
+- Lớn: 72`,
+  `# Kết quả hồi quy chính
+| Biến | Hệ số | Sai số chuẩn | Ý nghĩa |
+| Chỉ số chuyển đổi số | 0,183 | 0,041 | *** |
+| Quy mô (log lao động) | 0,094 | 0,022 | *** |
+| Tuổi doanh nghiệp | -0,012 | 0,008 | |
+! Tăng 10 điểm chỉ số chuyển đổi số gắn với năng suất cao hơn khoảng 1,8%.`,
+  `# Rào cản lớn nhất
+:: bieu-do-ngang Tỷ lệ doanh nghiệp lựa chọn (%)
+- Thiếu nhân lực số: 62 *
+- Chi phí đầu tư: 55
+- Thiếu thông tin giải pháp: 38
+- An toàn dữ liệu: 27`,
+  '## Kết luận',
+  `# Kết luận và hàm ý chính sách
+### Kết luận
+- Chuyển đổi số có tác động dương, có ý nghĩa thống kê
+- Tác động lớn hơn ở doanh nghiệp vừa
+### Hàm ý chính sách
+- Hỗ trợ đào tạo kỹ năng số
+- Gói tín dụng cho đầu tư công nghệ`,
 ].join('\n\n') + '\n';

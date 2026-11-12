@@ -2,7 +2,7 @@
 
 // Template dự toán kinh phí: chọn mẫu, sửa từng khoản chi, xem tổng và số tiền bằng chữ, tải Excel có công thức.
 import { useEffect, useState } from 'react';
-import { PRESETS, XLSX_MIME, amount, buildBudgetXlsx, grandTotal, groupTotal, newBudget, numberToWords, vnd, type BudgetInput, type BudgetItem, type PresetKey } from '@/lib/xlsx/budget';
+import { PRESETS, XLSX_MIME, actualTotal, amount, buildBudgetXlsx, grandTotal, groupTotal, newBudget, numberToWords, vnd, type BudgetInput, type BudgetItem, type PresetKey } from '@/lib/xlsx/budget';
 import { download } from '../ReviewBox';
 
 const STORE = 'soan-thao:du-toan';
@@ -50,19 +50,21 @@ export function BudgetMaker() {
   function choose(k: PresetKey) {
     if (!confirm('Thay các khoản chi hiện tại bằng mẫu mới? Thông tin đơn vị và người ký được giữ lại.')) return;
     setPreset(k);
-    setB((cur) => newBudget(k, { chuQuan: cur.chuQuan, donVi: cur.donVi, boPhan: cur.boPhan, diaDanh: cur.diaDanh, soNguoi: cur.soNguoi, soNgay: cur.soNgay, signers: cur.signers, thoiGian: cur.thoiGian, diaDiem: cur.diaDiem }));
+    setB((cur) => newBudget(k, { loai: cur.loai, chuQuan: cur.chuQuan, donVi: cur.donVi, boPhan: cur.boPhan, diaDanh: cur.diaDanh, soNguoi: cur.soNguoi, soNgay: cur.soNgay, signers: cur.signers, thoiGian: cur.thoiGian, diaDiem: cur.diaDiem }));
   }
 
   async function make() {
     setBusy(true);
     try {
-      download(await buildBudgetXlsx(b), `Du_toan_${slug(b.tieuDe) || 'kinh_phi'}.xlsx`, XLSX_MIME);
+      download(await buildBudgetXlsx(b), `${b.loai === 'quyet-toan' ? 'Quyet_toan' : 'Du_toan'}_${slug(b.tieuDe) || 'kinh_phi'}.xlsx`, XLSX_MIME);
     } finally {
       setBusy(false);
     }
   }
 
   const total = grandTotal(b);
+  const qt = b.loai === 'quyet-toan';
+  const spent = actualTotal(b);
   const txt = (k: 'chuQuan' | 'donVi' | 'boPhan' | 'tieuDe' | 'thoiGian' | 'diaDiem' | 'diaDanh', label: string, ph = '', cls = '') => (
     <label className={cls}>
       <span className="label">{label}</span>
@@ -75,8 +77,14 @@ export function BudgetMaker() {
       <section className="card space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold">Thông tin dự toán</h2>
+            <h2 className="text-base font-semibold">{qt ? 'Thông tin quyết toán' : 'Thông tin dự toán'}</h2>
             <p className="mt-1 text-sm muted">Chọn mẫu theo loại việc; các mức chi mẫu chỉ để tham khảo, hãy đối chiếu Quy chế chi tiêu nội bộ hiện hành của Trường.</p>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+          <div role="radiogroup" aria-label="Loại" className="flex rounded-xl border border-slate-200 p-0.5 text-sm dark:border-slate-700">
+            {([['du-toan', 'Dự toán'], ['quyet-toan', 'Quyết toán']] as const).map(([k, l]) => (
+              <button key={k} type="button" role="radio" aria-checked={(b.loai ?? 'du-toan') === k} onClick={() => set('loai', k)} className={`rounded-lg px-3 py-1.5 ${(b.loai ?? 'du-toan') === k ? 'bg-brand-600 text-white' : ''}`}>{l}</button>
+            ))}
           </div>
           <label>
             <span className="label">Mẫu</span>
@@ -84,6 +92,7 @@ export function BudgetMaker() {
               {PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
             </select>
           </label>
+          </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {txt('tieuDe', 'Nội dung dự toán', 'Tổ chức Hội thảo khoa học "..."', 'sm:col-span-2')}
@@ -115,9 +124,9 @@ export function BudgetMaker() {
           <button type="button" className="btn-secondary px-3 py-1 text-xs" onClick={() => setGroups((g) => [...g, { ten: 'Nhóm chi mới', items: [blankItem()] }])}>Thêm nhóm chi</button>
         </div>
         <div className="-mx-4 overflow-x-auto md:-mx-5">
-          <table className="table min-w-[980px] text-sm">
+          <table className="table min-w-[1180px] text-sm">
             <thead>
-              <tr><th className="w-10">STT</th><th>Nội dung chi</th><th className="w-20">ĐVT</th><th className="w-20">Số lượng</th><th className="w-20">Số ngày/lần</th><th className="w-32">Đơn giá</th><th className="w-32 text-right">Thành tiền</th><th>Ghi chú</th><th className="w-8" /></tr>
+              <tr><th className="w-10">STT</th><th>Nội dung chi</th><th className="w-20">ĐVT</th><th className="w-20">Số lượng</th><th className="w-20">Số ngày/lần</th><th className="w-32">Đơn giá</th><th className="w-32 text-right">{qt ? 'Dự toán' : 'Thành tiền'}</th>{qt && <><th className="w-32">Thực chi</th><th className="w-28 text-right">Chênh lệch</th></>}<th>Ghi chú</th><th className="w-8" /></tr>
             </thead>
             <tbody>
               {b.groups.map((g, gi) => (
@@ -126,6 +135,7 @@ export function BudgetMaker() {
                     <td className="font-semibold">{ROMAN[gi] ?? gi + 1}</td>
                     <td colSpan={5}><input className="input px-2 py-1 font-semibold" aria-label="Tên nhóm chi" value={g.ten} onChange={(e) => setGroups((gs) => gs.map((x, k) => (k === gi ? { ...x, ten: e.target.value } : x)))} /></td>
                     <td className="text-right font-semibold tabular-nums">{vnd(groupTotal(g))}</td>
+                    {qt && <><td className="text-right font-semibold tabular-nums">{vnd(g.items.reduce((a, i) => a + (i.thucChi || 0), 0))}</td><td /></>}
                     <td><button type="button" className="link text-xs" onClick={() => setGroups((gs) => gs.map((x, k) => (k === gi ? { ...x, items: [...x.items, blankItem()] } : x)))}>+ Thêm khoản</button></td>
                     <td><button type="button" className="link text-xs" aria-label="Xóa nhóm" onClick={() => { if (confirm(`Xóa nhóm "${g.ten}"?`)) setGroups((gs) => gs.filter((_, k) => k !== gi)); }}>✕</button></td>
                   </tr>
@@ -138,6 +148,7 @@ export function BudgetMaker() {
                       <td><input type="number" min={0} className="input px-2 py-1 text-right" aria-label="Số ngày hoặc số lần" value={it.lan} onChange={(e) => setItem(gi, ii, { lan: Number(e.target.value) || 0 })} /></td>
                       <td><Money label="Đơn giá" value={it.donGia} onChange={(n) => setItem(gi, ii, { donGia: n })} /></td>
                       <td className="text-right tabular-nums">{vnd(amount(it))}</td>
+                      {qt && <><td><Money label="Thực chi" value={it.thucChi ?? 0} onChange={(n) => setItem(gi, ii, { thucChi: n })} /></td><td className="text-right tabular-nums">{vnd((it.thucChi ?? 0) - amount(it))}</td></>}
                       <td><input className="input px-2 py-1 text-xs" aria-label="Ghi chú" value={it.ghiChu} onChange={(e) => setItem(gi, ii, { ghiChu: e.target.value })} /></td>
                       <td><button type="button" className="link text-xs" aria-label="Xóa khoản" onClick={() => setGroups((gs) => gs.map((x, k) => (k === gi ? { ...x, items: x.items.filter((_, y) => y !== ii) } : x)))}>✕</button></td>
                     </tr>
@@ -147,12 +158,13 @@ export function BudgetMaker() {
               <tr className="font-semibold">
                 <td colSpan={6} className="text-center">TỔNG CỘNG</td>
                 <td className="text-right tabular-nums">{vnd(total)}</td>
+                {qt && <><td className="text-right tabular-nums">{vnd(spent)}</td><td className="text-right tabular-nums">{vnd(spent - total)}</td></>}
                 <td colSpan={2} />
               </tr>
             </tbody>
           </table>
         </div>
-        <p className="text-sm"><i>Bằng chữ: {numberToWords(total)}./.</i></p>
+        <p className="text-sm"><i>{qt ? 'Số tiền quyết toán bằng chữ' : 'Bằng chữ'}: {numberToWords(qt ? spent : total)}./.</i></p>
       </section>
 
       <section className="card space-y-3">
@@ -166,8 +178,8 @@ export function BudgetMaker() {
           ))}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
-          <span>Tổng: <b className="tabular-nums">{vnd(total)} đồng</b></span>
-          <button type="button" className="btn" disabled={busy} onClick={make}>Tải dự toán (.xlsx)</button>
+          <span>{qt ? 'Quyết toán' : 'Tổng'}: <b className="tabular-nums">{vnd(qt ? spent : total)} đồng</b></span>
+          <button type="button" className="btn" disabled={busy} onClick={make}>{qt ? 'Tải quyết toán (.xlsx)' : 'Tải dự toán (.xlsx)'}</button>
         </div>
         <p className="text-xs muted">File Excel có sẵn công thức Thành tiền = Số lượng x Số ngày x Đơn giá, cộng nhóm và tổng; sửa số trong Excel thì tổng tự tính lại. Dòng &quot;Bằng chữ&quot; cần sửa tay nếu đổi số trong Excel.</p>
       </section>
