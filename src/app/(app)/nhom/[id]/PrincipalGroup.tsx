@@ -4,22 +4,19 @@ import type { DirGroup } from './PublicGroup';
 
 type Contact = { user_id: string; full_name: string; email: string; position: string | null; phone: string | null; office: string | null; role: string };
 
-// Trang nhóm với Hiệu trưởng (khi không là thành viên): thông tin chung, sự kiện và dự án liên quan,
+// Trang nhóm với Hiệu trưởng (khi không là thành viên): thông tin chung, sự kiện và dự án đang diễn ra
+// hoặc đang chuẩn bị (mọi cấp con chưa lưu trữ),
 // lãnh đạo và đầu mối liên hệ. Không hiện tiến độ, đầu việc, tài liệu, lịch, thành viên hay nhật ký.
-export function PrincipalGroup({ group, parent, memberCount, contacts, units, related }: {
-  group: Group; parent: { id: string; name: string } | null; memberCount: number; contacts: Contact[]; units: DirGroup[]; related: DirGroup[];
+export function PrincipalGroup({ group, parent, memberCount, contacts, units, tree, linked }: {
+  group: Group; parent: { id: string; name: string } | null; memberCount: number; contacts: Contact[]; units: DirGroup[];
+  tree: (DirGroup & { depth: number })[]; linked: DirGroup[];
 }) {
-  const events = related.filter((g) => g.kind === 'event');
-  const others = related.filter((g) => g.kind !== 'event');
-  const List = ({ items }: { items: DirGroup[] }) => (
-    <ul className="divide-y divide-slate-200 dark:divide-slate-800">
-      {items.map((g) => (
-        <li key={g.id} className="py-2.5">
-          <Link href={`/nhom/${g.id}`} className="font-medium hover:text-brand-600 dark:hover:text-brand-300">{g.name}</Link>
-          <div className="text-xs muted">{groupTypeLabel(g)}{g.description ? ` · ${g.description}` : ''}</div>
-        </li>
-      ))}
-    </ul>
+  const Item = ({ g, depth = 0 }: { g: DirGroup; depth?: number }) => (
+    <li className="py-2.5" style={{ paddingLeft: `${depth * 1.25}rem` }}>
+      <Link href={`/nhom/${g.id}`} className="font-medium hover:text-brand-600 dark:hover:text-brand-300">{g.name}</Link>
+      <span className="chip ml-2 align-middle text-[11px]">{groupTypeLabel(g)}</span>
+      {g.description && <div className="text-xs muted">{g.description}</div>}
+    </li>
   );
 
   return (
@@ -43,13 +40,20 @@ export function PrincipalGroup({ group, parent, memberCount, contacts, units, re
       <div className="grid items-start gap-5 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-5">
           <section className="card" aria-labelledby="sk-h">
-            <h2 id="sk-h" className="mb-1 text-lg font-semibold">Sự kiện đang diễn ra <span className="chip ml-1 align-middle">{events.length}</span></h2>
-            {events.length ? <List items={events} /> : <p className="text-sm muted">Chưa có sự kiện nào.</p>}
+            <h2 id="sk-h" className="mb-1 text-lg font-semibold">Sự kiện và dự án đang diễn ra, đang chuẩn bị <span className="chip ml-1 align-middle">{tree.length}</span></h2>
+            <p className="mb-2 text-sm muted">Gồm mọi cấp bên trong {group.name}. Mục đã lưu trữ không hiện ở đây.</p>
+            {tree.length ? (
+              <ul className="divide-y divide-slate-200 dark:divide-slate-800">
+                {tree.map((g) => <Item key={g.id} g={g} depth={g.depth} />)}
+              </ul>
+            ) : <p className="text-sm muted">Chưa có sự kiện hay dự án nào.</p>}
           </section>
-          {others.length > 0 && (
+          {linked.length > 0 && (
             <section className="card" aria-labelledby="da-h">
-              <h2 id="da-h" className="mb-1 text-lg font-semibold">Dự án và nhóm liên quan <span className="chip ml-1 align-middle">{others.length}</span></h2>
-              <List items={others} />
+              <h2 id="da-h" className="mb-1 text-lg font-semibold">Dự án liên đơn vị <span className="chip ml-1 align-middle">{linked.length}</span></h2>
+              <ul className="divide-y divide-slate-200 dark:divide-slate-800">
+                {linked.map((g) => <Item key={g.id} g={g} />)}
+              </ul>
             </section>
           )}
         </div>
