@@ -41,7 +41,7 @@ export default async function PersonalCalendarPage({ searchParams }: { searchPar
   const fromIso = new Date(dayStart(from)).toISOString();
   const toIso = new Date(dayStart(to)).toISOString();
 
-  const { supabase, userId } = await requireSession();
+  const { supabase, userId, ctx } = await requireSession();
   const [data, colleagues, { data: incoming }, { data: given }] = await Promise.all([
     loadPersonal(supabase, userId, fromIso, toIso),
     loadColleagues(supabase, userId),
@@ -103,7 +103,7 @@ export default async function PersonalCalendarPage({ searchParams }: { searchPar
 
   return (
     <>
-      <LichTabs current="ca-nhan" pendingAssigned={pending.length} />
+      <LichTabs current="ca-nhan" isPrincipal={ctx.role === 'principal'} pendingAssigned={pending.length} />
       <CalendarView
         view={view}
         anchor={anchor}

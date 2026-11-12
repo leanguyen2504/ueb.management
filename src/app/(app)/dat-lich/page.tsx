@@ -31,7 +31,7 @@ async function origin() {
 
 export default async function BookingOwnerPage({ searchParams }: { searchParams: Promise<{ loi?: string }> }) {
   const { loi } = await searchParams;
-  const { supabase, userId, profile } = await requireSession();
+  const { supabase, userId, profile, ctx } = await requireSession();
   const nowIso = new Date().toISOString();
   const [{ data: page }, { data: toMe }, { data: fromMe }, { data: others }] = await Promise.all([
     supabase.from('booking_pages').select('*').eq('user_id', userId).maybeSingle<BookingPage>(),
@@ -55,7 +55,7 @@ export default async function BookingOwnerPage({ searchParams }: { searchParams:
 
   return (
     <>
-      <LichTabs current="dat" pendingBookings={pending.length} />
+      <LichTabs current="dat" isPrincipal={ctx.role === 'principal'} pendingBookings={pending.length} />
       <PageHead
         title="Trang đặt lịch"
         sub="Gửi link để người khác chọn giờ trống và đặt lịch họp với bạn. Cuộc họp chỉ vào Lịch của tôi khi bạn xác nhận."

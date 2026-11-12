@@ -37,7 +37,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
   // Ngày đang điểm danh: hôm nay, hoặc ngày được chọn trong 31 ngày gần đây.
   const pick = /^\d{4}-\d{2}-\d{2}$/.test(sp.ngay ?? '') && sp.ngay! <= addDays(today, 7) && sp.ngay! >= addDays(today, -31) ? sp.ngay! : today;
 
-  const { supabase, userId } = await requireSession();
+  const { supabase, userId, ctx } = await requireSession();
   const [data, { data: punches }, { data: punchSync }] = await Promise.all([
     loadPersonal(supabase, userId, dayStartIso(from), dayStartIso(to), { worklogs: true }),
     supabase.from('attendance_punches').select('*').gte('day', from).lt('day', to).order('day').returns<PunchRow[]>(),
@@ -77,7 +77,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
 
   return (
     <>
-      <LichTabs current="cham-cong" />
+      <LichTabs current="cham-cong" isPrincipal={ctx.role === 'principal'} />
       <AutoRefresh seconds={60} />
       <PageHead
         eyebrow="Cá nhân"
