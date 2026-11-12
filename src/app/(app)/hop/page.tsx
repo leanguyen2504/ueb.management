@@ -4,12 +4,13 @@ import { requireSession } from '@/lib/session';
 import { HopTabs, PageHead } from '@/components/PageHead';
 import { addDays, dayStartIso, fmtDate, fmtDateTime, fmtTime, vnDay, weekdayShort } from '@/lib/format';
 import { isGoogleCalendarEnabled } from '@/lib/google-calendar';
-import { areaOfItem, areasOf, isMyMeeting, loadAreas, loadMeetings, meetingProgress, type Meeting, type MeetingItem, type WorkArea } from '@/lib/meetings';
-import { DOC_TYPES, STATUS_LABEL, autoStatus, deadlines, jiraKeyIn, jiraUrl, type Deadline } from '@/lib/meeting-rules';
+import { areaOfItem, areasOf, isMyMeeting, loadAreas, loadMeetings, meetingJiraHref, meetingProgress, type Meeting, type MeetingItem, type WorkArea } from '@/lib/meetings';
+import { DOC_TYPES, STATUS_LABEL, autoStatus, deadlines, isSourceNote, type Deadline } from '@/lib/meeting-rules';
 import { meetingAnchor } from '@/lib/meeting-anchor';
 import { loadPeople } from '@/lib/people';
 import { serverEnv } from '@/lib/env';
 import { DropBox } from './DropBox';
+import { JiraBox } from './JiraBox';
 import { AddItemForm, EditItemForm, RecordForm, type PersonOption } from './MeetingForms';
 import { deleteMeetingItem } from './actions';
 import { OpenFromHash } from '@/components/OpenFromHash';
@@ -194,7 +195,7 @@ function ItemRow({ it, v }: { it: MeetingItem; v: View }) {
     it.doc_type ? DOC_TYPES[it.doc_type] : null,
     it.assignee_id ? `Đôn đốc: ${it.assignee_id === v.userId ? 'tôi' : v.name(it.assignee_id)}` : null,
     it.url && it.updated_by ? `Cập nhật: ${it.updated_by === v.userId ? 'tôi' : v.name(it.updated_by)}, ${fmtDateTime(it.updated_at)}` : null,
-    it.note,
+    isSourceNote(it.note) ? null : it.note,
   ].filter(Boolean);
   return (
     <li className="py-2">
@@ -250,7 +251,7 @@ function MeetingCard({ m, v }: { m: Meeting; v: View }) {
   const pre = m.items.filter((i) => i.kind === 'pre');
   const minutes = m.items.filter((i) => i.kind === 'minutes');
   const row = (it: MeetingItem) => <ItemRow key={it.id} it={it} v={v} />;
-  const jUrl = m.jira_key ? jiraUrl(v.jiraBase, m.jira_key) : null;
+  const jUrl = meetingJiraHref(m, v.jiraBase);
   const ref = { source_id: m.source_id, event_key: m.event_key, title: m.title, starts_at: m.starts_at };
   const p = meetingProgress(m);
   const dls = deadlines(m.items, m.starts_at, m.ends_at, m.status);
@@ -265,12 +266,10 @@ function MeetingCard({ m, v }: { m: Meeting; v: View }) {
         </div>
         <div className="min-w-0">
           <h3 className="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-[15px] font-semibold">
-            {m.jira_key && (jUrl
-              ? <a href={jUrl} target="_blank" rel="noopener noreferrer" className="rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-xs font-medium text-brand-700 hover:underline dark:bg-brand-900 dark:text-brand-100">{m.jira_key}</a>
-              : <span className="rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-xs font-medium text-brand-700 dark:bg-brand-900 dark:text-brand-100">{m.jira_key}</span>)}
             <span>{m.title}</span>
           </h3>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs muted">
+            <JiraBox meeting={ref} jiraKey={m.jira_key} href={jUrl} canEdit={v.canFile} />
             <span className={`chip ${m.status === 'hoan_tat' ? DL_CLASS.done : ''}`}>{STATUS_LABEL[m.status]}</span>
             {worst && worst.state !== 'done' && worst.state !== 'ok' && (
               <span className={`chip ${DL_CLASS[worst.state]}`}>{worst.label}: {worst.state === 'late' ? 'quá hạn' : `hạn ${fmtDateTime(worst.due)}`}</span>
@@ -339,9 +338,9 @@ function MeetingCard({ m, v }: { m: Meeting; v: View }) {
               <div className="mt-3"><AddItemForm meeting={ref} people={v.people} partiesListId="ds-ben" uid={anchor} /></div>
             </details>
             <details>
-              <summary className="cursor-pointer text-sm font-medium text-brand-600 dark:text-brand-300">Mã Jira, thư mục Drive, tình trạng xử lý</summary>
+              <summary className="cursor-pointer text-sm font-medium text-brand-600 dark:text-brand-300">Thư mục Drive, tình trạng xử lý</summary>
               <div className="mt-3">
-                <RecordForm meeting={ref} values={m.record} autoJira={jiraKeyIn(m.title, m.description)} autoStatusLabel={STATUS_LABEL[autoStatus(m.items, m.ends_at)]} uid={`${anchor}-r`} />
+                <RecordForm meeting={ref} values={m.record} autoStatusLabel={STATUS_LABEL[autoStatus(m.items, m.ends_at)]} uid={`${anchor}-r`} />
               </div>
             </details>
           </div>

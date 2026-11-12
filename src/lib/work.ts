@@ -303,8 +303,75 @@ export async function deleteTaskLink(form: FormData) {
   const groupId = uuidOrNull(text(form, 'group_id'));
   if (!id) return;
   const supabase = await createClient();
-  await supabase.from('task_links').delete().eq('id', id);
+  const { data: old } = await supabase.from('task_links').select('file_path').eq('id', id).maybeSingle();
+  const { count } = await supabase.from('task_links').delete({ count: 'exact' }).eq('id', id);
+  if (count && old?.file_path) await supabase.storage.from(TASK_BUCKET).remove([old.file_path]);
   refresh(groupId ?? undefined);
+}
+
+// Ô kéo thả sản phẩm: trình duyệt xin link tải lên (RLS của Storage kiểm tra quyền gắn
+// sản phẩm của việc), tự tải thẳng lên Supabase Storage, rồi báo máy chủ gắn vào việc.
+const TASK_BUCKET = 'task-files';
+const TASK_MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+function safeFileName(name: string) {
+  const base = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D')
+    .replace(/[^A-Za-z0-9._-]+/g, '_').replace(/_+/g, '_').replace(/^[._]+/, '');
+  return (base || 'tep').slice(-120);
+}
+
+export async function prepareTaskUpload(input: { task_id: string; files: { name: string; size: number }[] }):
+  Promise<{ error: string } | { uploads: { path: string; token: string }[] }> {
+  if (!uuidOrNull(input.task_id)) return { error: 'Thiếu thông tin đầu việc.' };
+  if (!input.files.length || input.files.length > 20) return { error: 'Mỗi lần tải tối đa 20 tệp.' };
+  const big = input.files.find((f) => f.size > TASK_MAX_FILE_BYTES);
+  if (big) return { error: `Tệp "${big.name}" quá lớn (tối đa 25 MB). Tệp lớn hơn hãy để trên Google Drive và dán link.` };
+  const supabase = await createClient();
+  const uploads: { path: string; token: string }[] = [];
+  for (const f of input.files) {
+    const path = `${input.task_id}/${crypto.randomUUID()}/${safeFileName(f.name)}`;
+    const { data, error } = await supabase.storage.from(TASK_BUCKET).createSignedUploadUrl(path);
+    if (error || !data) {
+      if (/bucket not found/i.test(error?.message ?? '')) return { error: 'Chưa bật chỗ lưu tệp sản phẩm: quản trị cần chạy SQL 20261112600002_san_pham_keo_tha.sql.' };
+      return { error: error?.message?.includes('row-level security') ? 'Bạn không có quyền gắn sản phẩm cho việc này.' : `Không chuẩn bị được chỗ lưu tệp: ${error?.message ?? ''}` };
+    }
+    uploads.push({ path, token: data.token });
+  }
+  return { uploads };
+}
+
+export type TaskDropInput = {
+  task_id: string;
+  group_id: string;
+  files: { path: string; name: string; size: number }[];
+  links: string[];
+  // Nội dung gõ thẳng (không phải link).
+  body: string;
+};
+
+export async function attachTaskDrop(input: TaskDropInput): Promise<FormState> {
+  const task_id = uuidOrNull(input.task_id);
+  if (!task_id) return { error: 'Thiếu thông tin đầu việc.' };
+  const files = input.files.filter((f) => f.path.startsWith(`${task_id}/`) && !f.path.includes('..') && f.path.length <= 400);
+  const links = [...new Set(input.links.map((l) => l.trim()).filter((l) => /^https:\/\/(drive|docs)\.google\.com\/\S*$/.test(l) && l.length <= 1000))].slice(0, 20);
+  const body = input.body.trim().slice(0, 5000);
+  if (!files.length && !links.length && !body) return { error: 'Không có tệp, link hay nội dung nào để gắn.' };
+  const stem = (n: string) => n.replace(/\.[A-Za-z0-9]{1,6}$/, '').slice(0, 200);
+  const rows = [
+    ...files.map((f) => ({ task_id, label: stem(f.name) || null, file_path: f.path, file_name: f.name.slice(0, 255), file_size: Math.max(0, Math.round(f.size)) })),
+    ...links.map((url) => ({ task_id, url })),
+    ...(body ? [{ task_id, body }] : []),
+  ];
+  const supabase = await createClient();
+  const { error } = await supabase.from('task_links').insert(rows);
+  if (error) {
+    if (files.length) await supabase.storage.from(TASK_BUCKET).remove(files.map((f) => f.path));
+    if (/body|file_path|null value in column "url"|task_links_url_check/.test(error.message ?? '') && (files.length || body))
+      return { error: 'Chưa bật gắn tệp/nội dung: quản trị cần chạy SQL 20261112600002_san_pham_keo_tha.sql. Tạm thời dán link Google Drive.' };
+    return { error: errText(error) };
+  }
+  refresh(uuidOrNull(input.group_id) ?? undefined);
+  return { ok: `Đã gắn ${rows.length} sản phẩm.` };
 }
 
 // ---- Không gian cá nhân ----

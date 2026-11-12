@@ -205,8 +205,13 @@ export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
 export type TaskLink = {
   id: string;
   task_id: string;
-  url: string;
+  url: string | null;
   label: string | null;
+  // Nội dung gõ thẳng và tệp tải lên (có sau SQL 20261112600002).
+  body?: string | null;
+  file_path?: string | null;
+  file_name?: string | null;
+  file_size?: number | null;
   created_at: string;
   created_by: string | null;
 };

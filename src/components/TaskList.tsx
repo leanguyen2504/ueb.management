@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { addTaskLink, deleteTask, deleteTaskLink, nudgeTask, setTaskStatus } from '@/lib/work';
+import { TaskDropBox } from '@/components/TaskDropBox';
+import { deleteTask, deleteTaskLink, nudgeTask, setTaskStatus } from '@/lib/work';
 import { fmtDate, vnDay } from '@/lib/format';
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, type Task, type TaskLink } from '@/lib/types';
 
@@ -9,6 +10,21 @@ const PRIORITY_CLASS: Record<Task['priority'], string> = {
   high: 'border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300',
   urgent: 'border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300',
 };
+
+// Mô tả nhập từ kế hoạch thường có "Người phụ trách: … · Phối hợp: …": tách ra để hiện
+// thành "Bên phụ trách", "Bên phối hợp" cạnh hạn, phần còn lại giữ làm mô tả.
+function splitRoles(description: string | null) {
+  let lead = '';
+  let support = '';
+  const rest: string[] = [];
+  for (const seg of (description ?? '').split(/\s+·\s+|\n+/)) {
+    const m = seg.match(/^\s*(người phụ trách|bên phụ trách|phụ trách|phối hợp|bên phối hợp)\s*:\s*(.+?)\.?\s*$/iu);
+    if (m && /phụ trách/i.test(m[1]) && !lead) lead = m[2];
+    else if (m && /phối hợp/i.test(m[1]) && !support) support = m[2];
+    else if (seg.trim()) rest.push(seg.trim());
+  }
+  return { lead, support, rest: rest.join(' · ') };
+}
 
 // Danh sách việc; nút đổi trạng thái chỉ là giao diện, cơ sở dữ liệu kiểm tra quyền.
 export function TaskList({
@@ -43,13 +59,15 @@ export function TaskList({
     <ul className="divide-y divide-slate-100 dark:divide-slate-800">
       {tasks.map((t) => {
         const overdue = t.due_date && t.status !== 'done' && t.due_date < today;
+        const roles = splitRoles(t.description);
         return (
           <li key={`${t.id}:${t.status}:${t.progress}`} className="flex flex-wrap items-start gap-3 py-2.5">
             <div className="min-w-0 flex-1">
               <div className={`font-medium ${t.status === 'done' ? 'line-through muted' : ''}`}>{t.title}</div>
               <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 text-xs muted">
                 {groupName && <Link href={`/nhom/${t.group_id}`} className="hover:underline">{groupName(t.group_id)}</Link>}
-                {t.assignee_id ? <span>Người làm: {name(t.assignee_id)}</span> : <span>Chưa giao</span>}
+                {(roles.lead || t.assignee_id) && <span>Bên phụ trách: {roles.lead || name(t.assignee_id)}</span>}
+                {roles.support && <span>Bên phối hợp: {roles.support}</span>}
                 {t.start_date && <span>Bắt đầu {fmtDate(t.start_date)}</span>}
                 {t.due_date && <span className={overdue ? 'font-semibold text-orange-600 dark:text-orange-400' : ''}>Hạn {fmtDate(t.due_date)}{overdue ? ' (quá hạn)' : ''}</span>}
                 {t.priority !== 'normal' && <span className={`chip ${PRIORITY_CLASS[t.priority]}`}>{TASK_PRIORITY_LABEL[t.priority]}</span>}
@@ -60,7 +78,7 @@ export function TaskList({
                   <span className="tabular-nums">{t.progress}%</span>
                 </div>
               )}
-              {t.description && <p className="mt-1 text-sm">{t.description}</p>}
+              {roles.rest && <p className="mt-1 text-sm">{roles.rest}</p>}
               {links && <TaskLinks task={t} links={links.get(t.id) ?? []} canAttach={canAttach || t.assignee_id === me} me={me} />}
             </div>
             {canNudge && t.assignee_id && t.status !== 'done' && t.assignee_id !== me && (
@@ -95,37 +113,40 @@ export function TaskList({
 
 function TaskLinks({ task, links, canAttach, me }: { task: Task; links: TaskLink[]; canAttach: boolean; me?: string }) {
   if (!links.length && !canAttach) return null;
+  const notes = links.filter((l) => l.body && !l.url && !l.file_path);
+  const files = links.filter((l) => !notes.includes(l));
   return (
     <div className="mt-1.5 text-sm">
-      {links.length > 0 && (
+      {files.length > 0 && (
         <ul className="flex flex-wrap gap-1.5">
-          {links.map((l) => (
+          {files.map((l) => (
             <li key={l.id} className="chip flex items-center gap-1">
-              <a href={l.url} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline dark:text-brand-100">📎 {l.label || 'Sản phẩm'}</a>
-              {(l.created_by === me || canAttach) && (
-                <form action={deleteTaskLink}>
-                  <input type="hidden" name="id" value={l.id} />
-                  <input type="hidden" name="group_id" value={task.group_id} />
-                  <button className="text-xs text-orange-600 dark:text-orange-400" aria-label="Gỡ sản phẩm">×</button>
-                </form>
-              )}
+              <a href={l.url ?? `/viec/tep?p=${encodeURIComponent(l.file_path ?? '')}`} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline dark:text-brand-100">📎 {l.label || l.file_name || 'Sản phẩm'}</a>
+              {l.file_path && <a href={`/viec/tep?p=${encodeURIComponent(l.file_path)}&tai=1`} className="text-xs muted hover:underline" title="Tải về">{l.file_size != null ? mb(l.file_size) : ''} ⤓</a>}
+              {(l.created_by === me || canAttach) && <RemoveLink id={l.id} groupId={task.group_id} />}
             </li>
           ))}
         </ul>
       )}
-      {canAttach && (
-        <details className="mt-1">
-          <summary className="cursor-pointer text-xs text-brand-600 dark:text-brand-100">+ Gắn sản phẩm (link Drive)</summary>
-          <form action={addTaskLink} className="mt-1 flex flex-wrap gap-2">
-            <input type="hidden" name="task_id" value={task.id} />
-            <input type="hidden" name="group_id" value={task.group_id} />
-            <input name="url" type="url" required placeholder="https://drive.google.com/…" pattern="https://(drive|docs)\.google\.com/.*" className="input max-w-sm flex-1 py-1 text-xs" aria-label="Link Google Drive" />
-            <input name="label" maxLength={200} placeholder="Tên (tùy chọn)" className="input w-40 py-1 text-xs" aria-label="Tên sản phẩm" />
-            <button className="btn-secondary px-2 py-1 text-xs">Gắn</button>
-          </form>
-          <p className="mt-1 text-xs muted">Chỉ lưu đường link; quyền xem file vẫn do chia sẻ trên Google Drive quyết định.</p>
-        </details>
-      )}
+      {notes.map((l) => (
+        <div key={l.id} className="mt-1 flex items-start gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 dark:bg-slate-800/60">
+          <p className="flex-1 whitespace-pre-line">📝 {l.body}</p>
+          {(l.created_by === me || canAttach) && <RemoveLink id={l.id} groupId={task.group_id} />}
+        </div>
+      ))}
+      {canAttach && <TaskDropBox taskId={task.id} groupId={task.group_id} />}
     </div>
+  );
+}
+
+const mb = (n: number) => `${(n / 1024 / 1024).toFixed(n < 1024 * 1024 ? 2 : 1)} MB`;
+
+function RemoveLink({ id, groupId }: { id: string; groupId: string }) {
+  return (
+    <form action={deleteTaskLink}>
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="group_id" value={groupId} />
+      <button className="text-xs text-orange-600 dark:text-orange-400" aria-label="Gỡ sản phẩm">×</button>
+    </form>
   );
 }
