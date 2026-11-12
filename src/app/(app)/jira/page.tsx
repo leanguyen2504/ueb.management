@@ -5,40 +5,42 @@ import { PageHead, SectionTabs } from '@/components/PageHead';
 import { features, publicEnv, serverEnv } from '@/lib/env';
 import { fmtDate, fmtDateTime, vnDay } from '@/lib/format';
 import {
-  ROLE_FILTERS, blockedBy, blocking, daysBetween, dueState, fmtDuration, fmtHours, groupWorklogs, hours, inProgressNoLog,
-  byProductType, numberOf, pickConvertedField, productLabel, roleChips, submittedByMonth, todoList, waitingOnMe, waitingOnOthers,
-  type RoleFilter, type Worklog,
+  blockedBy, blocking, byProductType, daysBetween, dueState, fmtHours, groupWorklogs, hours, inProgressNoLog,
+  pickConvertedField, submittedByMonth, todoList, waitingOnMe, waitingOnOthers, periodLabel, weekStart, type Worklog,
 } from '@/lib/jira/report';
 import type { JiraAccount, JiraIssueRow, JiraMentionRow } from '@/lib/jira/types';
+import { DataTable } from '@/components/table/DataTable';
 import { BookmarkletSetup, TokenForm } from './JiraConnect';
 import { disconnectJira } from './actions';
+import { ISSUE_COLUMNS, PRODUCT_COLUMNS, WORKLOG_COLUMNS, issueRow, productRow, worklogRow, type RowCtx } from './rows';
+import { ReportTab } from './ReportTab';
 
 export const metadata: Metadata = { title: 'Jira của tôi' };
 
-const TABS = ['can-lam', 'cho-toi', 'cho-nguoi-khac', 'da-lam', 'worklog', 'tat-ca'] as const;
+const TABS = ['can-lam', 'cho-toi', 'cho-nguoi-khac', 'da-lam', 'worklog', 'tat-ca', 'bao-cao', 'ket-noi'] as const;
 type Tab = (typeof TABS)[number];
-type Search = Promise<{ muc?: string; xem?: string; vai?: string }>;
+export type JiraSearch = { muc?: string; xem?: string; kieu?: string; ai?: string; nhom?: string; tu?: string; den?: string; loi?: string; ok?: string; nguoi?: string | string[] };
 
-export default async function JiraPage({ searchParams }: { searchParams: Search }) {
+export default async function JiraPage({ searchParams }: { searchParams: Promise<JiraSearch> }) {
   const sp = await searchParams;
-  const tab: Tab = TABS.includes(sp.muc as Tab) ? (sp.muc as Tab) : 'can-lam';
-  const by = sp.xem === 'thang' ? 'thang' : 'tuan';
-  const role: RoleFilter = sp.vai && sp.vai in ROLE_FILTERS ? (sp.vai as RoleFilter) : 'tat-ca';
-  const { supabase } = await requireSession();
+  const { supabase, userId } = await requireSession();
   // RLS: mỗi người chỉ đọc được dữ liệu Jira của chính mình.
   const [{ data: acc }, { data: issueRows }, { data: wlRows }, { data: mentionRows }] = await Promise.all([
-    supabase.from('jira_accounts').select('*').maybeSingle<JiraAccount>(),
+    supabase.from('jira_accounts').select('*').maybeSingle<JiraAccount & { share_scope?: 'none' | 'leads' | 'members' }>(),
     supabase.from('jira_issues').select('*').order('updated_at_jira', { ascending: false, nullsFirst: false }).limit(3000),
     supabase.from('jira_worklogs').select('worklog_id, issue_key, started_at, seconds, comment').order('started_at', { ascending: false }).limit(20000),
     supabase.from('jira_mentions').select('*').order('created_at', { ascending: false }).limit(200),
   ]);
+  const synced = Boolean(acc?.last_synced_at);
+  const fallback: Tab = synced ? 'can-lam' : 'ket-noi';
+  const tab: Tab = TABS.includes(sp.muc as Tab) ? (sp.muc as Tab) : fallback;
+  const by = sp.xem === 'thang' ? 'thang' : 'tuan';
   const issues = (issueRows ?? []) as JiraIssueRow[];
   const worklogs = (wlRows ?? []) as Worklog[];
   const mentions = (mentionRows ?? []) as JiraMentionRow[];
   const jiraUrl = serverEnv.jiraBaseUrl();
   const browse = (key: string) => (jiraUrl ? `${jiraUrl}/browse/${encodeURIComponent(key)}` : null);
   const byKey = new Map(issues.map((i) => [i.issue_key, i]));
-  const synced = Boolean(acc?.last_synced_at);
   const today = vnDay();
 
   const field = pickConvertedField(acc?.custom_field_names ?? [], process.env.JIRA_CONVERTED_HOURS_FIELD);
@@ -47,205 +49,292 @@ export default async function JiraPage({ searchParams }: { searchParams: Search 
   const noLog = inProgressNoLog(issues, worklogs);
   const onMe = waitingOnMe(issues, mentions);
   const onOthers = waitingOnOthers(issues);
-  const overdue = todo.filter((i) => dueState(i, today) === 'overdue').length;
+  const overdue = todo.filter((i) => dueState(i, today) === 'overdue');
+  const soon = todo.filter((i) => dueState(i, today) === 'soon');
+  const weeks = groupWorklogs(worklogs, 'tuan', 12);
   const thisMonth = today.slice(0, 7);
   const totals = {
-    weekSec: groupWorklogs(worklogs, 'tuan', 1)[0].seconds,
+    weekSec: weeks[0].seconds,
+    lastWeekSec: weeks[1].seconds,
     monthSec: groupWorklogs(worklogs, 'thang', 1)[0].seconds,
     submittedMonth: submitted.find((s) => s.key === thisMonth)?.count ?? 0,
+    convertedMonth: submitted.find((s) => s.key === thisMonth)?.converted ?? 0,
     convertedYear: submitted.filter((s) => s.key.startsWith(thisMonth.slice(0, 4))).reduce((a, s) => a + s.converted, 0),
   };
-  const q = (o: { muc?: string; xem?: string; vai?: string }) =>
-    `/jira?${new URLSearchParams({ muc: o.muc ?? tab, xem: o.xem ?? by, vai: o.vai ?? role }).toString()}`;
-  const ctx = { browse, today, byKey };
+  const waitingMe = onMe.mentions.length + onMe.blockingOthers.length;
+  const waitingOthers = onOthers.delegated.length + onOthers.blocked.length;
+  const q = (o: Partial<Record<'muc' | 'xem' | 'kieu', string>>) => {
+    const p = new URLSearchParams({ muc: o.muc ?? tab });
+    if ((o.xem ?? by) !== 'tuan') p.set('xem', o.xem ?? by);
+    if (o.kieu ?? sp.kieu) p.set('kieu', (o.kieu ?? sp.kieu)!);
+    return `/jira?${p.toString()}`;
+  };
+  const ctx: RowCtx = { browse, today, byKey, field };
+  const staleDays = acc?.last_synced_at ? daysBetween(vnDay(acc.last_synced_at), today) : 0;
 
   return (
     <>
       <PageHead
         eyebrow="Cá nhân"
         title="Jira của tôi"
-        sub="Chỉ dữ liệu Jira của chính bạn. Chỉ bạn xem được trang này, kể cả quản trị cũng không xem được."
-        actions={synced ? <a href="#ket-noi" className="btn-secondary">Cập nhật dữ liệu</a> : undefined}
+        sub={synced ? (
+          <>
+            <b>{acc!.jira_display_name || acc!.jira_username}</b> ({acc!.jira_username}) · cập nhật {fmtDateTime(acc!.last_synced_at)}
+            {acc!.last_source === 'server' ? ' (tự động)' : ' (nút trên Jira)'} · Chỉ bạn xem được{acc?.share_scope && acc.share_scope !== 'none' ? ', trừ phần bạn đã chia sẻ' : ''}.
+          </>
+        ) : 'Kết nối Jira để xem việc cần làm, worklog, sản phẩm đã nộp và xuất báo cáo Excel. Chỉ bạn xem được dữ liệu của mình.'}
+        actions={synced ? (
+          <>
+            <Link href={q({ muc: 'bao-cao' })} className="btn-secondary">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" /></svg>
+              Xuất Excel
+            </Link>
+            <Link href={q({ muc: 'ket-noi' })} className="btn-secondary">Cập nhật dữ liệu</Link>
+          </>
+        ) : undefined}
       />
 
+      {synced && staleDays >= 2 && (
+        <p role="status" className="-mt-2 mb-4 rounded-xl bg-orange-50 px-4 py-2.5 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">
+          Dữ liệu Jira đã cũ {staleDays} ngày. <Link href={q({ muc: 'ket-noi' })} className="font-semibold underline">Cập nhật ngay</Link> để số liệu và báo cáo đúng.
+        </p>
+      )}
+
       {synced && (
+        <div className="mb-6 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+          <section className="card !p-0" aria-label="Việc cần chú ý">
+            <h2 className="px-4 pt-3 text-xs font-semibold uppercase tracking-wide muted">Việc cần chú ý</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4">
+              <Kpi href={q({ muc: 'can-lam' })} label="Cần làm" value={todo.length} hint={`${noLog.length} đang làm chưa log tuần này`} />
+              <Kpi href={q({ muc: 'can-lam' })} label="Quá hạn" value={overdue.length} tone={overdue.length ? 'warn' : undefined} hint={soon.length ? `${soon.length} đến hạn trong 7 ngày` : 'Không có việc sắp đến hạn'} />
+              <Kpi href={q({ muc: 'cho-toi' })} label="Đang chờ tôi" value={waitingMe} tone={waitingMe ? 'warn' : undefined} hint={`${onMe.mentions.length} lời nhắc · ${onMe.blockingOthers.length} việc đang chặn`} />
+              <Kpi href={q({ muc: 'cho-nguoi-khac' })} label="Chờ người khác" value={waitingOthers} hint={`${onOthers.blocked.length} bị chặn · ${onOthers.delegated.length} đã giao`} />
+            </div>
+          </section>
+          <section className="card !p-0" aria-label="Kết quả">
+            <h2 className="px-4 pt-3 text-xs font-semibold uppercase tracking-wide muted">Kết quả</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3">
+              <Kpi href={q({ muc: 'worklog' })} label="Giờ log tuần này" value={fmtHours(hours(totals.weekSec))}
+                hint={`Tuần trước ${fmtHours(hours(totals.lastWeekSec))} · tháng ${fmtHours(hours(totals.monthSec))}`}
+                extra={<Spark values={[...weeks].reverse().map((w) => hours(w.seconds))} />} />
+              <Kpi href={q({ muc: 'da-lam' })} label="Sản phẩm tháng này" value={totals.submittedMonth} hint={field ? `${fmtHours(totals.convertedMonth)} giờ quy đổi` : undefined} />
+              <Kpi href={q({ muc: 'da-lam' })} label="Giờ quy đổi năm nay" value={field ? fmtHours(totals.convertedYear) : '—'} hint={field ? `Trường "${field}"` : 'Chưa thấy trường quy đổi'} />
+            </div>
+          </section>
+        </div>
+      )}
+
+      <SectionTabs current={tab} tabs={[
+        ...(synced ? [
+          { key: 'can-lam', href: q({ muc: 'can-lam' }), label: 'Cần làm', count: todo.length },
+          { key: 'cho-toi', href: q({ muc: 'cho-toi' }), label: 'Đang chờ tôi', count: waitingMe },
+          { key: 'cho-nguoi-khac', href: q({ muc: 'cho-nguoi-khac' }), label: 'Chờ người khác', count: waitingOthers },
+          { key: 'da-lam', href: q({ muc: 'da-lam' }), label: 'Đã làm' },
+          { key: 'worklog', href: q({ muc: 'worklog' }), label: 'Worklog' },
+          { key: 'tat-ca', href: q({ muc: 'tat-ca' }), label: 'Tất cả mã Jira', count: issues.length },
+        ] : []),
+        { key: 'bao-cao', href: q({ muc: 'bao-cao' }), label: 'Báo cáo Excel' },
+        { key: 'ket-noi', href: q({ muc: 'ket-noi' }), label: 'Kết nối, cập nhật' },
+      ]} />
+
+      {tab === 'can-lam' && synced && (
         <>
-          <p className="-mt-3 mb-5 text-sm muted">
-            Tài khoản Jira: <b>{acc!.jira_display_name || acc!.jira_username}</b> ({acc!.jira_username}) · cập nhật lần cuối {fmtDateTime(acc!.last_synced_at)}
-            {acc!.last_source === 'server' ? ' (tự động)' : ' (bấm nút trên Jira)'}
-          </p>
-          <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <Stat label="Việc cần làm" value={String(todo.length)} />
-            <Stat label="Quá hạn" value={String(overdue)} warn={overdue > 0} />
-            <Stat label="Đang chờ tôi" value={String(onMe.mentions.length + onMe.blockingOthers.length)} warn={onMe.mentions.length + onMe.blockingOthers.length > 0} />
-            <Stat label="Giờ log tuần này" value={fmtHours(hours(totals.weekSec))} />
-            <Stat label="Sản phẩm nộp tháng này" value={String(totals.submittedMonth)} />
-            <Stat label="Giờ quy đổi năm nay" value={field ? fmtHours(totals.convertedYear) : '—'} />
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm muted">Việc được giao cho bạn hoặc bạn có log work, chưa xong. Bấm vào một việc để xem chi tiết.</p>
+            <nav className="seg" aria-label="Kiểu hiển thị">
+              <Link href={q({ kieu: 'nhom' })} aria-current={sp.kieu !== 'bang' ? 'page' : undefined}>Theo hạn</Link>
+              <Link href={q({ kieu: 'bang' })} aria-current={sp.kieu === 'bang' ? 'page' : undefined}>Dạng bảng</Link>
+            </nav>
           </div>
-
-          <SectionTabs current={tab} tabs={[
-            { key: 'can-lam', href: q({ muc: 'can-lam' }), label: 'Cần làm', count: todo.length },
-            { key: 'cho-toi', href: q({ muc: 'cho-toi' }), label: 'Đang chờ tôi', count: onMe.mentions.length + onMe.blockingOthers.length },
-            { key: 'cho-nguoi-khac', href: q({ muc: 'cho-nguoi-khac' }), label: 'Đang chờ người khác', count: onOthers.delegated.length + onOthers.blocked.length },
-            { key: 'da-lam', href: q({ muc: 'da-lam' }), label: 'Đã làm' },
-            { key: 'worklog', href: q({ muc: 'worklog' }), label: 'Worklog' },
-            { key: 'tat-ca', href: q({ muc: 'tat-ca' }), label: 'Tất cả mã Jira', count: issues.length },
-          ]} />
-
-          {tab === 'can-lam' && (
-            <>
-              <Section title="Việc của tôi, chưa xong" note="Việc được giao cho bạn hoặc bạn đã log work. Xếp theo hạn: quá hạn tô đỏ, đến hạn trong 7 ngày tô vàng; cùng hạn thì việc ưu tiên cao lên trước.">
-                <IssueCards items={todo} ctx={ctx} empty="Không có việc nào đang mở. Tuyệt vời!" />
-              </Section>
-              <Section title="Đang làm nhưng tuần này chưa log work" note="Việc ở trạng thái đang làm mà từ thứ Hai tới nay bạn chưa ghi giờ.">
-                <IssueCards items={noLog} ctx={ctx} empty="Việc đang làm nào cũng đã có worklog tuần này." />
-              </Section>
-            </>
+          {noLog.length > 0 && (
+            <p className="mb-4 rounded-xl bg-gold-50 px-4 py-2.5 text-sm dark:bg-gold-600/10">
+              <b className="text-gold-600 dark:text-gold-500">Chưa log work tuần này:</b>{' '}
+              {noLog.map((i, n) => <span key={i.issue_key}>{n > 0 && ', '}<IssueLink k={i.issue_key} href={browse(i.issue_key)} title={i.summary} /></span>)}
+            </p>
           )}
-
-          {tab === 'cho-toi' && (
-            <>
-              <Section title="Comment nhắc tên tôi, chưa trả lời" note="Bạn chưa comment lại trên mã việc đó kể từ lời nhắc.">
-                <MentionList items={onMe.mentions} ctx={ctx} empty="Không có lời nhắc nào đang chờ bạn." />
-              </Section>
-              <Section title="Việc của tôi đang chặn việc khác" note="Người khác đang chờ các việc này xong mới làm tiếp được.">
-                <IssueCards items={onMe.blockingOthers} ctx={ctx} empty="Không có việc nào của bạn đang chặn người khác." />
-              </Section>
-            </>
-          )}
-
-          {tab === 'cho-nguoi-khac' && (
-            <>
-              <Section title="Việc của tôi bị việc khác chặn">
-                <IssueCards items={onOthers.blocked} ctx={ctx} empty="Không có việc nào bị chặn." />
-              </Section>
-              <Section title="Việc tôi tạo hoặc theo dõi, người khác đang làm" note="Xếp theo hạn; xem cột trạng thái và comment mới nhất để biết cần nhắc ai.">
-                <IssueCards items={[...onOthers.delegated].sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'))} ctx={ctx} showAssignee empty="Không có việc nào." />
-              </Section>
-            </>
-          )}
-
-          {tab === 'da-lam' && (
-            <Section title="Sản phẩm đã nộp và giờ quy đổi" note={<>Tính các mã việc của bạn (được giao cho bạn hoặc bạn có log work) đã chuyển sang trạng thái hoàn thành, theo tháng hoàn thành.{' '}
-              {field ? <>Giờ quy đổi lấy từ trường <b>{field}</b> trên Jira (số giờ ghi ở cuối, ví dụ &quot;Biên bản loại 1-1h&quot; là 1 giờ).</> : <>Chưa tìm thấy trường &quot;giờ quy đổi&quot;{acc!.custom_field_names.length ? <> (các trường đang có: {acc!.custom_field_names.slice(0, 15).join(', ')}{acc!.custom_field_names.length > 15 ? '…' : ''})</> : null}.</>}</>}>
-              <TypeTable title="Theo loại sản phẩm, 12 tháng gần nhất" rows={byProductType(submitted.flatMap((s) => s.items), field)} field={field} />
-              <h3 className="mb-1 mt-5 text-sm font-semibold">Theo tháng</h3>
-              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-                {submitted.map((s) => (
-                  <li key={s.key}>
-                    <details open={s.key === thisMonth && s.count > 0}>
-                      <summary className="flex cursor-pointer items-center gap-3 py-2 text-sm">
-                        <span className="w-32 shrink-0">{s.label}</span>
-                        <span className="flex-1 font-semibold">{s.count} sản phẩm</span>
-                        {field && <span className="tabular-nums">{fmtHours(s.converted)} giờ quy đổi</span>}
-                      </summary>
-                      {s.items.length > 0 && (
-                        <table className="table mb-2">
-                          <thead><tr><th>Mã</th><th>Tóm tắt</th><th>Loại sản phẩm</th><th>Ngày nộp</th><th className="text-right">Giờ log</th>{field && <th className="text-right">Giờ quy đổi</th>}<th>Số lần bị trả lại</th></tr></thead>
-                          <tbody>
-                            {s.items.map((i) => (
-                              <tr key={i.issue_key}>
-                                <td><IssueLink k={i.issue_key} href={browse(i.issue_key)} /></td>
-                                <td>{i.summary}</td>
-                                <td className="text-xs">{field ? productLabel(i.custom?.[field]) : i.issue_type}</td>
-                                <td className="whitespace-nowrap">{i.resolved_at ? fmtDate(vnDay(i.resolved_at)) : ''}</td>
-                                <td className="text-right tabular-nums">{i.my_seconds ? fmtHours(hours(i.my_seconds)) : ''}</td>
-                                {field && <td className="text-right tabular-nums">{numberOf(i.custom?.[field]) !== null ? fmtHours(numberOf(i.custom[field])!) : ''}</td>}
-                                <td>{i.reopen_count ? <span className="chip !bg-orange-100 !text-orange-700 dark:!bg-orange-950 dark:!text-orange-300">{i.reopen_count} lần</span> : ''}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </details>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
-
-          {tab === 'worklog' && <WorklogSection worklogs={worklogs} by={by} q={q} ctx={ctx} />}
-
-          {tab === 'tat-ca' && (
-            <section className="card mb-6" aria-labelledby="h-viec">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h2 id="h-viec" className="font-semibold">Mã Jira liên quan đến tôi</h2>
-                <nav className="seg" aria-label="Lọc theo vai trò">
-                  {(Object.keys(ROLE_FILTERS) as RoleFilter[]).map((r) => (
-                    <Link key={r} href={q({ vai: r })} aria-current={role === r ? 'page' : undefined}>
-                      {ROLE_FILTERS[r].label} <span className="text-xs muted">{issues.filter(ROLE_FILTERS[r].test).length}</span>
-                    </Link>
-                  ))}
-                </nav>
-              </div>
-              <AllTable items={issues.filter(ROLE_FILTERS[role].test)} ctx={ctx} />
-            </section>
+          {sp.kieu === 'bang' ? (
+            <div className="card"><DataTable id="jira-can-lam" columns={ISSUE_COLUMNS} rows={todo.map((i) => issueRow(i, ctx))} exportName="viec-can-lam" empty="Không có việc nào đang mở." /></div>
+          ) : todo.length === 0 ? (
+            <div className="card text-sm muted">Không có việc nào đang mở. Tuyệt vời!</div>
+          ) : (
+            <div className="space-y-3">
+              <Group title="Quá hạn" tone="warn" items={overdue} ctx={ctx} />
+              <Group title="Đến hạn trong 7 ngày" tone="gold" items={soon} ctx={ctx} />
+              <Group title="Còn hạn" items={todo.filter((i) => dueState(i, today) === 'later')} ctx={ctx} />
+              <Group title="Chưa đặt hạn" items={todo.filter((i) => !i.due_date)} ctx={ctx} closed={todo.length > 15} />
+            </div>
           )}
         </>
       )}
 
-      <section id="ket-noi" className="mt-8 grid gap-4 lg:grid-cols-2">
-        <div className="card">
-          <h2 className="mb-1 font-semibold">{synced ? 'Cập nhật dữ liệu: nút trên trang Jira' : 'Kết nối Jira: nút trên trang Jira'}</h2>
-          <p className="mb-3 text-sm muted">Dùng được cả khi Jira chỉ mở trong mạng trường. Mỗi lần muốn cập nhật số liệu, mở Jira và bấm nút.</p>
-          <BookmarkletSetup appUrl={publicEnv.appUrl().replace(/\/+$/, '')} hasKey={Boolean(acc?.has_sync_key)} jiraUrl={jiraUrl} />
+      {tab === 'cho-toi' && synced && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Panel title="Comment nhắc tên tôi, chưa trả lời" count={onMe.mentions.length} note="Bạn chưa comment lại trên mã việc đó kể từ lời nhắc.">
+            <MentionList items={onMe.mentions} ctx={ctx} empty="Không có lời nhắc nào đang chờ bạn." />
+          </Panel>
+          <Panel title="Việc của tôi đang chặn người khác" count={onMe.blockingOthers.length} note="Người khác đang chờ các việc này xong mới làm tiếp được.">
+            <IssueList items={onMe.blockingOthers} ctx={ctx} empty="Không có việc nào của bạn đang chặn người khác." />
+          </Panel>
         </div>
-        <div className="card space-y-3">
-          <h2 className="font-semibold">Đồng bộ tự động hằng ngày</h2>
-          {features.jiraServerSync() ? (
-            <>
-              <p className="text-sm muted">Máy chủ web tự đọc Jira mỗi sáng bằng Personal Access Token của bạn. Chỉ chạy được nếu Jira mở ra Internet.</p>
-              <TokenForm hasToken={Boolean(acc?.has_token)} />
-            </>
-          ) : (
-            <p className="text-sm muted">Chưa bật. Cần Jira của trường mở ra Internet; quản trị hệ thống bật bằng biến FEATURE_JIRA (xem tài liệu docs/jira.md).</p>
-          )}
-          {acc?.last_error && <p role="alert" className="rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-700 dark:bg-orange-950 dark:text-orange-300">Lần đồng bộ gần nhất lỗi: {acc.last_error}</p>}
-          {acc && (
-            <form action={disconnectJira} className="border-t border-slate-200 pt-3 dark:border-slate-800">
-              <button className="btn-danger text-sm">Ngắt kết nối và xóa dữ liệu Jira đã lưu</button>
-            </form>
-          )}
+      )}
+
+      {tab === 'cho-nguoi-khac' && synced && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Panel title="Việc của tôi bị việc khác chặn" count={onOthers.blocked.length}>
+            <IssueList items={onOthers.blocked} ctx={ctx} empty="Không có việc nào bị chặn." />
+          </Panel>
+          <Panel title="Việc tôi tạo hoặc theo dõi, người khác đang làm" count={onOthers.delegated.length} note="Xếp theo hạn; mở một việc để xem comment mới nhất và biết cần nhắc ai.">
+            <IssueList items={[...onOthers.delegated].sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'))} ctx={ctx} showAssignee empty="Không có việc nào." />
+          </Panel>
         </div>
-      </section>
+      )}
+
+      {tab === 'da-lam' && synced && (() => {
+        const items = submitted.flatMap((s) => s.items);
+        const types = byProductType(items, field);
+        const maxCount = Math.max(1, ...submitted.map((s) => s.count));
+        return (
+          <>
+            <div className="mb-4 grid gap-4 lg:grid-cols-2">
+              <Panel title="Theo tháng, 12 tháng gần nhất" note="Việc của bạn chuyển sang trạng thái hoàn thành, theo tháng hoàn thành.">
+                <ul className="space-y-1">
+                  {submitted.map((s) => (
+                    <li key={s.key} className="flex items-center gap-3 text-sm">
+                      <span className="w-28 shrink-0 muted">{s.label}</span>
+                      <span className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                        <span className="block h-full rounded-full bg-brand-600 dark:bg-brand-300" style={{ width: `${(s.count / maxCount) * 100}%` }} />
+                      </span>
+                      <span className="w-24 text-right tabular-nums"><b>{s.count}</b> sản phẩm</span>
+                      {field && <span className="hidden w-24 text-right text-xs tabular-nums muted sm:block">{fmtHours(s.converted)} giờ QĐ</span>}
+                    </li>
+                  ))}
+                </ul>
+              </Panel>
+              <Panel title="Theo loại sản phẩm" note={field ? <>Giờ quy đổi lấy từ trường <b>{field}</b> (số giờ ở cuối, ví dụ &quot;Biên bản loại 1-1h&quot; là 1 giờ).</> : <>Chưa tìm thấy trường &quot;giờ quy đổi&quot;{acc!.custom_field_names.length ? <> (các trường đang có: {acc!.custom_field_names.slice(0, 12).join(', ')}{acc!.custom_field_names.length > 12 ? '…' : ''})</> : null}.</>}>
+                {types.length ? (
+                  <table className="table">
+                    <thead><tr><th>Loại sản phẩm</th><th className="text-right">Số lượng</th>{field && <th className="text-right">Giờ quy đổi</th>}</tr></thead>
+                    <tbody>
+                      {types.map((r) => <tr key={r.label}><td>{r.label}</td><td className="text-right tabular-nums">{r.count}</td>{field && <td className="text-right tabular-nums">{fmtHours(r.converted)}</td>}</tr>)}
+                      <tr className="font-semibold"><td>Tổng</td><td className="text-right tabular-nums">{types.reduce((a, r) => a + r.count, 0)}</td>{field && <td className="text-right tabular-nums">{fmtHours(types.reduce((a, r) => a + r.converted, 0))}</td>}</tr>
+                    </tbody>
+                  </table>
+                ) : <p className="text-sm muted">Chưa có sản phẩm nào hoàn thành trong 12 tháng gần nhất.</p>}
+              </Panel>
+            </div>
+            <Panel title="Danh sách sản phẩm đã nộp" note="Lọc theo tháng, loại sản phẩm; chọn cột cần xem; tải Excel đúng phần đang lọc.">
+              <DataTable id="jira-da-lam" columns={PRODUCT_COLUMNS.filter((c) => field || c.key !== 'converted')} rows={items.map((i) => productRow(i, ctx))}
+                exportName="san-pham-da-nop" initialSort={{ key: 'resolved', dir: 'desc' }} empty="Chưa có sản phẩm nào." />
+            </Panel>
+          </>
+        );
+      })()}
+
+      {tab === 'worklog' && synced && (() => {
+        const periods = groupWorklogs(worklogs, by, 12);
+        const maxSec = Math.max(1, ...periods.map((p) => p.seconds));
+        const avg = periods.slice(1).reduce((s, p) => s + p.seconds, 0) / Math.max(1, periods.length - 1);
+        return (
+          <>
+            <Panel title={by === 'tuan' ? 'Giờ log 12 tuần gần nhất' : 'Giờ log 12 tháng gần nhất'}
+              note={`Trung bình ${fmtHours(hours(avg))} giờ mỗi ${by === 'tuan' ? 'tuần' : 'tháng'} (không tính kỳ hiện tại).`}
+              right={(
+                <nav className="seg" aria-label="Xem theo">
+                  <Link href={q({ xem: 'tuan' })} aria-current={by === 'tuan' ? 'page' : undefined}>Theo tuần</Link>
+                  <Link href={q({ xem: 'thang' })} aria-current={by === 'thang' ? 'page' : undefined}>Theo tháng</Link>
+                </nav>
+              )}>
+              <div className="flex h-40 items-end gap-1.5" role="img" aria-label="Biểu đồ giờ log">
+                {[...periods].reverse().map((p) => (
+                  <div key={p.key} className="group flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1" title={`${p.label}: ${fmtHours(hours(p.seconds))} giờ, ${p.issues} mã việc`}>
+                    <span className="text-[10px] tabular-nums muted opacity-0 group-hover:opacity-100 sm:opacity-100">{p.seconds ? fmtHours(hours(p.seconds)) : ''}</span>
+                    <span className={`w-full rounded-t-md ${p.key === periods[0].key ? 'bg-gold-500' : 'bg-brand-600 dark:bg-brand-300'}`} style={{ height: `${Math.max(2, (p.seconds / maxSec) * 100)}%` }} />
+                    <span className="w-full truncate text-center text-[10px] muted">{by === 'tuan' ? `${p.key.slice(8)}/${p.key.slice(5, 7)}` : `T${Number(p.key.slice(5))}`}</span>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+            <div className="mt-4">
+              <Panel title="Chi tiết worklog" note="Toàn bộ worklog đã đồng bộ. Lọc theo tháng, tuần, dự án hoặc mã việc; cột Giờ cộng tổng phần đang lọc.">
+                <DataTable id="jira-worklog" columns={WORKLOG_COLUMNS} exportName="worklog" initialSort={{ key: 'day', dir: 'desc' }}
+                  rows={worklogs.map((w) => worklogRow(w, ctx, (d) => periodLabel(weekStart(d), 'tuan')))} empty="Chưa có worklog." />
+              </Panel>
+            </div>
+          </>
+        );
+      })()}
+
+      {tab === 'tat-ca' && synced && (
+        <Panel title="Mã Jira liên quan đến tôi" note="Lọc cột Liên quan để xem việc được giao, tôi tạo, theo dõi, có worklog hoặc nhắc tên. Bấm Cột để bật thêm thông tin (ước tính, sprint, nhãn, epic, comment mới nhất...).">
+          <DataTable id="jira-tat-ca" columns={ISSUE_COLUMNS} rows={issues.map((i) => issueRow(i, ctx))} exportName="ma-jira" empty="Không có mã việc nào." />
+        </Panel>
+      )}
+
+      {tab === 'bao-cao' && <ReportTab sp={sp} userId={userId} supabase={supabase} synced={synced} shareScope={acc?.share_scope} />}
+
+      {tab === 'ket-noi' && (
+        <section id="ket-noi" className="grid gap-4 lg:grid-cols-2">
+          <div className="card">
+            <h2 className="mb-1 font-semibold">{synced ? 'Cập nhật dữ liệu: nút trên trang Jira' : 'Kết nối Jira: nút trên trang Jira'}</h2>
+            <p className="mb-3 text-sm muted">Dùng được cả khi Jira chỉ mở trong mạng trường. Mỗi lần muốn cập nhật số liệu, mở Jira và bấm nút.</p>
+            <BookmarkletSetup appUrl={publicEnv.appUrl().replace(/\/+$/, '')} hasKey={Boolean(acc?.has_sync_key)} jiraUrl={jiraUrl} />
+          </div>
+          <div className="card space-y-3">
+            <h2 className="font-semibold">Đồng bộ tự động hằng ngày</h2>
+            {features.jiraServerSync() ? (
+              <>
+                <p className="text-sm muted">Máy chủ web tự đọc Jira mỗi sáng bằng Personal Access Token của bạn. Chỉ chạy được nếu Jira mở ra Internet.</p>
+                <TokenForm hasToken={Boolean(acc?.has_token)} />
+              </>
+            ) : (
+              <p className="text-sm muted">Chưa bật. Cần Jira của trường mở ra Internet; quản trị hệ thống bật bằng biến FEATURE_JIRA (xem tài liệu docs/jira.md).</p>
+            )}
+            {acc?.last_error && <p role="alert" className="rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-700 dark:bg-orange-950 dark:text-orange-300">Lần đồng bộ gần nhất lỗi: {acc.last_error}</p>}
+            {acc && (
+              <form action={disconnectJira} className="border-t border-slate-200 pt-3 dark:border-slate-800">
+                <button className="btn-danger text-sm">Ngắt kết nối và xóa dữ liệu Jira đã lưu</button>
+              </form>
+            )}
+          </div>
+        </section>
+      )}
     </>
   );
 }
 
-function TypeTable({ title, rows, field }: { title: string; rows: ReturnType<typeof byProductType>; field: string | null }) {
-  if (!rows.length) return <p className="text-sm muted">Chưa có sản phẩm nào hoàn thành trong 12 tháng gần nhất.</p>;
+function Kpi({ href, label, value, hint, tone, extra }: { href: string; label: string; value: string | number; hint?: string; tone?: 'warn'; extra?: React.ReactNode }) {
   return (
-    <>
-      <h3 className="mb-1 text-sm font-semibold">{title}</h3>
-      <table className="table">
-        <thead><tr><th>Loại sản phẩm</th><th className="text-right">Số lượng</th>{field && <th className="text-right">Giờ quy đổi</th>}</tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.label}><td>{r.label}</td><td className="text-right tabular-nums">{r.count}</td>{field && <td className="text-right tabular-nums">{fmtHours(r.converted)}</td>}</tr>
-          ))}
-          <tr className="font-semibold"><td>Tổng</td><td className="text-right tabular-nums">{rows.reduce((a, r) => a + r.count, 0)}</td>{field && <td className="text-right tabular-nums">{fmtHours(rows.reduce((a, r) => a + r.converted, 0))}</td>}</tr>
-        </tbody>
-      </table>
-    </>
+    <Link href={href} className="group block border-t border-slate-100 px-4 py-3 hover:bg-slate-50 sm:border-l sm:first:border-l-0 dark:border-slate-800 dark:hover:bg-slate-800/40">
+      <div className="text-xs muted group-hover:text-slate-700 dark:group-hover:text-slate-200">{label}</div>
+      <div className="flex items-end justify-between gap-2">
+        <div className={`mt-0.5 text-2xl font-semibold tabular-nums ${tone === 'warn' && value ? 'text-orange-700 dark:text-orange-300' : ''}`}>{value}</div>
+        {extra}
+      </div>
+      {hint && <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug muted" title={hint}>{hint}</div>}
+    </Link>
   );
 }
 
-type Ctx = { browse: (k: string) => string | null; today: string; byKey: Map<string, JiraIssueRow> };
-
-function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+// Biểu đồ cột nhỏ (giờ log 12 tuần).
+function Spark({ values }: { values: number[] }) {
+  const max = Math.max(1, ...values);
   return (
-    <div className="card !p-4">
-      <div className="text-xs muted">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${warn ? 'text-orange-700 dark:text-orange-300' : ''}`}>{value}</div>
-    </div>
+    <svg viewBox={`0 0 ${values.length * 5} 24`} className="mb-1 h-6 w-16 shrink-0" aria-hidden="true">
+      {values.map((v, i) => <rect key={i} x={i * 5} y={24 - (v / max) * 24} width="3.5" height={Math.max(1, (v / max) * 24)} rx="1" className={i === values.length - 1 ? 'fill-gold-500' : 'fill-brand-300 dark:fill-brand-600'} />)}
+    </svg>
   );
 }
 
-function Section({ title, note, children }: { title: string; note?: React.ReactNode; children: React.ReactNode }) {
+function Panel({ title, note, count, right, children }: { title: string; note?: React.ReactNode; count?: number; right?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="card mb-6">
-      <h2 className="font-semibold">{title}</h2>
-      {note && <p className="mt-1 text-xs muted">{note}</p>}
+    <section className="card">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="font-semibold">{title}{count !== undefined && <span className="ml-2 text-sm font-normal muted">{count}</span>}</h2>
+          {note && <p className="mt-0.5 text-xs muted">{note}</p>}
+        </div>
+        {right}
+      </div>
       <div className="mt-3">{children}</div>
     </section>
   );
@@ -255,62 +344,90 @@ function IssueLink({ k, href, title }: { k: string; href: string | null; title?:
   return href ? <a className="link whitespace-nowrap" href={href} target="_blank" rel="noreferrer" title={title}>{k}</a> : <span className="font-medium" title={title}>{k}</span>;
 }
 
-const DUE_STYLE = {
+const TONE = {
+  warn: 'border-l-orange-500',
+  gold: 'border-l-gold-500',
+  none: 'border-l-slate-200 dark:border-l-slate-700',
+};
+
+function Group({ title, items, ctx, tone, closed }: { title: string; items: JiraIssueRow[]; ctx: RowCtx; tone?: 'warn' | 'gold'; closed?: boolean }) {
+  if (!items.length) return null;
+  return (
+    <details open={!closed} className={`group/g card border-l-4 !py-3 ${TONE[tone ?? 'none']}`}>
+      <summary className="flex cursor-pointer list-none items-center gap-2">
+        <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform group-open/g:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+        <h2 className="font-semibold">{title}</h2>
+        <span className="text-sm muted">{items.length}</span>
+      </summary>
+      <div className="mt-2"><IssueList items={items} ctx={ctx} /></div>
+    </details>
+  );
+}
+
+const DUE_CHIP = {
   overdue: 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300',
-  soon: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+  soon: 'bg-gold-100 text-gold-600 dark:bg-gold-600/20 dark:text-gold-500',
   later: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
   none: '',
 };
 
-function DueChip({ i, today }: { i: JiraIssueRow; today: string }) {
-  const st = dueState(i, today);
-  if (st === 'none') return null;
-  const d = daysBetween(today, i.due_date!);
-  const text = d < 0 ? `Quá hạn ${-d} ngày` : d === 0 ? 'Hạn hôm nay' : `Còn ${d} ngày`;
-  return <span className={`chip ${DUE_STYLE[st]}`} title={`Hạn ${fmtDate(i.due_date!)}`}>{text} · {fmtDate(i.due_date!)}</span>;
-}
-
-// Thẻ một đầu việc: đủ thông tin để quyết định làm gì tiếp.
-function IssueCards({ items, ctx, empty, showAssignee }: { items: JiraIssueRow[]; ctx: Ctx; empty: string; showAssignee?: boolean }) {
+// Danh sách việc gọn: một dòng chính (hạn, mã, tóm tắt, trạng thái); bấm để mở chi tiết.
+function IssueList({ items, ctx, empty, showAssignee }: { items: JiraIssueRow[]; ctx: RowCtx; empty?: string; showAssignee?: boolean }) {
   if (!items.length) return <p className="text-sm muted">{empty}</p>;
   return (
-    <ul className="space-y-2.5">
+    <ul className="divide-y divide-slate-100 dark:divide-slate-800">
       {items.slice(0, 200).map((i) => {
+        const st = dueState(i, ctx.today);
+        const d = i.due_date ? daysBetween(ctx.today, i.due_date) : null;
         const since = i.status_since ? daysBetween(vnDay(i.status_since), ctx.today) : null;
         const bBy = blockedBy(i);
         const bOut = blocking(i);
         const meta = [i.sprint, ...(i.fix_versions ?? []), ...(i.components ?? []), ...(i.labels ?? [])].filter(Boolean) as string[];
         return (
-          <li key={i.issue_key} className="rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-800">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <IssueLink k={i.issue_key} href={ctx.browse(i.issue_key)} />
-              <span className="font-medium">{i.summary}</span>
-            </div>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              <span className="chip">{i.status}{since !== null && since > 0 ? ` · ${since} ngày` : ''}</span>
-              <DueChip i={i} today={ctx.today} />
-              {i.priority && <span className="chip">Ưu tiên: {i.priority}</span>}
-              {i.start_date && <span className="chip">Bắt đầu {fmtDate(i.start_date)}</span>}
-              {(i.original_estimate || i.remaining_estimate) ? <span className="chip">Còn {fmtDuration(i.remaining_estimate ?? 0)}{i.original_estimate ? ` / ước tính ${fmtDuration(i.original_estimate)}` : ''}</span> : null}
-              {i.my_seconds > 0 && <span className="chip">Tôi đã log {fmtDuration(i.my_seconds)}</span>}
-              {i.subtask_total > 0 && <span className="chip">Việc con {i.subtask_done}/{i.subtask_total}</span>}
-              {i.reopen_count > 0 && <span className="chip !bg-orange-100 !text-orange-700 dark:!bg-orange-950 dark:!text-orange-300">Bị trả lại {i.reopen_count} lần</span>}
-              {showAssignee && <span className="chip">Người làm: {i.assignee_name ?? 'chưa giao'}</span>}
-            </div>
-            {(i.parent_key || i.epic_key || meta.length > 0) && (
-              <div className="mt-1.5 text-xs muted">
-                {i.parent_key && <>Thuộc <IssueLink k={i.parent_key} href={ctx.browse(i.parent_key)} /> {i.parent_summary} · </>}
-                {i.epic_key && <>Epic <IssueLink k={i.epic_key} href={ctx.browse(i.epic_key)} title={ctx.byKey.get(i.epic_key)?.summary} /> · </>}
-                {i.project_name}{meta.length ? ` · ${meta.join(' · ')}` : ''}
+          <li key={i.issue_key}>
+            <details className="group">
+              <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 py-2 text-sm">
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 muted transition-transform group-open:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+                {d !== null && (
+                  <span className={`chip ${DUE_CHIP[st]} tabular-nums`} title={`Hạn ${fmtDate(i.due_date!)}`}>
+                    {d < 0 ? `Quá ${-d} ngày` : d === 0 ? 'Hôm nay' : `${fmtDate(i.due_date!).slice(0, 5)}`}
+                  </span>
+                )}
+                <IssueLink k={i.issue_key} href={ctx.browse(i.issue_key)} />
+                <span className="min-w-0 flex-1 truncate font-medium" title={i.summary}>{i.summary}</span>
+                {bBy.length > 0 && <span className="chip !bg-orange-100 !text-orange-800 dark:!bg-orange-950 dark:!text-orange-300">Chờ {bBy.length}</span>}
+                {bOut.length > 0 && <span className="chip !bg-gold-100 !text-gold-600 dark:!bg-gold-600/20 dark:!text-gold-500">Chặn {bOut.length}</span>}
+                {i.reopen_count > 0 && <span className="chip !bg-orange-100 !text-orange-700 dark:!bg-orange-950 dark:!text-orange-300">Trả lại {i.reopen_count}</span>}
+                {showAssignee && <span className="text-xs muted">{i.assignee_name ?? 'chưa giao'}</span>}
+                <span className="chip">{i.status}</span>
+                {i.my_seconds > 0 && <span className="hidden w-14 text-right text-xs tabular-nums muted sm:inline">{fmtHours(hours(i.my_seconds))} giờ</span>}
+              </summary>
+              <div className="mb-3 ml-5 grid gap-x-6 gap-y-1.5 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-2 dark:bg-slate-800/40">
+                <Info label="Trạng thái">{i.status}{since ? ` · ${since} ngày` : ''}{i.priority ? ` · ưu tiên ${i.priority}` : ''}</Info>
+                <Info label="Thời gian">
+                  {[i.start_date && `bắt đầu ${fmtDate(i.start_date)}`, i.due_date && `hạn ${fmtDate(i.due_date)}`].filter(Boolean).join(', ') || '—'}
+                </Info>
+                <Info label="Giờ">
+                  {[i.my_seconds > 0 && `tôi log ${fmtHours(hours(i.my_seconds))}`, i.original_estimate && `ước tính ${fmtHours(hours(i.original_estimate))}`, i.remaining_estimate != null && `còn ${fmtHours(hours(i.remaining_estimate))}`].filter(Boolean).join(' · ') || '—'}
+                </Info>
+                <Info label="Người làm, người tạo">{i.assignee_name ?? 'chưa giao'} · {i.reporter_name ?? '—'}</Info>
+                {i.subtask_total > 0 && <Info label="Việc con">{i.subtask_done}/{i.subtask_total} xong</Info>}
+                {(i.parent_key || i.epic_key) && (
+                  <Info label="Thuộc">
+                    {i.parent_key && <><IssueLink k={i.parent_key} href={ctx.browse(i.parent_key)} /> {i.parent_summary} </>}
+                    {i.epic_key && <>· Epic <IssueLink k={i.epic_key} href={ctx.browse(i.epic_key)} title={ctx.byKey.get(i.epic_key)?.summary} /></>}
+                  </Info>
+                )}
+                <Info label="Dự án">{[i.project_name, i.issue_type, ...meta].filter(Boolean).join(' · ')}</Info>
+                {bBy.length > 0 && <Info label="Đang chờ" warn>{bBy.map((l, n) => <span key={`${l.key}-${n}`}>{n > 0 && ', '}{l.key && <IssueLink k={l.key} href={ctx.browse(l.key)} />} {l.summary}</span>)}</Info>}
+                {bOut.length > 0 && <Info label="Đang chặn" warn>{bOut.map((l, n) => <span key={`${l.key}-${n}`}>{n > 0 && ', '}{l.key && <IssueLink k={l.key} href={ctx.browse(l.key)} />} {l.summary}</span>)}</Info>}
+                {i.last_comment && (
+                  <div className="sm:col-span-2">
+                    <Info label={`Comment mới nhất · ${i.last_comment.isMe ? 'bạn' : i.last_comment.author} · ${fmtDate(vnDay(i.last_comment.created))}`}>{mentionText(i.last_comment.body, 400)}</Info>
+                  </div>
+                )}
               </div>
-            )}
-            {bBy.length > 0 && <LinkLine label="Đang chờ" links={bBy} ctx={ctx} />}
-            {bOut.length > 0 && <LinkLine label="Đang chặn" links={bOut} ctx={ctx} />}
-            {i.last_comment && (
-              <p className="mt-1.5 text-xs muted">
-                Comment mới nhất: <b>{i.last_comment.isMe ? 'bạn' : i.last_comment.author}</b> ({fmtDate(vnDay(i.last_comment.created))}): {mentionText(i.last_comment.body, 160)}
-              </p>
-            )}
+            </details>
           </li>
         );
       })}
@@ -318,98 +435,31 @@ function IssueCards({ items, ctx, empty, showAssignee }: { items: JiraIssueRow[]
   );
 }
 
-function LinkLine({ label, links, ctx }: { label: string; links: ReturnType<typeof blockedBy>; ctx: Ctx }) {
+function Info({ label, children, warn }: { label: string; children: React.ReactNode; warn?: boolean }) {
   return (
-    <p className="mt-1.5 text-xs">
-      <span className="font-semibold text-orange-700 dark:text-orange-300">{label}:</span>{' '}
-      {links.map((l, n) => <span key={`${l.key}-${n}`}>{n > 0 && ', '}{l.key && <IssueLink k={l.key} href={ctx.browse(l.key)} />} {l.summary}</span>)}
-    </p>
+    <div className="min-w-0">
+      <div className={`text-xs ${warn ? 'font-semibold text-orange-700 dark:text-orange-300' : 'muted'}`}>{label}</div>
+      <div className="break-words">{children}</div>
+    </div>
   );
 }
 
-function MentionList({ items, ctx, empty }: { items: JiraMentionRow[]; ctx: Ctx; empty: string }) {
+function MentionList({ items, ctx, empty }: { items: JiraMentionRow[]; ctx: RowCtx; empty: string }) {
   if (!items.length) return <p className="text-sm muted">{empty}</p>;
   return (
-    <ul className="space-y-3">
+    <ul className="divide-y divide-slate-100 dark:divide-slate-800">
       {items.map((m) => (
-        <li key={m.comment_id} className="rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-800">
-          <div className="mb-1 text-xs muted"><b>{m.author_name}</b> · {fmtDateTime(m.created_at)} · <IssueLink k={m.issue_key} href={ctx.browse(m.issue_key)} /> {ctx.byKey.get(m.issue_key)?.summary}</div>
-          <p className="whitespace-pre-line">{mentionText(m.body, 500)}</p>
+        <li key={m.comment_id} className="py-2.5 text-sm">
+          <div className="flex flex-wrap items-center gap-x-2 text-xs muted">
+            <b className="text-slate-700 dark:text-slate-200">{m.author_name}</b>
+            <span>{fmtDateTime(m.created_at)}</span>
+            <IssueLink k={m.issue_key} href={ctx.browse(m.issue_key)} />
+            <span className="truncate">{ctx.byKey.get(m.issue_key)?.summary}</span>
+          </div>
+          <p className="mt-0.5 line-clamp-3 whitespace-pre-line" title={mentionText(m.body, 2000)}>{mentionText(m.body, 600)}</p>
         </li>
       ))}
     </ul>
-  );
-}
-
-function WorklogSection({ worklogs, by, q, ctx }: { worklogs: Worklog[]; by: 'tuan' | 'thang'; q: (o: { xem?: string }) => string; ctx: Ctx }) {
-  const periods = groupWorklogs(worklogs, by, 12);
-  const maxSec = Math.max(1, ...periods.map((p) => p.seconds));
-  return (
-    <section className="card mb-6" aria-labelledby="h-worklog">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 id="h-worklog" className="font-semibold">Worklog cá nhân</h2>
-        <nav className="seg" aria-label="Xem theo">
-          <Link href={q({ xem: 'tuan' })} aria-current={by === 'tuan' ? 'page' : undefined}>Theo tuần</Link>
-          <Link href={q({ xem: 'thang' })} aria-current={by === 'thang' ? 'page' : undefined}>Theo tháng</Link>
-        </nav>
-      </div>
-      <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-        {periods.map((p) => (
-          <li key={p.key}>
-            <details>
-              <summary className="flex cursor-pointer items-center gap-3 py-2 text-sm">
-                <span className="w-48 shrink-0">{p.label}</span>
-                <span className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                  <span className="block h-full rounded-full bg-brand-600" style={{ width: `${(p.seconds / maxSec) * 100}%` }} />
-                </span>
-                <span className="w-20 text-right font-semibold tabular-nums">{fmtHours(hours(p.seconds))} giờ</span>
-                <span className="hidden w-20 text-right text-xs muted sm:block">{p.issues} mã việc</span>
-              </summary>
-              {p.items.length ? (
-                <table className="table mb-2">
-                  <thead><tr><th>Ngày</th><th>Mã việc</th><th className="text-right">Giờ</th><th>Ghi chú</th></tr></thead>
-                  <tbody>
-                    {p.items.map((w) => (
-                      <tr key={w.worklog_id}>
-                        <td className="whitespace-nowrap">{fmtDate(vnDay(w.started_at))}</td>
-                        <td><IssueLink k={w.issue_key} href={ctx.browse(w.issue_key)} /> <span className="muted">{ctx.byKey.get(w.issue_key)?.summary}</span></td>
-                        <td className="text-right tabular-nums">{fmtHours(hours(w.seconds))}</td>
-                        <td className="muted">{w.comment}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : <p className="pb-2 text-sm muted">Không có worklog.</p>}
-            </details>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function AllTable({ items, ctx }: { items: JiraIssueRow[]; ctx: Ctx }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="table">
-        <thead><tr><th>Mã</th><th>Tóm tắt</th><th>Trạng thái</th><th>Liên quan</th><th className="text-right">Giờ của tôi</th><th>Hạn</th><th>Cập nhật</th></tr></thead>
-        <tbody>
-          {items.slice(0, 300).map((i) => (
-            <tr key={i.issue_key}>
-              <td className="whitespace-nowrap"><IssueLink k={i.issue_key} href={ctx.browse(i.issue_key)} /></td>
-              <td>{i.summary}<div className="text-xs muted">{i.project_name}{i.issue_type ? ` · ${i.issue_type}` : ''}</div></td>
-              <td className="whitespace-nowrap"><span className="chip">{i.status}</span></td>
-              <td><div className="flex flex-wrap gap-1">{roleChips(i).map((c) => <span key={c} className="chip">{c}</span>)}</div></td>
-              <td className="text-right tabular-nums">{i.my_seconds ? fmtHours(hours(i.my_seconds)) : ''}</td>
-              <td className="whitespace-nowrap">{i.due_date ? fmtDate(i.due_date) : ''}</td>
-              <td className="whitespace-nowrap text-xs muted">{i.updated_at_jira ? fmtDate(vnDay(i.updated_at_jira)) : ''}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {!items.length && <p className="py-3 text-sm muted">Không có mã việc nào.</p>}
-      {items.length > 300 && <p className="py-3 text-sm muted">Đang hiện 300/{items.length} mã mới cập nhật nhất.</p>}
-    </div>
   );
 }
 

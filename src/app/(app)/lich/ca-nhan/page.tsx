@@ -127,9 +127,14 @@ export default async function PersonalCalendarPage({ searchParams }: { searchPar
       />
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <section id="duoc-giao" className="card scroll-mt-20" aria-labelledby="h-duoc-giao">
-          <h2 id="h-duoc-giao" className="mb-1 font-semibold">Việc được phân công cho tôi</h2>
-          <p className="mb-3 text-sm muted">Đồng nghiệp cùng nhóm, đơn vị giao cho bạn. Bấm Nhận để xác nhận; việc hiện trên lịch và bảng chấm công.</p>
+        <details id="duoc-giao" open={pending.length > 0 || (incoming ?? []).length <= 5} className="group card scroll-mt-20">
+          <summary className="flex cursor-pointer list-none items-center gap-2">
+            <Chevron />
+            <h2 className="font-semibold">Việc được phân công cho tôi</h2>
+            <span className="text-sm muted">{(incoming ?? []).length}</span>
+            {pending.length > 0 && <span className="chip !bg-gold-100 !text-gold-600 dark:!bg-gold-600/20 dark:!text-gold-500">{pending.length} chờ nhận</span>}
+          </summary>
+          <p className="mb-3 mt-1 text-sm muted">Đồng nghiệp cùng nhóm, đơn vị giao cho bạn. Bấm Nhận để xác nhận; việc hiện trên lịch và bảng chấm công.</p>
           {(incoming ?? []).length === 0 ? <p className="text-sm muted">Chưa có việc nào.</p> : (
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">
               {(incoming ?? []).map((i) => (
@@ -155,11 +160,16 @@ export default async function PersonalCalendarPage({ searchParams }: { searchPar
               ))}
             </ul>
           )}
-        </section>
+        </details>
 
-        <section className="card" aria-labelledby="h-da-giao">
-          <h2 id="h-da-giao" className="mb-1 font-semibold">Việc tôi đã giao</h2>
-          <p className="mb-3 text-sm muted">Bấm Tạo, chọn tên đồng nghiệp ở ô &quot;Lịch của&quot; để giao việc A, B, C cho họ.</p>
+        <details open={(given ?? []).length > 0 && (given ?? []).length <= 5} className="group card">
+          <summary className="flex cursor-pointer list-none items-center gap-2">
+            <Chevron />
+            <h2 className="font-semibold">Việc tôi đã giao</h2>
+            <span className="text-sm muted">{(given ?? []).length}</span>
+            {(given ?? []).some((i) => i.status === 'declined') && <span className="chip !bg-orange-100 !text-orange-700 dark:!bg-orange-950 dark:!text-orange-300">có việc bị từ chối</span>}
+          </summary>
+          <p className="mb-3 mt-1 text-sm muted">Bấm Tạo, chọn tên đồng nghiệp ở ô &quot;Lịch của&quot; để giao việc A, B, C cho họ.</p>
           {(given ?? []).length === 0 ? <p className="text-sm muted">Bạn chưa giao việc nào.</p> : (
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">
               {(given ?? []).map((i) => (
@@ -173,10 +183,14 @@ export default async function PersonalCalendarPage({ searchParams }: { searchPar
               ))}
             </ul>
           )}
-        </section>
+        </details>
       </div>
     </>
   );
+}
+
+function Chevron() {
+  return <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>;
 }
 
 function AssignedRow({ item: i, who }: { item: PersonalItem; who: string }) {

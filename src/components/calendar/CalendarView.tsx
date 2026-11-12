@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { VIEW_LABEL, type CalItem, type CalSource, type CalView } from './types';
+import { DataTable } from '@/components/table/DataTable';
+import type { Column, Row } from '@/components/table/types';
 import {
   WEEKDAY, WEEKDAY_LONG, addDay, dayStart, dmy, hhmm, monthGridStart, vnDayOf, vnMinutesOf, weekStart, weekdayOf,
 } from './time';
@@ -13,7 +15,7 @@ import {
 
 const HOUR_PX = 48;
 const DAY_MS = 86400000;
-const VIEWS: CalView[] = ['ngay', 'tuan', 'thang', 'lich-bieu'];
+const VIEWS: CalView[] = ['ngay', 'tuan', 'thang', 'lich-bieu', 'bang'];
 
 type Props = {
   view: CalView;
@@ -159,6 +161,7 @@ export function CalendarView(props: Props) {
         w: () => go('tuan', anchor),
         m: () => go('thang', anchor),
         a: () => go('lich-bieu', anchor),
+        b: () => go('bang', anchor),
       };
       map[e.key]?.();
     };
@@ -208,7 +211,7 @@ export function CalendarView(props: Props) {
           <MiniMonth anchor={anchor} today={today} view={view} href={href} />
           <SourceList sources={sources} hidden={hidden} toggle={toggle} />
           {sideExtra}
-          <p className="text-[11px] muted">Phím tắt: T hôm nay, J/K tới/lùi, D ngày, W tuần, M tháng, A lịch biểu.</p>
+          <p className="text-[11px] muted">Phím tắt: T hôm nay, J/K tới/lùi, D ngày, W tuần, M tháng, A lịch biểu, B bảng.</p>
         </aside>
 
         <div className="min-w-0 flex-1">
@@ -223,6 +226,8 @@ export function CalendarView(props: Props) {
           </div>
           {view === 'thang' ? (
             <MonthGrid anchor={anchor} today={today} items={visible} color={color} href={href} open={open} />
+          ) : view === 'bang' ? (
+            <div className="p-4"><ItemTable items={visible} label={label} basePath={basePath} title={title} /></div>
           ) : view === 'lich-bieu' ? (
             <Agenda anchor={anchor} today={today} items={visible} color={color} href={href} open={open} />
           ) : (
@@ -557,4 +562,40 @@ function Detail({ sel, color, sourceLabel, onClose, deleteAction }: {
       )}
     </div>
   );
+}
+
+const TABLE_COLUMNS: Column[] = [
+  { key: 'day', label: 'Ngày', type: 'date', nowrap: true },
+  { key: 'weekday', label: 'Thứ', type: 'enum', nowrap: true },
+  { key: 'time', label: 'Giờ', type: 'text', nowrap: true },
+  { key: 'title', label: 'Nội dung', type: 'text', wide: true },
+  { key: 'source', label: 'Loại lịch', type: 'enum' },
+  { key: 'location', label: 'Địa điểm', type: 'enum' },
+  { key: 'hours', label: 'Số giờ', type: 'number', align: 'right', hidden: true, total: true },
+  { key: 'description', label: 'Mô tả', type: 'text', hidden: true, wide: true },
+  { key: 'links', label: 'Liên kết', type: 'tags', hidden: true },
+];
+
+// Kiểu xem Bảng: mọi mục trong tháng, lọc theo loại lịch, địa điểm, thứ; chọn cột; tải Excel.
+function ItemTable({ items, label, basePath, title }: { items: CalItem[]; label: Map<string, string>; basePath: string; title: string }) {
+  const rows: Row[] = [...items].sort((a, b) => a.starts_at.localeCompare(b.starts_at)).map((it) => {
+    const d = vnDayOf(it.starts_at);
+    const span = daysOf(it);
+    const dur = (new Date(it.ends_at).getTime() - new Date(it.starts_at).getTime()) / 3600000;
+    return {
+      id: it.key,
+      cells: {
+        day: { v: d, sub: span.length > 1 ? `đến ${dmy(span[span.length - 1])}` : undefined },
+        weekday: WEEKDAY[weekdayOf(d)],
+        time: isAllDayLike(it) ? 'Cả ngày' : `${hhmm(it.starts_at)}–${hhmm(it.ends_at)}`,
+        title: { v: it.title, sub: it.sub ?? undefined, href: it.links?.[0]?.href, ext: it.links?.[0]?.external },
+        source: label.get(it.source) ?? '',
+        location: it.location ?? '',
+        hours: isAllDayLike(it) ? null : Math.round(dur * 100) / 100,
+        description: it.description ?? '',
+        links: { items: (it.links ?? []).map((l) => ({ t: l.label, href: l.href, ext: l.external })) },
+      },
+    };
+  });
+  return <DataTable id={`lich-bang${basePath.replace(/\//g, '-')}`} columns={TABLE_COLUMNS} rows={rows} exportName={`lich-${title.replace(/[^0-9a-zA-Z]+/g, '-').toLowerCase()}`} empty="Không có lịch nào trong tháng này." />;
 }

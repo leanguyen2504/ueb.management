@@ -10,23 +10,14 @@ import {
 } from '@/lib/attendance';
 import { WEEKDAY, hhmm } from '@/components/calendar/time';
 import { PageHead } from '@/components/PageHead';
+import { DataTable } from '@/components/table/DataTable';
+import type { Column, Row, Tone } from '@/components/table/types';
 import { LichTabs } from '../tabs';
 import { CheckInForm } from '../ca-nhan/PersonalForms';
 import { clearCheckIn } from '../ca-nhan/actions';
 
 export const metadata: Metadata = { title: 'Chấm công' };
 
-const VERDICT_TONE: Record<DayVerdict, string> = {
-  dat: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-  'mot-phan': 'bg-gold-100 text-gold-600 dark:bg-gold-600/20 dark:text-gold-500',
-  'nghi-phep': 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
-  'cho-duyet': 'bg-gold-100 text-gold-600 dark:bg-gold-600/20 dark:text-gold-500',
-  thieu: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
-  'cuoi-tuan': '',
-  'lam-cuoi-tuan': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-  'chua-den': '',
-  'hom-nay': 'bg-brand-50 text-brand-600 dark:bg-brand-900 dark:text-brand-100',
-};
 
 const monthShift = (ym: string, n: number) => {
   const [y, m] = ym.split('-').map(Number);
@@ -88,14 +79,34 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
         }
       />
 
-      <div className="mb-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+      {(() => {
+        // Những điều cần rà soát trong tháng, hiện ngay đầu trang.
+        const missing = workdays.filter((d) => d.verdict === 'thieu');
+        const partial = workdays.filter((d) => d.verdict === 'mot-phan');
+        const pendingReq = requestsInMonth.filter((r) => r.state === 'pending');
+        const stale = data.account?.last_synced_at ? Math.round((Date.now() - Date.parse(data.account.last_synced_at)) / 86400000) : null;
+        const notes: React.ReactNode[] = [];
+        if (!data.account?.last_synced_at) notes.push(<>Chưa có dữ liệu Jira. <Link href="/jira?muc=ket-noi" className="font-semibold underline">Kết nối Jira</Link> để bảng tự ghi nghỉ phép, làm ngoài giờ, worklog và sản phẩm.</>);
+        else if (stale !== null && stale >= 2) notes.push(<>Dữ liệu Jira đã cũ {stale} ngày (cập nhật {fmtDateTime(data.account.last_synced_at)}). <Link href="/jira?muc=ket-noi" className="font-semibold underline">Cập nhật</Link></>);
+        if (missing.length) notes.push(<>{missing.length} ngày làm việc chưa có worklog: {missing.slice(0, 8).map((d) => `${d.day.slice(8)}/${d.day.slice(5, 7)}`).join(', ')}{missing.length > 8 ? '…' : ''}</>);
+        if (partial.length) notes.push(<>{partial.length} ngày chưa đủ {DAY_TARGET_HOURS} giờ.</>);
+        if (pendingReq.length) notes.push(<>{pendingReq.length} đơn nghỉ/ngoài giờ trên Jira đang chờ duyệt.</>);
+        return notes.length > 0 && (
+          <section role="status" aria-label="Cần rà soát" className="mb-5 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-900 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-200">
+            <h2 className="mb-1 font-semibold">Cần rà soát</h2>
+            <ul className="list-disc space-y-0.5 pl-5">{notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
+          </section>
+        );
+      })()}
+
+      <div className="mb-6 grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)]">
         <section className="card" aria-labelledby="h-diem-danh">
           <h2 id="h-diem-danh" className="mb-1 font-semibold">
             Điểm danh {pick === today ? 'hôm nay' : `ngày ${pick.slice(8)}/${pick.slice(5, 7)}`}
           </h2>
           <p className="mb-3 text-sm muted">
             {pickRow ? `Đã điểm danh: ${CHECKIN_LABEL[pickRow.place as keyof typeof CHECKIN_LABEL]} lúc ${hhmm(pickRow.checked_at)}. ` : 'Hôm nay bạn làm việc ở đâu? '}
-            Điểm danh bù được trong 31 ngày: bấm vào ngày trong bảng.
+            Điểm danh bù trong 31 ngày: bấm vào ngày ở bảng.
           </p>
           <CheckInForm key={pick} day={pick} current={(pickRow?.place as never) ?? null} note={pickRow?.note ?? null} />
           {pickRow && (
@@ -106,139 +117,123 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
           )}
         </section>
 
-        <section aria-label="Tổng hợp tháng" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="Ngày có mặt" value={`${stats.present}/${workdays.length}`} />
-          <Stat label="Ngày nghỉ phép (Jira)" value={fmtHours(stats.leave)} />
-          <Stat label="Ngày đạt 8 giờ" value={String(stats.ok)} />
-          <Stat label="Ngày chưa log work" value={String(stats.missing)} />
-          <Stat label="Giờ làm (log + giảng)" value={fmtHours(Math.round(stats.hours * 100) / 100)} />
-          <Stat label="Sản phẩm hoàn thành" value={String(stats.products)} />
-          <Stat label="Giờ quy đổi" value={fmtHours(Math.round(stats.converted * 100) / 100)} />
-          <Stat label="Đơn làm ngoài giờ" value={String(requestsInMonth.filter((r) => r.kind === 'overtime').length)} />
+        <section aria-label="Tổng hợp tháng" className="grid items-start gap-3 sm:grid-cols-3">
+          <StatGroup title="Ngày công" items={[
+            { label: 'Có mặt', value: `${stats.present}/${workdays.length}` },
+            { label: 'Nghỉ phép (Jira)', value: fmtHours(stats.leave) },
+            { label: 'Tự điểm danh', value: String(stats.checked) },
+          ]} />
+          <StatGroup title="Giờ làm" items={[
+            { label: 'Log + giảng', value: fmtHours(Math.round(stats.hours * 100) / 100) },
+            { label: `Ngày đạt ${DAY_TARGET_HOURS} giờ`, value: String(stats.ok) },
+            { label: 'Ngày chưa log', value: String(stats.missing), warn: stats.missing > 0 },
+          ]} />
+          <StatGroup title="Kết quả" items={[
+            { label: 'Sản phẩm', value: String(stats.products) },
+            { label: 'Giờ quy đổi', value: fmtHours(Math.round(stats.converted * 100) / 100) },
+            { label: 'Đơn ngoài giờ', value: String(requestsInMonth.filter((r) => r.kind === 'overtime').length) },
+          ]} />
         </section>
       </div>
 
-      {!data.account?.last_synced_at && (
-        <p className="mb-4 rounded-xl bg-gold-100 px-4 py-3 text-sm text-gold-600 dark:bg-gold-600/20 dark:text-gold-500">
-          Chưa có dữ liệu Jira. <Link href="/jira#ket-noi" className="font-semibold underline">Kết nối Jira</Link> để bảng tự ghi nghỉ phép, làm ngoài giờ, worklog và sản phẩm.
-        </p>
-      )}
+      <section className="card">
+        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold">Bảng chấm công theo ngày</h2>
+          <p className="text-xs muted">Lọc cột Đánh giá để xem ngày chưa log, chưa đủ giờ; bấm Cột để bật giờ log, giờ giảng, danh sách sản phẩm; mũi tên đầu dòng mở chi tiết ngày.</p>
+        </div>
+        <DataTable id="cham-cong" columns={COLUMNS} exportName={`cham-cong-${month}`} pageSize={40}
+          rows={days.map((d) => dayRow(d, { today, month, browse }))} />
+      </section>
 
-      <div className="card overflow-x-auto !p-0">
-        <table className="table min-w-[960px]">
-          <thead>
-            <tr>
-              <th className="w-24">Ngày</th>
-              <th>Làm việc ở đâu</th>
-              <th>Lịch và việc được giao</th>
-              <th>Nghỉ / ngoài giờ (Jira)</th>
-              <th className="text-right">Giờ làm</th>
-              <th>Sản phẩm hoàn thành</th>
-              <th>Đánh giá</th>
-            </tr>
-          </thead>
-          <tbody>
-            {days.map((d) => (
-              <tr key={d.day} id={`ngay-${d.day}`} className={`${d.weekend ? 'bg-slate-50/70 dark:bg-slate-900/40' : ''} ${d.day === today ? 'outline outline-2 -outline-offset-2 outline-gold-500' : ''}`}>
-                <td className="whitespace-nowrap align-top">
-                  {d.day <= addDays(today, 7) && d.day >= addDays(today, -31) ? (
-                    <Link href={`/lich/cham-cong?thang=${month}&ngay=${d.day}`} className="font-medium hover:underline" title="Điểm danh ngày này">
-                      {WEEKDAY[new Date(`${d.day}T00:00:00Z`).getUTCDay()]} {d.day.slice(8)}/{d.day.slice(5, 7)}
-                    </Link>
-                  ) : (
-                    <span className="font-medium">{WEEKDAY[new Date(`${d.day}T00:00:00Z`).getUTCDay()]} {d.day.slice(8)}/{d.day.slice(5, 7)}</span>
-                  )}
-                </td>
-                <td className="align-top text-sm">
-                  {d.place ?? <span className="muted">—</span>}
-                  {d.placeFrom && <div className="text-xs muted">{d.placeFrom === 'diem-danh' ? 'tự điểm danh' : d.placeFrom === 'lich' ? 'theo lịch' : d.placeFrom === 'mac-dinh' ? 'không có đơn nghỉ' : 'theo Jira'}</div>}
-                  {d.checkin?.note && <div className="text-xs muted">{d.checkin.note}</div>}
-                </td>
-                <td className="align-top text-sm">
-                  {d.items.length === 0 ? <span className="muted">—</span> : (
-                    <ul className="space-y-0.5">
-                      {d.items.map((i) => (
-                        <li key={i.id}>
-                          <Link href={`/lich/ca-nhan?xem=ngay&ngay=${d.day}`} className="hover:underline">
-                            {!i.all_day && <span className="tabular-nums muted">{hhmm(i.starts_at)} </span>}
-                            {i.title}
-                          </Link>
-                          {(i.role || i.assigned_by) && (
-                            <span className="text-xs muted"> · {[i.role && ROLE_LABEL[i.role], i.assigned_by && (i.status === 'pending' ? 'được giao, chờ nhận' : 'được giao')].filter(Boolean).join(', ')}</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </td>
-                <td className="align-top text-sm">
-                  {[...d.leave, ...d.overtime].length === 0 ? <span className="muted">—</span> : (
-                    <ul className="space-y-0.5">
-                      {[...d.leave, ...d.overtime].map((r) => (
-                        <li key={r.key}>
-                          {r.kind === 'leave' ? 'Nghỉ' : 'Ngoài giờ'}{r.leaveType ? ` (${r.leaveType})` : ''}{r.fraction < 1 ? ', nửa ngày' : ''}{r.hours ? `, ${fmtHours(r.hours)} giờ` : ''}
-                          {' · '}
-                          {browse(r.key) ? <a href={browse(r.key)!} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline dark:text-brand-300">{r.key}</a> : r.key}
-                          <span className={`ml-1 text-xs ${r.state === 'approved' ? 'text-emerald-700 dark:text-emerald-300' : 'text-gold-600 dark:text-gold-500'}`}>
-                            {r.state === 'approved' ? 'đã duyệt' : `chờ duyệt${r.status ? `: ${r.status}` : ''}`}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </td>
-                <td className="whitespace-nowrap text-right align-top text-sm tabular-nums">
-                  {d.worklogHours + d.teachHours > 0 ? (
-                    <>
-                      {fmtHours(Math.round((d.worklogHours + d.teachHours) * 100) / 100)} giờ
-                      <div className="text-xs muted">{[d.worklogHours && `log ${fmtHours(d.worklogHours)}`, d.teachHours && `giảng ${fmtHours(d.teachHours)}`].filter(Boolean).join(' · ')}</div>
-                    </>
-                  ) : <span className="muted">—</span>}
-                </td>
-                <td className="align-top text-sm">
-                  {d.products.length === 0 ? <span className="muted">—</span> : (
-                    <>
-                      <div className="font-medium">{d.products.length} sản phẩm{d.converted ? ` · ${fmtHours(d.converted)} giờ quy đổi` : ''}</div>
-                      <ul className="text-xs muted">
-                        {d.products.slice(0, 4).map((p) => (
-                          <li key={p.key} className="truncate" title={p.summary}>
-                            {browse(p.key) ? <a href={browse(p.key)!} target="_blank" rel="noreferrer" className="hover:underline">{p.key}</a> : p.key} {p.summary}
-                          </li>
-                        ))}
-                        {d.products.length > 4 && <li>và {d.products.length - 4} sản phẩm khác</li>}
-                      </ul>
-                    </>
-                  )}
-                </td>
-                <td className="whitespace-nowrap align-top text-sm">
-                  {VERDICT_LABEL[d.verdict] && <span className={`chip ${VERDICT_TONE[d.verdict]}`}>{VERDICT_LABEL[d.verdict]}</span>}
-                  {d.verdict === 'mot-phan' && <div className="mt-0.5 text-xs muted">cần {fmtHours(d.target)} giờ</div>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <section className="mt-6 text-sm muted" aria-label="Cách tính">
-        <h2 className="mb-1 font-semibold text-slate-700 dark:text-slate-300">Cách tính</h2>
-        <ul className="list-disc space-y-1 pl-5">
-          <li><b>Làm việc ở đâu</b>: Jira không có dữ liệu chấm công và web không nhận được dữ liệu chấm công khuôn mặt của trường, nên ngày làm việc nào không có đơn nghỉ phép trên Jira đều tính là <b>Có mặt</b>. Ngày có việc đi onsite/công tác trên Jira (tiêu đề ghi ngày, ví dụ &quot;Đi onsite Thành ủy ngày 14.10.2026&quot;) hiện là Công tác. Muốn ghi rõ ở trường, ở khoa hay đi giảng thì điểm danh hoặc thêm lịch cá nhân.</li>
+      <details className="mt-6 text-sm muted">
+        <summary className="cursor-pointer font-semibold text-slate-700 dark:text-slate-300">Cách tính</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          <li><b>Làm việc ở đâu</b>: Jira không có dữ liệu chấm công và web chưa nhận dữ liệu máy chấm công của trường, nên ngày làm việc nào không có đơn nghỉ phép trên Jira đều tính là <b>Có mặt</b>. Ngày có việc đi onsite/công tác trên Jira (tiêu đề ghi ngày, ví dụ &quot;Đi onsite Thành ủy ngày 14.10.2026&quot;) hiện là Công tác. Muốn ghi rõ ở trường, ở khoa hay đi giảng thì điểm danh hoặc thêm lịch cá nhân.</li>
           <li><b>Nghỉ phép, làm ngoài giờ</b>: chỉ đọc từ đơn trên Jira loại &quot;nghỉ phép&quot; mà bạn là người viết đơn (trường &quot;Người viết đơn&quot;, &quot;Từ ngày&quot;, &quot;Đến ngày&quot;, &quot;Số ngày nghỉ&quot;). Mỗi lần đồng bộ Jira, bảng tự cập nhật; đơn bị từ chối không tính.</li>
           <li><b>Giờ làm</b> = giờ log work trên Jira trong ngày + giờ dạy/giảng trên lịch cá nhân. <b>Sản phẩm</b> = việc Jira của bạn chuyển sang Xong trong ngày, giờ quy đổi theo trường &quot;{data.convertedField ?? 'Sản phẩm'}&quot;.</li>
           <li><b>Đạt</b> khi giờ làm hoặc giờ quy đổi đủ {DAY_TARGET_HOURS} giờ (trừ phần nghỉ phép); <b>Nghỉ có phép</b> khi đơn nghỉ đã duyệt; <b>Chưa log work</b> khi ngày làm việc đã qua mà chưa có worklog, giờ giảng hay sản phẩm nào trên Jira (vẫn tính là có mặt, chỉ nhắc bạn log work).</li>
-          {data.account?.last_synced_at && <li>Dữ liệu Jira cập nhật lần cuối {fmtDateTime(data.account.last_synced_at)}. <Link href="/jira#ket-noi" className="text-brand-600 hover:underline dark:text-brand-300">Cập nhật</Link></li>}
+          {data.account?.last_synced_at && <li>Dữ liệu Jira cập nhật lần cuối {fmtDateTime(data.account.last_synced_at)}. <Link href="/jira?muc=ket-noi" className="text-brand-600 hover:underline dark:text-brand-300">Cập nhật</Link></li>}
         </ul>
-      </section>
+      </details>
     </>
   );
 }
 
-function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+const VERDICT_TONE: Record<DayVerdict, Tone | undefined> = {
+  dat: 'ok', 'mot-phan': 'gold', 'nghi-phep': 'muted', 'cho-duyet': 'gold', thieu: 'warn',
+  'cuoi-tuan': undefined, 'lam-cuoi-tuan': 'ok', 'chua-den': undefined, 'hom-nay': 'info',
+};
+const FROM_LABEL = { 'diem-danh': 'tự điểm danh', lich: 'theo lịch', 'mac-dinh': 'không có đơn nghỉ', jira: 'theo Jira' } as const;
+
+const COLUMNS: Column[] = [
+  { key: 'day', label: 'Ngày', type: 'date', nowrap: true },
+  { key: 'weekday', label: 'Thứ', type: 'enum', hidden: true },
+  { key: 'verdict', label: 'Đánh giá', type: 'enum', nowrap: true },
+  { key: 'place', label: 'Làm việc ở đâu', type: 'enum' },
+  { key: 'hours', label: 'Giờ làm', type: 'number', align: 'right', total: true },
+  { key: 'worklog', label: 'Giờ log', type: 'number', align: 'right', hidden: true, total: true },
+  { key: 'teach', label: 'Giờ giảng', type: 'number', align: 'right', hidden: true, total: true },
+  { key: 'products', label: 'Sản phẩm', type: 'number', align: 'right', total: true },
+  { key: 'converted', label: 'Giờ quy đổi', type: 'number', align: 'right', total: true },
+  { key: 'items', label: 'Lịch và việc được giao', type: 'tags', wide: true },
+  { key: 'requests', label: 'Nghỉ / ngoài giờ (Jira)', type: 'tags' },
+  { key: 'productList', label: 'Danh sách sản phẩm', type: 'tags', hidden: true, wide: true },
+  { key: 'overtimeHours', label: 'Giờ ngoài giờ', type: 'number', align: 'right', hidden: true, total: true },
+  { key: 'note', label: 'Ghi chú điểm danh', type: 'text', hidden: true },
+];
+
+function dayRow(d: DayRow, o: { today: string; month: string; browse: (k: string) => string | null }): Row {
+  const wd = WEEKDAY[new Date(`${d.day}T00:00:00Z`).getUTCDay()];
+  const canPick = d.day <= addDays(o.today, 7) && d.day >= addDays(o.today, -31);
+  const total = Math.round((d.worklogHours + d.teachHours) * 100) / 100;
+  const reqs = [...d.leave, ...d.overtime];
+  return {
+    id: d.day,
+    tone: d.day === o.today ? 'today' : d.weekend ? 'weekend' : undefined,
+    cells: {
+      day: { v: d.day, t: `${wd} ${d.day.slice(8)}/${d.day.slice(5, 7)}`, href: canPick ? `/lich/cham-cong?thang=${o.month}&ngay=${d.day}` : undefined, title: canPick ? 'Điểm danh ngày này' : undefined },
+      weekday: wd,
+      place: { v: d.place ?? '', sub: d.placeFrom ? FROM_LABEL[d.placeFrom] : undefined },
+      items: { items: d.items.map((i) => ({
+        t: `${i.all_day ? '' : `${hhmm(i.starts_at)} `}${i.title}`,
+        href: `/lich/ca-nhan?xem=ngay&ngay=${d.day}`,
+        sub: [i.role && ROLE_LABEL[i.role], i.assigned_by && (i.status === 'pending' ? 'được giao, chờ nhận' : 'được giao')].filter(Boolean).join(', ') || undefined,
+      })) },
+      requests: { items: reqs.map((r) => ({
+        t: `${r.kind === 'leave' ? 'Nghỉ' : 'Ngoài giờ'}${r.leaveType ? ` (${r.leaveType})` : ''}${r.fraction < 1 ? ', nửa ngày' : ''}${r.hours ? `, ${fmtHours(r.hours)} giờ` : ''}`,
+        href: o.browse(r.key) ?? undefined, ext: true,
+        sub: r.state === 'approved' ? 'đã duyệt' : `chờ duyệt${r.status ? `: ${r.status}` : ''}`,
+      })) },
+      worklog: d.worklogHours || null,
+      teach: d.teachHours || null,
+      hours: total ? { v: total, sub: [d.worklogHours && `log ${fmtHours(d.worklogHours)}`, d.teachHours && `giảng ${fmtHours(d.teachHours)}`].filter(Boolean).join(' · ') || undefined } : null,
+      products: d.products.length || null,
+      productList: { items: d.products.map((p) => ({ t: p.key, href: o.browse(p.key) ?? undefined, ext: true, sub: p.summary })) },
+      converted: d.converted || null,
+      overtimeHours: d.overtimeHours || null,
+      verdict: VERDICT_LABEL[d.verdict] ? { v: VERDICT_LABEL[d.verdict], tone: VERDICT_TONE[d.verdict], sub: d.verdict === 'mot-phan' ? `cần ${fmtHours(d.target)} giờ` : undefined } : null,
+      note: d.checkin?.note ?? null,
+    },
+    detail: d.products.length || d.checkin?.note || reqs.length ? [
+      ...(d.checkin ? [{ label: 'Điểm danh', value: `${CHECKIN_LABEL[d.checkin.place]} lúc ${hhmm(d.checkin.checked_at)}${d.checkin.note ? ` · ${d.checkin.note}` : ''}` }] : []),
+      ...(d.products.length ? [{ label: `Sản phẩm hoàn thành (${d.products.length})`, value: { items: d.products.map((p) => ({ t: p.key, href: o.browse(p.key) ?? undefined, ext: true, sub: `${p.summary}${p.converted ? ` · ${fmtHours(p.converted)} giờ QĐ` : ''}` })) } }] : []),
+      ...(reqs.length ? [{ label: 'Đơn trên Jira', value: { items: reqs.map((r) => ({ t: r.key, href: o.browse(r.key) ?? undefined, ext: true, sub: r.title })) } }] : []),
+    ] : undefined,
+  };
+}
+
+function StatGroup({ title, items }: { title: string; items: { label: string; value: string; warn?: boolean }[] }) {
   return (
     <div className="card !p-4">
-      <div className="text-xs muted">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${warn ? 'text-orange-700 dark:text-orange-300' : ''}`}>{value}</div>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide muted">{title}</h3>
+      <dl className="space-y-1.5">
+        {items.map((i) => (
+          <div key={i.label} className="flex items-baseline justify-between gap-2">
+            <dt className="text-sm muted">{i.label}</dt>
+            <dd className={`text-lg font-semibold tabular-nums ${i.warn ? 'text-orange-700 dark:text-orange-300' : ''}`}>{i.value}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }

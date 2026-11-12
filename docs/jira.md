@@ -55,3 +55,10 @@ OR worklogAuthor = currentUser() OR comment ~ "<tên đăng nhập>"
 - **Lịch sử trạng thái**: lấy từ changelog (30 lần chuyển gần nhất). "Bị trả lại" là lần chuyển từ trạng thái nhóm Xong về trạng thái chưa xong.
 
 Mỗi người có thể bấm **Ngắt kết nối và xóa dữ liệu Jira đã lưu** để xóa token, mã đồng bộ và toàn bộ dữ liệu.
+
+## Xuất báo cáo Excel và chia sẻ cho người liên quan
+
+- Thẻ **Báo cáo Excel** trên trang Jira của tôi (`/jira?muc=bao-cao`) xuất file `.xlsx` (route `/jira/xuat`) cho: chỉ mình, một nhóm/dự án/đơn vị, mọi người liên quan, hoặc từng người được chọn; kỳ báo cáo tùy chọn. File có 6 trang: Tổng hợp theo người, Theo tháng, Sản phẩm đã nộp, Theo loại sản phẩm, Worklog, Mã việc. File được dựng bằng `src/lib/xlsx.ts`, không cần thư viện ngoài.
+- Dữ liệu người khác chỉ có khi chính họ bật **Chia sẻ dữ liệu Jira của tôi**: cho Trưởng nhóm, Văn thư các nhóm mình tham gia (`leads`) hoặc mọi thành viên nhóm chung (`members`). Mặc định `none`. Không tính không gian cá nhân và nhóm đã lưu trữ.
+- Người được chia sẻ chỉ đọc qua các hàm `jira_related_people`, `jira_related_issues`, `jira_related_worklogs` (migration `20261112000001_chia_se_jira.sql`), không có comment, lời nhắc tên, lịch sử trạng thái. Bảng gốc vẫn chỉ chủ đọc được. Kiểm thử: `supabase/tests/99_chia_se_jira.sql`.
+- Mọi bảng trên trang (Tất cả mã Jira, Worklog, Sản phẩm, Chấm công, kiểu xem Bảng của Lịch) dùng chung `src/components/table/DataTable.tsx`: lọc từng cột, sắp xếp, chọn cột hiển thị (nhớ trên máy), mở rộng dòng, cộng tổng và tải Excel đúng phần đang lọc.

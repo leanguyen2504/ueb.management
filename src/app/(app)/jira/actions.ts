@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { requireSession } from '@/lib/session';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { encryptSecret, hashSyncKey, newSyncKey, syncFromServer } from '@/lib/jira/server';
@@ -58,4 +59,14 @@ export async function disconnectJira() {
   ]);
   await admin.from('jira_accounts').delete().eq('user_id', userId);
   revalidatePath('/jira');
+}
+
+// Chủ tài khoản chọn chia sẻ báo cáo Jira với người liên quan (không / Trưởng nhóm, Văn thư / mọi thành viên nhóm chung).
+export async function setJiraShare(form: FormData) {
+  const { supabase } = await requireSession();
+  const scope = String(form.get('scope') || 'none');
+  const { error } = await supabase.rpc('jira_set_share', { p_scope: scope });
+  revalidatePath('/jira');
+  if (error) redirect(`/jira?muc=bao-cao&loi=${encodeURIComponent(error.message || 'Không lưu được lựa chọn chia sẻ.')}`);
+  redirect('/jira?muc=bao-cao&ok=chia-se');
 }
