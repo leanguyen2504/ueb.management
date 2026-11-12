@@ -49,7 +49,7 @@ const rule = (indent: number) =>
 
 const cell = (w: number, inner: string) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/></w:tcPr>${inner}</w:tc>`;
 const table = (cols: [number, string][]) =>
-  `<w:tbl><w:tblPr><w:tblW w:w="${cols.reduce((s, c) => s + c[0], 0)}" w:type="dxa"/><w:tblInd w:w="-108" w:type="dxa"/><w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders><w:tblLayout w:type="fixed"/><w:tblLook w:val="0000"/></w:tblPr><w:tblGrid>${cols.map((c) => `<w:gridCol w:w="${c[0]}"/>`).join('')}</w:tblGrid><w:tr>${cols.map(([w, inner]) => cell(w, inner)).join('')}</w:tr></w:tbl>`;
+  `<w:tbl><w:tblPr><w:tblW w:w="${cols.reduce((s, c) => s + c[0], 0)}" w:type="dxa"/><w:tblInd w:w="-108" w:type="dxa"/><w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders><w:tblLayout w:type="fixed"/><w:tblLook w:val="0000"/></w:tblPr><w:tblGrid>${cols.map((c) => `<w:gridCol w:w="${c[0]}"/>`).join('')}</w:tblGrid><w:tr><w:trPr><w:cantSplit/></w:trPr>${cols.map(([w, inner]) => cell(w, inner)).join('')}</w:tr></w:tbl>`;
 
 const lines = (s: string) => s.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
 
@@ -82,10 +82,12 @@ export function templateDocumentXml(i: TemplateInput) {
     ? lines(i.kinhGui).map((k, n, all) => para(n === 0 ? `Kính gửi: ${k}` : k, { size: 28, jc: all.length > 1 ? 'left' : 'center', left: all.length > 1 ? (n === 0 ? 1985 : 3110) : 0, after: n === all.length - 1 ? 240 : 0 })).join('') || para('Kính gửi: ...', { size: 28, after: 240 })
     : '';
   const bodyLines = lines(i.noiDung);
-  const body = (bodyLines.length ? bodyLines : ['Nội dung văn bản.']).map((t) =>
-    /^(QUYẾT ĐỊNH|QUYẾT NGHỊ)\s*:?$/.test(t) ? para(t.replace(/\s*:?$/, ':'), { b: true, size: 28, before: 120, after: 120 })
-      : /^(Căn cứ|Theo đề nghị|Xét đề nghị)/i.test(t) ? para(t, { i: true, jc: 'both', first: 567, after: 120, line: 276 })
-        : para(t, { jc: 'both', first: 567, after: 120, line: 276, b: /^(Điều \d+\.|[IVX]+\.\s)/.test(t) }),
+  // Hai đoạn cuối giữ liền với phần ký để trang chữ ký luôn có nội dung phía trên.
+  const bl = bodyLines.length ? bodyLines : ['Nội dung văn bản.'];
+  const body = bl.map((t, k) => ({ t, keep: k >= bl.length - 2 })).map(({ t, keep }) =>
+    /^(QUYẾT ĐỊNH|QUYẾT NGHỊ)\s*:?$/.test(t) ? para(t.replace(/\s*:?$/, ':'), { b: true, size: 28, before: 120, after: 120, keep })
+      : /^(Căn cứ|Theo đề nghị|Xét đề nghị)/i.test(t) ? para(t, { i: true, jc: 'both', first: 567, after: 120, line: 276, keep })
+        : para(t, { jc: 'both', first: 567, after: 120, line: 276, b: /^(Điều \d+\.|[IVX]+\.\s)/.test(t), keep }),
   ).join('');
   const recips = lines(i.noiNhan);
   const nn = recips.length ? recips : ['Như trên', 'Lưu: VT'];
@@ -98,7 +100,7 @@ export function templateDocumentXml(i: TemplateInput) {
   const signTable = table([[4300, noiNhan], [5054, sign]]);
   const sect = `<w:sectPr><w:headerReference w:type="default" r:id="rId2"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="851" w:bottom="1134" w:left="1701" w:header="567" w:footer="567" w:gutter="0"/><w:cols w:space="720"/><w:titlePg/><w:docGrid w:linePitch="381"/></w:sectPr>`;
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${draft}${head}${title}${kinhGui}${body}${para('', { after: 120 })}${signTable}${sect}</w:body></w:document>`;
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${draft}${head}${title}${kinhGui}${body}${para('', { after: 120, keep: true })}${signTable}${sect}</w:body></w:document>`;
 }
 
 const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -108,6 +110,11 @@ const HEADER = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:fldSimple w:instr=" PAGE "><w:r><w:rPr><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t>2</w:t></w:r></w:fldSimple></w:p></w:hdr>`;
 
 export async function buildTemplateDocx(i: TemplateInput): Promise<Uint8Array> {
+  return packDocx(templateDocumentXml(i));
+}
+
+// Đóng gói document.xml (đã có w:sectPr dùng header rId2) thành file .docx.
+export async function packDocx(documentXml: string): Promise<Uint8Array> {
   const files: [string, string][] = [
     ['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/></Types>`],
@@ -115,7 +122,7 @@ export async function buildTemplateDocx(i: TemplateInput): Promise<Uint8Array> {
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`],
     ['word/_rels/document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/></Relationships>`],
-    ['word/document.xml', templateDocumentXml(i)],
+    ['word/document.xml', documentXml],
     ['word/styles.xml', STYLES],
     ['word/header1.xml', HEADER],
   ];
