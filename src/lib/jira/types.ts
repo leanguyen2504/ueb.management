@@ -84,6 +84,7 @@ export type JiraIssueRow = {
   is_watcher: boolean;
   has_my_worklog: boolean;
   mentions_me: boolean;
+  created_at_jira?: string | null;
   updated_at_jira: string | null;
   resolved_at: string | null;
   due_date: string | null;

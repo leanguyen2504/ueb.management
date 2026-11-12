@@ -58,6 +58,11 @@ Người được giao việc phải là thành viên nhóm (hoặc Hiệu trư�
 - Dự án tự hiện trong mục "Dự án liên đơn vị" của từng đơn vị được gắn. Việc gắn không cấp quyền xem: người của đơn vị thấy thông tin như danh bạ và xin tham gia được.
 - Trong trang đơn vị, "Việc chung nhiều đơn vị" tạo một không gian con (`create_subgroup`) rồi gắn đơn vị đó cùng các đơn vị đã chọn.
 
+## Jira cá nhân và chia sẻ
+
+- Dữ liệu Jira (`jira_issues`, `jira_worklogs`, `jira_mentions`) chỉ chủ tài khoản đọc được, kể cả quản trị và Hiệu trưởng cũng không.
+- Chủ tài khoản có thể tự bật chia sẻ (`jira_set_share`): cho Trưởng nhóm, Văn thư (`leads`) hoặc mọi thành viên (`members`) của các nhóm, dự án, đơn vị mình đang tham gia. Người được chia sẻ chỉ đọc qua `jira_related_*`, đã bỏ comment, lời nhắc tên và lịch sử trạng thái.
+
 ## Kiểm thử
 
 `supabase/tests/10_phan_quyen.sql` đăng nhập giả lập từng vai trò và kiểm tra các trường hợp được phép và bị chặn. Chạy bằng `npm run test:db`; CI chạy lại mỗi lần có pull request.

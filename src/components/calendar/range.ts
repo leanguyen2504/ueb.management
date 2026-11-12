@@ -17,5 +17,10 @@ export function rangeOf(view: CalView, anchor: string): { from: string; to: stri
     const s = monthGridStart(anchor);
     return { from: s, to: addDay(s, 42), title: `Tháng ${m}, ${y}` };
   }
+  if (view === 'bang') {
+    const s = `${anchor.slice(0, 7)}-01`;
+    const next = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
+    return { from: s, to: next, title: `Tháng ${m}, ${y}` };
+  }
   return { from: anchor, to: addDay(anchor, 30), title: `Từ ${Number(anchor.slice(8))}/${m}/${y}` };
 }

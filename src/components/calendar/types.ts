@@ -1,6 +1,6 @@
-export type CalView = 'ngay' | 'tuan' | 'thang' | 'lich-bieu';
+export type CalView = 'ngay' | 'tuan' | 'thang' | 'lich-bieu' | 'bang';
 
-export const VIEW_LABEL: Record<CalView, string> = { ngay: 'Ngày', tuan: 'Tuần', thang: 'Tháng', 'lich-bieu': 'Lịch biểu' };
+export const VIEW_LABEL: Record<CalView, string> = { ngay: 'Ngày', tuan: 'Tuần', thang: 'Tháng', 'lich-bieu': 'Lịch biểu', bang: 'Bảng' };
 
 // Một nguồn lịch hiện ở cột trái (bật/tắt được), ví dụ "Lịch nhóm", "Lịch tuần BGH".
 export type CalSource = { key: string; label: string; color: string };
