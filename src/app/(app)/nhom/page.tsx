@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { groupDirectory } from '@/lib/directory';
+import { coWorkOptions, groupDirectory } from '@/lib/directory';
 import Link from 'next/link';
 import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
@@ -82,7 +82,7 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
             <PersonalProjectForm />
           </section>
         )}
-        {ctx.can_create_group && !luu_tru && loai !== 'ca-nhan' && <CreateGroupForm units={((dir ?? []) as DirRow[]).filter((g) => g.kind === 'unit').map((g) => ({ id: g.id, name: g.name }))} />}
+        {ctx.can_create_group && !luu_tru && loai !== 'ca-nhan' && <CreateGroupForm units={coWorkOptions((dir ?? []) as DirRow[])} />}
         {groups?.length ? (
           <GroupTable hideTasks={ctx.role === 'principal' && !ctx.is_admin} rows={groups.map((g) => ({
             id: g.id,

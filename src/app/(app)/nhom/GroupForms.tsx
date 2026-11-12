@@ -6,23 +6,24 @@ import { FormMessage } from '@/components/FormMessage';
 import { SubmitButton } from '@/components/SubmitButton';
 import { KIND_LABEL, UNIT_CATEGORY_LABEL, type Group } from '@/lib/types';
 
-export type UnitOption = { id: string; name: string };
+export type UnitOption = { id: string; name: string; hint?: string };
 
-// Danh sách đơn vị/tổ có ô lọc theo tên, chọn nhiều.
-function UnitPicker({ units, selected = [] }: { units: UnitOption[]; selected?: string[] }) {
+// Danh sách đơn vị, nhóm, dự án có ô lọc theo tên, chọn nhiều.
+export function UnitPicker({ units, selected = [] }: { units: UnitOption[]; selected?: string[] }) {
   const [q, setQ] = useState('');
   const fold = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase();
-  const shown = units.filter((u) => fold(u.name).includes(fold(q)));
+  const shown = units.filter((u) => fold(`${u.name} ${u.hint ?? ''}`).includes(fold(q)));
   return (
     <div>
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Lọc đơn vị…" className="input mb-2 py-1.5 text-sm" aria-label="Lọc đơn vị" />
-      <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2 text-sm dark:border-slate-700">
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Lọc đơn vị, nhóm, dự án…" className="input mb-2 py-1.5 text-sm" aria-label="Lọc đơn vị, nhóm, dự án" />
+      <div className="max-h-60 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2 text-sm dark:border-slate-700">
         {units.map((u) => (
-          <label key={u.id} className={`flex items-center gap-2 ${shown.includes(u) ? '' : 'hidden'}`}>
-            <input type="checkbox" name="unit_ids" value={u.id} defaultChecked={selected.includes(u.id)} /> {u.name}
+          <label key={u.id} className={`flex items-start gap-2 ${shown.includes(u) ? '' : 'hidden'}`}>
+            <input type="checkbox" name="unit_ids" value={u.id} defaultChecked={selected.includes(u.id)} className="mt-1" />
+            <span>{u.name}{u.hint && <span className="ml-1 text-xs muted">· {u.hint}</span>}</span>
           </label>
         ))}
-        {!shown.length && <p className="muted">Không có đơn vị khớp.</p>}
+        {!shown.length && <p className="muted">Không có nhóm khớp.</p>}
       </div>
     </div>
   );
@@ -69,8 +70,8 @@ export function CreateGroupForm({ units = [] }: { units?: UnitOption[] }) {
         {kind === 'ca_nhan' && <p className="text-sm muted">Tạo dự án trong mục Cá nhân của bạn: chỉ bạn xem được, không thêm được người khác.</p>}
         {kind !== 'unit' && kind !== 'ca_nhan' && units.length > 0 && (
           <fieldset>
-            <legend className="label">Các đơn vị/tổ cùng làm (không bắt buộc)</legend>
-            <p className="mb-2 text-xs muted">Dự án sẽ tự hiện trong mục &quot;Dự án liên đơn vị&quot; của từng đơn vị được chọn.</p>
+            <legend className="label">Các đơn vị, nhóm, dự án cùng làm (không bắt buộc)</legend>
+            <p className="mb-2 text-xs muted">Dự án sẽ tự hiện trong mục &quot;Dự án liên đơn vị&quot; của từng đơn vị, nhóm được chọn.</p>
             <UnitPicker units={units} />
           </fieldset>
         )}
@@ -145,8 +146,8 @@ export function GroupUnitsForm({ groupId, units, selected }: { groupId: string; 
   const [state, action] = useActionState(setGroupUnits, null);
   return (
     <form action={action} className="card space-y-3">
-      <h2 className="font-semibold">Các đơn vị/tổ cùng làm</h2>
-      <p className="text-xs muted">Dự án tự hiện trong mục &quot;Dự án liên đơn vị&quot; của từng đơn vị được chọn. Người của đơn vị thấy tên, lãnh đạo, đầu mối và xin tham gia được; chi tiết vẫn chỉ thành viên dự án xem.</p>
+      <h2 className="font-semibold">Các đơn vị, nhóm, dự án cùng làm</h2>
+      <p className="text-xs muted">Dự án tự hiện trong mục &quot;Dự án liên đơn vị&quot; của từng đơn vị, nhóm được chọn (kể cả tổ công tác, không gian chung). Người của nhóm đó thấy tên, lãnh đạo, đầu mối và xin tham gia được; chi tiết vẫn chỉ thành viên dự án xem.</p>
       <input type="hidden" name="group_id" value={groupId} />
       <UnitPicker units={units} selected={selected} />
       <FormMessage state={state} />

@@ -4,12 +4,11 @@ import { useActionState, useState } from 'react';
 import { createSubgroup } from '@/lib/work';
 import { FormMessage } from '@/components/FormMessage';
 import { SubmitButton } from '@/components/SubmitButton';
+import { UnitPicker, type UnitOption } from './GroupForms';
 
-export function SubgroupForm({ parentId, people, me, units = [] }: { parentId: string; people: { id: string; label: string }[]; me: string; units?: { id: string; name: string }[] }) {
+export function SubgroupForm({ parentId, people, me, units = [] }: { parentId: string; people: { id: string; label: string }[]; me: string; units?: UnitOption[] }) {
   const [state, action] = useActionState(createSubgroup, null);
   const [q, setQ] = useState('');
-  const [uq, setUq] = useState('');
-  const uShown = units.filter((u) => u.name.toLowerCase().includes(uq.trim().toLowerCase()));
   const others = people.filter((p) => p.id !== me);
   const shown = others.filter((p) => p.label.toLowerCase().includes(q.trim().toLowerCase()));
   return (
@@ -31,16 +30,9 @@ export function SubgroupForm({ parentId, people, me, units = [] }: { parentId: s
       </fieldset>
       {units.length > 0 && (
         <fieldset>
-          <legend className="label">Đơn vị/phòng ban cùng làm (không bắt buộc)</legend>
-          <p className="mb-2 text-xs muted">Không gian sẽ tự hiện trong trang của từng đơn vị được chọn; Trưởng nhóm, Văn thư của đơn vị đó nhận thông báo và mời người của họ vào.</p>
-          <input value={uq} onChange={(e) => setUq(e.target.value)} placeholder="Tìm đơn vị…" className="input mb-2 py-1" aria-label="Tìm đơn vị" />
-          <div className="max-h-48 space-y-1 overflow-y-auto">
-            {units.map((u) => (
-              <label key={u.id} className={`flex items-center gap-2 text-sm ${uShown.includes(u) ? '' : 'hidden'}`}>
-                <input type="checkbox" name="unit_ids" value={u.id} /> {u.name}
-              </label>
-            ))}
-          </div>
+          <legend className="label">Đơn vị, nhóm, dự án cùng làm (không bắt buộc)</legend>
+          <p className="mb-2 text-xs muted">Không gian sẽ tự hiện trong trang của từng đơn vị, nhóm được chọn; Trưởng nhóm, Văn thư của nhóm đó nhận thông báo và mời người của họ vào.</p>
+          <UnitPicker units={units} />
         </fieldset>
       )}
       <FormMessage state={state} />

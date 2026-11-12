@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { groupDirectory } from '@/lib/directory';
+import { coWorkOptions, groupDirectory } from '@/lib/directory';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireSession } from '@/lib/session';
@@ -112,7 +112,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const myUnits = (tagRows ?? []).filter((r) => r.group_id === id).map((r) => dirById.get(r.unit_id)).filter(Boolean) as DirGroup[];
   // Không gian con của chính đơn vị này đã nằm trong mục Không gian, không lặp lại.
   const sharedProjects = ((tagRows ?? []).filter((r) => r.unit_id === id).map((r) => dirById.get(r.group_id)).filter(Boolean) as (DirGroup & { can_view: boolean })[]).filter((p) => p.parent_id !== id);
-  const unitOptions = dirAll.filter((g) => g.kind === 'unit' && g.id !== id).map((g) => ({ id: g.id, name: g.name }));
+  const unitOptions = coWorkOptions(dirAll, id);
   const links = new Map<string, TaskLink[]>();
   (linkRows ?? []).forEach((l) => links.set(l.task_id, [...(links.get(l.task_id) ?? []), l]));
   const childIds = (children ?? []).map((c) => c.id);
