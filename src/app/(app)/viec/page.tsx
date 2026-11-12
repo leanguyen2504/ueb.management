@@ -32,6 +32,15 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
     : base().eq('assignee_id', userId).neq('status', 'done').limit(300).returns<Task[]>();
   const earlyTasks = early ? early.then((r) => r) : null; // .then để truy vấn chạy ngay
 
+  // Việc cần hiện (trừ "Tiến độ", cần biết mục cá nhân) được đọc song song với các bước dưới.
+  const base = () => supabase.from('tasks').select('*').order('due_date', { ascending: true, nullsFirst: false }).order('updated_at', { ascending: false });
+  const early =
+    xem === 'tien-do' ? null
+    : xem === 'da-giao' ? base().eq('created_by', userId).or(`assignee_id.is.null,assignee_id.neq.${userId}`).neq('status', 'done').limit(300).returns<Task[]>()
+    : xem === 'xong' ? base().or(`assignee_id.eq.${userId},created_by.eq.${userId}`).eq('status', 'done').limit(300).returns<Task[]>()
+    : base().eq('assignee_id', userId).neq('status', 'done').limit(300).returns<Task[]>();
+  const earlyTasks = early ? early.then((r) => r) : null; // .then để truy vấn chạy ngay
+
   // Mỗi người có sẵn mục "Cá nhân" (tạo ở lần đầu mở trang).
   const { data: personalRoot } = await supabase.rpc('my_personal_group');
 
