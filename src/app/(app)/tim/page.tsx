@@ -32,7 +32,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const [meetings, records, items, groupsRls, tasks, events, people, sources, dir] = await Promise.all([
     supabase.from('calendar_events').select('source_id, google_event_id, title, starts_at, location').or(or('title', 'description', 'location')).order('starts_at', { ascending: false }).limit(25),
     supabase.from('meeting_records').select('source_id, event_key, meeting_title, meeting_starts_at, jira_key').or(or('jira_key', 'meeting_title', 'follow_up')).order('meeting_starts_at', { ascending: false }).limit(25),
-    supabase.from('meeting_items').select('id, source_id, event_key, meeting_title, meeting_starts_at, party, title, url, kind').or(or('title', 'party', 'note', 'meeting_title')).order('meeting_starts_at', { ascending: false }).limit(25),
+    supabase.from('meeting_items').select('id, source_id, event_key, meeting_title, meeting_starts_at, party, title, url, kind').or(or('title', 'party', 'note', 'meeting_title', 'file_name')).order('meeting_starts_at', { ascending: false }).limit(25),
     supabase.from('groups').select('id, name, description, kind, unit_category, archived_at').or(or('name', 'description')).order('name').limit(20).returns<Pick<Group, 'id' | 'name' | 'description' | 'kind' | 'unit_category' | 'archived_at'>[]>(),
     supabase.from('tasks').select('id, group_id, title, status, due_date').or(or('title', 'description')).order('due_date', { ascending: true, nullsFirst: false }).limit(25).returns<Pick<Task, 'id' | 'group_id' | 'title' | 'status' | 'due_date'>[]>(),
     supabase.from('events').select('id, group_id, title, starts_at, location').or(or('title', 'description', 'location')).order('starts_at', { ascending: false }).limit(20),

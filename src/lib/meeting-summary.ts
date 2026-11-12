@@ -1,4 +1,5 @@
 import 'server-only';
+import { serverEnv } from '@/lib/env';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays, dayStartIso, vnDay } from '@/lib/format';
 import { areaOfItem, areasOf, loadAreas, loadMeetings, type Meeting, type WorkArea } from '@/lib/meetings';
@@ -66,7 +67,8 @@ export async function buildSummary(supabase: SupabaseClient, userId: string, sp:
     ])];
     const link = (i: Meeting['items'][number]): SummaryLink => ({
       label: [i.party, i.title || (i.doc_type ? DOC_TYPES[i.doc_type] : null)].filter(Boolean).join(': ') || 'Tài liệu',
-      url: i.url!,
+      // Tệp tải lên có link trong ứng dụng: thêm địa chỉ web để mở được từ file Excel.
+      url: i.url!.startsWith('/') ? `${serverEnv.appUrl()}${i.url}` : i.url!,
     });
     const pre = [...m.attachments.map((a) => ({ label: a.title, url: a.url })), ...m.items.filter((i) => i.kind === 'pre' && i.url).map(link)];
     const post = m.items.filter((i) => i.kind === 'minutes' && i.url).map(link);

@@ -9,6 +9,7 @@ import { DOC_TYPES, STATUS_LABEL, autoStatus, deadlines, jiraKeyIn, jiraUrl, typ
 import { meetingAnchor } from '@/lib/meeting-anchor';
 import { loadPeople } from '@/lib/people';
 import { serverEnv } from '@/lib/env';
+import { DropBox } from './DropBox';
 import { AddItemForm, EditItemForm, RecordForm, type PersonOption } from './MeetingForms';
 import { deleteMeetingItem } from './actions';
 import { OpenFromHash } from '@/components/OpenFromHash';
@@ -114,7 +115,7 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Pro
       <HopTabs current="hop" day={from} />
       <PageHead
         title="Hồ sơ cuộc họp"
-        sub={<>Tài liệu trước họp (muộn nhất 24 giờ trước họp) và biên bản sau họp (muộn nhất 24 giờ sau họp), gắn bằng link Google Drive. {missingTotal > 0 && <span className="font-medium text-amber-700 dark:text-amber-300">{missingTotal} mục đang chờ gửi.</span>}</>}
+        sub={<>Tài liệu trước họp (muộn nhất 24 giờ trước họp) và biên bản sau họp (muộn nhất 24 giờ sau họp). Kéo thả tệp vào ô của từng buổi họp, hoặc gắn link Google Drive. {missingTotal > 0 && <span className="font-medium text-amber-700 dark:text-amber-300">{missingTotal} mục đang chờ gửi.</span>}</>}
       />
       <OpenFromHash />
       <datalist id="ds-ben">{partyNames.map((p) => <option key={p} value={p} />)}</datalist>
@@ -202,9 +203,17 @@ function ItemRow({ it, v }: { it: MeetingItem; v: View }) {
           <div className="flex flex-wrap items-center gap-2">
             {(it.party || area) && <span className="font-medium">{it.party || area?.name}</span>}
             {it.url ? (
-              <a href={it.url} target="_blank" rel="noopener noreferrer" className="link">
-                {it.title || (it.doc_type ? DOC_TYPES[it.doc_type] : 'Mở tài liệu')} ↗
-              </a>
+              <>
+                <a href={it.url} target="_blank" rel="noopener noreferrer" className="link">
+                  {it.file_path && <span aria-hidden="true">📎 </span>}{it.title || it.file_name || (it.doc_type ? DOC_TYPES[it.doc_type] : 'Mở tài liệu')} ↗
+                </a>
+                {it.file_path && (
+                  <span className="text-xs muted">
+                    {it.file_size != null && `${(it.file_size / 1024 / 1024).toFixed(it.file_size < 1048576 ? 2 : 1)} MB · `}
+                    <a href={`${it.url}&tai=1`} className="hover:underline">Tải về</a>
+                  </span>
+                )}
+              </>
             ) : (
               <span className="chip border-amber-300 text-amber-800 dark:border-amber-700 dark:text-amber-300">Chờ gửi</span>
             )}
@@ -313,11 +322,13 @@ function MeetingCard({ m, v }: { m: Meeting; v: View }) {
             )}
             {pre.length ? <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">{pre.map(row)}</ul>
               : !m.attachments.length && <p className="mt-1 text-sm muted">Chưa có tài liệu.</p>}
+            {v.canFile && <DropBox meeting={ref} kind="pre" pending={pre.filter((i) => !i.url).map((i) => ({ id: i.id, label: i.party || i.title || 'Chờ gửi' }))} partiesListId="ds-ben" uid={`${anchor}-dp`} />}
           </section>
           <section>
             <h4 className="font-display text-sm font-semibold">B. Biên bản và tài liệu sau họp</h4>
             {minutes.length ? <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">{minutes.map(row)}</ul>
               : <p className="mt-1 text-sm muted">Chưa có biên bản.</p>}
+            {v.canFile && <DropBox meeting={ref} kind="minutes" pending={minutes.filter((i) => !i.url).map((i) => ({ id: i.id, label: i.party || i.title || 'Chờ gửi' }))} partiesListId="ds-ben" uid={`${anchor}-dm`} />}
           </section>
         </div>
 
