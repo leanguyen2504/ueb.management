@@ -21,7 +21,9 @@ import { SpaceGrid } from './SpaceGrid';
 import type { TaskLink } from '@/lib/types';
 import { EventForm, TaskForm } from '@/components/WorkForms';
 import { deleteEvent } from '@/lib/work';
-import { EVENT_KIND_LABEL, type CalEvent, type Task } from '@/lib/types';
+import { EVENT_KIND_LABEL, type CalEvent, type GroupFile, type Task } from '@/lib/types';
+import { DriveLinkForm, GroupDropBox } from './GroupDocs';
+import { deleteGroupDoc } from '@/lib/group-docs';
 
 export const metadata: Metadata = { title: 'Nhóm' };
 
@@ -74,7 +76,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     return <PublicGroup group={pub} contacts={contacts ?? []} tasks={open ?? []} requests={reqs ?? []} units={units} projects={projects} tb={tb} loi={loi} />;
   }
 
-  const [{ data: members }, { data: invites }, { data: log }, { data: tasks }, { data: events }, { data: joinReqs }, { data: delReqs }] = await Promise.all([
+  const [{ data: members }, { data: invites }, { data: log }, { data: tasks }, { data: events }, { data: joinReqs }, { data: delReqs }, { data: docs, error: docsErr }] = await Promise.all([
     supabase.from('group_members').select('*').eq('group_id', id).returns<GroupMember[]>(),
     supabase.from('invitations').select('id, email, is_manager, is_clerk, created_at, expires_at').eq('group_id', id).is('accepted_at', null),
     supabase.from('activity_log').select('id, at, actor_id, action, entity_type').eq('group_id', id).order('at', { ascending: false }).limit(15),
@@ -84,6 +86,8 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     supabase.from('join_requests').select('id, task_id, requester_id, message, created_at').eq('group_id', id).eq('status', 'pending').neq('requester_id', userId).order('created_at'),
     // RLS: Trưởng nhóm thấy mọi yêu cầu xóa của nhóm; người khác chỉ thấy yêu cầu mình gửi.
     supabase.from('delete_requests').select('id, item_type, item_id, item_title, reason, requester_id, created_at').eq('group_id', id).eq('status', 'pending').order('created_at').returns<DeleteRequest[]>(),
+    // Mục Tài liệu. Lỗi (chưa chạy SQL 20261112800001) thì mục hiện lời nhắc thay vì làm hỏng trang.
+    supabase.from('group_files').select('*').eq('group_id', id).order('created_at', { ascending: false }).limit(300).returns<GroupFile[]>(),
   ]);
   const taskIds = (tasks ?? []).map((t) => t.id);
   const [{ data: linkRows }, { data: children }, { data: parent }] = await Promise.all([
@@ -121,7 +125,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const { data: childTasks } = childIds.length
     ? await supabase.from('tasks').select('group_id, status, due_date').in('group_id', childIds)
     : { data: [] as { group_id: string; status: Task['status']; due_date: string | null }[] };
-  const ids = [...new Set([...(members ?? []).map((m) => m.user_id), ...(log ?? []).map((l) => l.actor_id).filter(Boolean) as string[], ...(tasks ?? []).map((t) => t.assignee_id).filter(Boolean) as string[], ...(joinReqs ?? []).map((r) => r.requester_id), ...(delReqs ?? []).map((r) => r.requester_id), group.created_by, group.updated_by].filter(Boolean) as string[])];
+  const ids = [...new Set([...(members ?? []).map((m) => m.user_id), ...(log ?? []).map((l) => l.actor_id).filter(Boolean) as string[], ...(tasks ?? []).map((t) => t.assignee_id).filter(Boolean) as string[], ...(joinReqs ?? []).map((r) => r.requester_id), ...(delReqs ?? []).map((r) => r.requester_id), ...(docs ?? []).map((d) => d.created_by), group.created_by, group.updated_by].filter(Boolean) as string[])];
   const { data: people } = await supabase.from('profiles').select('id, email, full_name, system_role, is_active, position, phone, office, avatar_path').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).returns<Profile[]>();
   const person = new Map((people ?? []).map((p) => [p.id, p]));
   const avatars = await avatarUrls(supabase, (members ?? []).map((m) => person.get(m.user_id)?.avatar_path));
@@ -152,6 +156,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     { key: 'tong-quan', label: 'Tổng quan' },
     { key: 'viec', label: 'Việc', count: openTasks.length },
     { key: 'lich', label: 'Lịch', count: events?.length ?? 0 },
+    { key: 'tai-lieu', label: 'Tài liệu', count: (docs?.length ?? 0) + (group.drive_url ? 1 : 0) },
     ...(childIds.length > 0 || canSub || sharedProjects.length > 0 ? [{ key: 'khong-gian', label: 'Không gian', count: childIds.length + sharedProjects.length }] : []),
     ...(isPersonal ? [] : [{ key: 'thanh-vien', label: (joinReqs?.length ? `Thành viên · ${joinReqs.length} yêu cầu` : 'Thành viên'), count: members?.length ?? 0 }]),
     { key: 'thong-tin', label: 'Thông tin' },
@@ -406,6 +411,63 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         </div>
       )}
 
+      {tab === 'tai-lieu' && (
+        <div className="grid items-start gap-5 lg:grid-cols-[1fr_380px]">
+          <div className="min-w-0 space-y-5">
+            {canAttach && !group.archived_at && (
+              <section className="card" aria-labelledby="tai-len-h">
+                <h2 id="tai-len-h" className="mb-3 text-lg font-semibold">Tải tài liệu lên</h2>
+                <GroupDropBox groupId={group.id} />
+              </section>
+            )}
+            <section className="card" aria-labelledby="tai-lieu-h">
+              <h2 id="tai-lieu-h" className="mb-1 text-lg font-semibold">Tài liệu của {isPersonal ? 'dự án' : 'không gian'} ({docs?.length ?? 0})</h2>
+              <p className="mb-3 text-sm muted">{isPersonal ? 'Chỉ bạn xem được.' : 'Mọi thành viên của không gian xem và tải về được.'}</p>
+              {docsErr ? (
+                <p className="rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">Chưa bật mục Tài liệu: quản trị cần chạy SQL 20261112800001_tai_lieu_khong_gian.sql.</p>
+              ) : docs?.length ? (
+                <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">
+                  {docs.map((d) => {
+                    const href = d.file_path ? `/nhom/tep?p=${encodeURIComponent(d.file_path)}` : d.url!;
+                    const title = d.file_name || d.label || d.url!.replace(/^https:\/\//, '');
+                    const canRemove = canEdit || d.created_by === userId;
+                    return (
+                      <li key={d.id} className="flex items-center gap-3 py-2.5">
+                        <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs font-semibold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{d.file_path ? (d.file_name?.match(/\.([A-Za-z0-9]{1,5})$/)?.[1] ?? 'tệp') : '🔗'}</span>
+                        <div className="min-w-0 flex-1">
+                          <a href={href} target="_blank" rel="noopener noreferrer" className="block truncate font-medium hover:underline">{title}</a>
+                          <div className="text-xs muted">{d.file_size != null ? `${fmtSize(d.file_size)} · ` : d.url ? 'Link · ' : ''}{name(d.created_by)} · {fmtDateTime(d.created_at)}</div>
+                        </div>
+                        {d.file_path && <a href={`${href}&tai=1`} className="text-xs link">Tải về</a>}
+                        {canRemove && (
+                          <form action={deleteGroupDoc}>
+                            <input type="hidden" name="id" value={d.id} />
+                            <input type="hidden" name="group_id" value={group.id} />
+                            <button className="text-xs text-orange-700 hover:underline dark:text-orange-400">Gỡ</button>
+                          </form>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : <p className="text-sm muted">Chưa có tài liệu.{canAttach && !group.archived_at ? ' Kéo thả tệp vào ô phía trên để tải lên.' : ''}</p>}
+            </section>
+          </div>
+          <section className="card" aria-labelledby="drive-h">
+            <h2 id="drive-h" className="mb-1 text-lg font-semibold">Drive chung</h2>
+            <p className="mb-3 text-sm muted">Thư mục Google Drive dùng chung của {isPersonal ? 'dự án' : 'không gian'}. Quyền mở thư mục do Google Drive quản lý.</p>
+            {group.drive_url ? (
+              <a href={group.drive_url} target="_blank" rel="noopener noreferrer" className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 hover:border-brand-600 dark:border-slate-800 dark:hover:border-brand-300">
+                <span aria-hidden>📁</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">{group.drive_url.replace(/^https:\/\//, '')}</span>
+                <span className="text-xs link">Mở ↗</span>
+              </a>
+            ) : !(canAttach && !group.archived_at) && <p className="text-sm muted">Chưa có link Drive chung.</p>}
+            {canAttach && !group.archived_at && <DriveLinkForm key={group.drive_url ?? ''} groupId={group.id} current={group.drive_url ?? null} />}
+          </section>
+        </div>
+      )}
+
       {tab === 'khong-gian' && shared && <div className="mb-5">{shared}</div>}
       {tab === 'khong-gian' && (childIds.length > 0 || canSub) && (
         <section className="card" aria-labelledby="kgc-h">
@@ -571,4 +633,5 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
 type DeleteRequest = { id: string; item_type: 'group' | 'task' | 'event'; item_id: string; item_title: string; reason: string | null; requester_id: string; created_at: string };
 const DELETE_ITEM_LABEL: Record<DeleteRequest['item_type'], string> = { group: 'không gian', task: 'việc', event: 'lịch' };
 const ACTION: Record<string, string> = { insert: 'thêm', update: 'sửa', delete: 'xóa' };
-const ENTITY: Record<string, string> = { groups: 'thông tin nhóm', group_members: 'thành viên', invitations: 'lời mời', tasks: 'đầu việc', events: 'lịch' };
+const ENTITY: Record<string, string> = { groups: 'thông tin nhóm', group_members: 'thành viên', invitations: 'lời mời', tasks: 'đầu việc', events: 'lịch', group_files: 'tài liệu' };
+const fmtSize = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
