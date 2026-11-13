@@ -25,6 +25,7 @@ export type FormDef = {
 
 // ---------- Dựng XML ----------
 const F = 'Times New Roman';
+const TSZ = 28; // chữ trong bảng cùng cỡ với thân văn bản (14)
 const TW = 9354; // bề rộng vùng chữ (twip) với lề trái 30 mm, phải 15 mm
 type R = { b?: boolean; i?: boolean; u?: boolean; sz?: number };
 const run = (t: string, o: R = {}) =>
@@ -46,12 +47,12 @@ const parseMoney = (s: string) => Number(String(s).replace(/[^\d-]/g, '')) || 0;
 const fmtCell = (c: Col, v: string) => (c.type === 'money' ? (parseMoney(v) ? vnd(parseMoney(v)) : '') : v);
 // Bảng có viền: tiêu đề cột đậm, nền xám; tùy chọn dòng tổng.
 export function grid(cols: Col[], rows: string[][], o: { sum?: string; minRows?: number; sz?: number; stt?: boolean } = {}) {
-  const sz = o.sz ?? 24;
+  const sz = o.sz ?? TSZ;
   const all = o.stt === false ? cols : [{ k: '_stt', label: 'TT', w: 600 } as Col, ...cols];
   const total = all.reduce((a, c) => a + c.w, 0);
   const scale = TW / total;
   const ws = all.map((c) => Math.round(c.w * scale));
-  const head = `<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>${all.map((c, i) => tc(ws[i], P(c.label, { b: true, sz, jc: 'center', after: 0, line: 240 }), '<w:shd w:val="clear" w:color="auto" w:fill="F2F2F2"/>')).join('')}</w:tr>`;
+  const head = `<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>${all.map((c, i) => tc(ws[i], P(c.label, { b: true, sz, jc: 'center', after: 0, line: 240 }))).join('')}</w:tr>`;
   const filled = rows.filter((r) => r.some((x) => String(x ?? '').trim()));
   const body = [...filled, ...Array(Math.max(0, (o.minRows ?? 2) - filled.length)).fill(cols.map(() => ''))];
   const tr = body.map((r, ri) => `<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="400"/></w:trPr>${all.map((c, i) => {
@@ -322,15 +323,16 @@ export const FORMS: FormDef[] = [
         [5560, P('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', { sz: 24, b: true, jc: 'center', after: 0 }) + P('Độc lập - Tự do - Hạnh phúc', { sz: 26, b: true, jc: 'center', after: 0 }) + rule(950)]]);
       const sub = (t: string) => P(t, { b: true, i: true, before: 60, after: 60, keep: true });
       const kp = RW(v, 'kinhPhi');
-      const kpCols: Col[] = [{ k: 'n', label: 'Nguồn kinh phí', w: 1850 }, { k: 't', label: 'Tổng số', w: 1250, type: 'money' }, ...KP_ROWS.map((l, i) => ({ k: `c${i}`, label: l, w: 1250, type: 'money' as const }))];
+      const kpCols: Col[] = [{ k: 'n', label: 'Nguồn kinh phí', w: 2150 }, { k: 't', label: 'Tổng số', w: 1200, type: 'number' }, ...KP_ROWS.map((l, i) => ({ k: `c${i}`, label: l, w: 1200, type: 'number' as const }))];
       const byKhoan = (col: number) => KP_ROWS.map((name, i) => parseMoney((kp.find((r) => r[0] === name) ?? kp[i] ?? [])[col] ?? ''));
       const tong = byKhoan(1), khoan = byKhoan(2), khong = tong.map((t, i) => Math.max(0, t - khoan[i]));
       const sumOf = (a: number[]) => a.reduce((x, y) => x + y, 0);
-      const row = (label: string, a: number[]) => [label, String(sumOf(a) || ''), ...a.map((n) => (n ? String(n) : ''))];
+      const tr = (n: number) => { if (!n) return ''; const t = Math.round(n / 1000) / 1000; const [i, f] = String(t).split('.'); return vnd(Number(i)) + (f ? `,${f}` : ''); };
+      const row = (label: string, a: number[]) => [label, tr(sumOf(a)), ...a.map(tr)];
       const quy = S(v, 'nguon') !== 'Nguồn ngân sách nhà nước';
       const kpRows = [row('Tổng kinh phí', tong), row(`Trong đó: ${S(v, 'nguon') || 'Quỹ phát triển tiềm lực KH&CN'}`, tong), row('a. Kinh phí khoán chi', khoan), row('b. Kinh phí không khoán chi', khong), ...(quy ? [row('Nguồn ngân sách nhà nước', [0, 0, 0, 0, 0])] : [])];
       const checks = lines(S(v, 'hoatDongNc'));
-      const tl = (s: string) => (lines(s).length ? lines(s).map((t, i) => P(`${i + 1}. ${t.replace(/^\d+[.)]\s*/, '')}`, { left: 284, first: -284 })).join('') : P(dots + dots));
+      const tl = (s: string) => (lines(s).length ? lines(s).map((t, i) => P(`${i + 1}. ${t.replace(/^\d+[.)]\s*/, '')}`, { left: 284, first: -284 })).join('') : P(dots + dots.slice(0, 13)));
       return head + P('ĐỀ CƯƠNG CHI TIẾT', { b: true, sz: 30, jc: 'center', before: 240, after: 0, keep: true })
         + P('(đề án/dự án/dự án tư vấn chính sách/dự án chuyển giao thương mại hóa)', { i: true, jc: 'center', after: 240 })
         + section('1. Tên đề án/dự án/dự án tư vấn chính sách/dự án chuyển giao thương mại hóa') + kv('Tiếng Việt', S(v, 'ten'), L) + kv('Tiếng Anh', S(v, 'tenTa'), L)
@@ -372,8 +374,8 @@ export const FORMS: FormDef[] = [
         + sub('18.3. Kết quả đào tạo') + textBlock(S(v, 'kqDaoTao'))
         + sub('18.4. Tăng cường năng lực và khả năng ứng dụng') + textBlock(S(v, 'kqNangLuc'))
         + section('19. NỘI DUNG VÀ TIẾN ĐỘ THỰC HIỆN') + grid([{ k: 'hd', label: 'Hoạt động nghiên cứu', w: 4000 }, { k: 'tu', label: 'Từ tháng', w: 1100 }, { k: 'den', label: 'Đến tháng', w: 1100 }, { k: 'sp', label: 'Sản phẩm khoa học', w: 2600 }], RW(v, 'tienDo'), { minRows: 4 })
-        + section('20. PHÂN BỔ KINH PHÍ DỰ KIẾN') + P('Đơn vị tính: đồng', { i: true, jc: 'right', sz: 24, after: 0, keep: true })
-        + grid(kpCols, kpRows, { stt: false, sz: 18, minRows: kpRows.length })
+        + section('20. PHÂN BỔ KINH PHÍ DỰ KIẾN') + P('Đơn vị tính: triệu đồng', { i: true, jc: 'right', after: 0, keep: true })
+        + grid(kpCols, kpRows, { stt: false, minRows: kpRows.length })
         + section('21. TÀI LIỆU THAM KHẢO') + sub('21.1. Tài liệu tiếng Việt') + tl(S(v, 'tlViet')) + sub('21.2. Tài liệu tiếng Anh') + tl(S(v, 'tlAnh'))
         + signs([{ t: '', sub: '' }, { t: 'CHỦ NHIỆM NHIỆM VỤ', name: S(v, 'hoTen') }], dateLine(S(v, 'diaDanh'), S(v, 'ngay')));
     },
@@ -408,13 +410,13 @@ export const FORMS: FormDef[] = [
       const n = (k: string) => S(v, k) || '……';
       const L = { left: 284 };
       const ncsCols: Col[] = [{ k: 'ten', label: 'Họ tên NCS/ThS', w: 1800 }, { k: 'la', label: 'Tên luận án của NCS (đã bảo vệ luận án TS hoặc đang làm NCS), luận văn của ThS', w: 2600 }, { k: 'vt', label: 'Vai trò hướng dẫn (chính hay phụ)', w: 1400 }, { k: 'tg', label: 'Thời gian đào tạo', w: 1300 }, { k: 'cq', label: 'Cơ quan công tác của TS, NCS, ThS, địa chỉ liên hệ (nếu có)', w: 1700 }];
-      const sub = (label: string) => `<w:tr><w:trPr><w:cantSplit/></w:trPr>${tc(Math.round(600 * TW / 9400), P(label.split(' ')[0], { b: true, sz: 24, jc: 'center', after: 0 }))}${tc(TW - Math.round(600 * TW / 9400), P(label.split(' ').slice(1).join(' '), { b: true, sz: 24, after: 0 }), '<w:gridSpan w:val="5"/>')}</w:tr>`;
+      const sub = (label: string) => `<w:tr><w:trPr><w:cantSplit/></w:trPr>${tc(Math.round(600 * TW / 9400), P(label.split(' ')[0], { b: true, sz: TSZ, jc: 'center', after: 0 }))}${tc(TW - Math.round(600 * TW / 9400), P(label.split(' ').slice(1).join(' '), { b: true, sz: TSZ, after: 0 }), '<w:gridSpan w:val="5"/>')}</w:tr>`;
       const ncsTable = grid(ncsCols, [], { minRows: 0 }).replace(/<\/w:tbl>/, () => {
         const scale = TW / (600 + ncsCols.reduce((a, c) => a + c.w, 0));
         const ws = [600, ...ncsCols.map((c) => c.w)].map((w) => Math.round(w * scale));
         const rowsOf = (rs: string[][]) => {
           const f = rs.filter((r) => r.some((x) => x?.trim()));
-          return (f.length ? f : [['', '', '', '', ''], ['', '', '', '', '']]).map((r, i) => `<w:tr><w:trPr><w:cantSplit/></w:trPr>${tc(ws[0], P(String(i + 1), { sz: 24, jc: 'center', after: 0 }))}${r.map((c, j) => tc(ws[j + 1], P(c ?? '', { sz: 24, after: 0, line: 240 }))).join('')}</w:tr>`).join('');
+          return (f.length ? f : [['', '', '', '', ''], ['', '', '', '', '']]).map((r, i) => `<w:tr><w:trPr><w:cantSplit/></w:trPr>${tc(ws[0], P(String(i + 1), { sz: TSZ, jc: 'center', after: 0 }))}${r.map((c, j) => tc(ws[j + 1], P(c ?? '', { sz: TSZ, after: 0, line: 240 }))).join('')}</w:tr>`).join('');
         };
         return `${sub('I Nghiên cứu sinh')}${rowsOf(RW(v, 'ncs'))}${sub('II Thạc sĩ')}${rowsOf(RW(v, 'ths'))}</w:tbl>`;
       });
