@@ -2,10 +2,11 @@ import Link from 'next/link';
 import { SectionTabs } from '@/components/PageHead';
 
 // Các trang trong mục Soạn thảo.
-export function SoanThaoTabs({ current }: { current: 'cong-cu' | 'template' }) {
+export function SoanThaoTabs({ current }: { current: 'cong-cu' | 'ghi-chu' | 'template' }) {
   return (
     <SectionTabs current={current} tabs={[
       { key: 'cong-cu', href: '/soan-thao', label: 'Công cụ soạn thảo' },
+      { key: 'ghi-chu', href: '/soan-thao/ghi-chu', label: 'Công cụ ghi chú' },
       { key: 'template', href: '/soan-thao/template', label: 'Template' },
     ]} />
   );
