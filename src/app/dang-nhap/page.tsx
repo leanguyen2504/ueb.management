@@ -20,7 +20,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-800 text-sm font-bold text-white">UEB</span>
           <div>
             <h1 className="text-lg font-semibold">Quản trị công việc</h1>
-            <p className="text-xs muted">Hiệu trưởng và tổ thư ký</p>
+            <p className="text-xs muted">Trường Đại học Kinh tế - ĐHQGHN</p>
           </div>
         </div>
         {loi && NOTICE[loi] && <p role="alert" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">{NOTICE[loi]}</p>}
