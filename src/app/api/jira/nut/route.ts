@@ -21,9 +21,15 @@ export function GET() {
   if (/chamcong/i.test(location.hostname + location.pathname)) { syncPunches(); return; }
   var collect = (${collectMyJira.toString()});
   var ctx = (window.AJS && typeof window.AJS.contextPath === 'function' && window.AJS.contextPath()) || '';
-  collect(location.origin + ctx, { onProgress: say })
+  // Bấm một lần: đọc ngay, rồi tự đọc lại mỗi 30 phút khi tab Jira còn mở (và đang hiện trên màn hình).
+  var busy = false;
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function runJira(auto) {
+    if (busy) return;
+    busy = true;
+    collect(location.origin + ctx, { onProgress: auto ? function () {} : say })
     .then(function (snap) {
-      say('Đang gửi về web UEB…');
+      if (!auto) say('Đang gửi về web UEB…');
       return fetch(APP + '/api/jira/nhap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + KEY },
@@ -31,13 +37,23 @@ export function GET() {
       }).then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
           if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
-          say('UEB · Đã cập nhật ' + j.issues + ' mã việc, ' + j.worklogs + ' worklog, ' + j.mentions + ' comment nhắc tên bạn. <a href="' + APP + '/jira" target="_blank" style="color:#fde68a;text-decoration:underline">Mở trang Jira của tôi</a>', true);
+          var at = new Date();
+          say('UEB · Đã cập nhật ' + j.issues + ' mã việc, ' + j.worklogs + ' worklog, ' + j.mentions + ' comment nhắc tên bạn. Lúc ' + pad2(at.getHours()) + ':' + pad2(at.getMinutes()) +
+            ', tự cập nhật mỗi 30 phút khi tab này còn mở. <a href="' + APP + '/jira" target="_blank" style="color:#fde68a;text-decoration:underline">Mở trang Jira của tôi</a>' +
+            ' <a href="#" onclick="this.parentNode.style.display=&quot;none&quot;;return false" style="color:#fff;opacity:.7;margin-left:6px">Ẩn</a>', true);
+          if (!auto) box.style.display = '';
         });
       });
     })
     .catch(function (e) {
+      box.style.display = '';
       say('Lỗi: ' + (e && e.message ? e.message : e) + ' (Hãy mở trang Jira của trường, đăng nhập rồi bấm lại.)');
-    });
+    })
+    .then(function () { busy = false; });
+  }
+  runJira(false);
+  if (window.__uebJiraTimer) clearInterval(window.__uebJiraTimer);
+  window.__uebJiraTimer = setInterval(function () { if (!document.hidden) runJira(true); }, 1800000);
 
   // Trang chấm công của trường: đọc báo cáo bằng phiên đăng nhập của chính bạn, chỉ giữ dòng của bạn, gửi về web.
   function syncPunches() {
