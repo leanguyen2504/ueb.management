@@ -138,6 +138,27 @@ export function buildFormXml(def: FormDef, v: Values) {
 }
 export const buildFormDocx = (def: FormDef, v: Values) => (def.build ? def.build(v) : packDocx(buildFormXml(def, v)));
 
+// ---------- Phiếu đánh giá, phân loại ĐG.01 (công chức) và ĐG.02 (viên chức, người lao động) của ĐHQGHN ----------
+// Dựng lại theo đúng bố cục, câu chữ của mẫu ĐHQGHN; phần nhận xét của tập thể, lãnh đạo, cấp có thẩm quyền để dòng chấm điền tay.
+const PHAN_LOAI = ['Hoàn thành xuất sắc nhiệm vụ', 'Hoàn thành tốt nhiệm vụ', 'Hoàn thành nhiệm vụ', 'Không hoàn thành nhiệm vụ'];
+// Dòng chấm kín bề ngang trang (tab có dấu chấm dẫn), không bị xuống dòng như chuỗi dấu chấm.
+const dotLine = `<w:p><w:pPr><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="${TW}"/></w:tabs><w:spacing w:before="0" w:after="60" w:line="276" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="${F}" w:hAnsi="${F}" w:cs="${F}"/><w:sz w:val="28"/></w:rPr><w:tab/></w:r></w:p>`;
+const dotLines = (n: number) => dotLine.repeat(n);
+const answer = (s: string, n = 1) => (lines(s).length ? lines(s).map((t) => P(t, { first: 567, after: 60 })).join('') : dotLines(n));
+const dgDate = (iso: string) => {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `Ngày ${m[3]} tháng ${m[2]} năm ${m[1]}` : 'Ngày…… tháng…… năm 20……';
+};
+const signRight = (date: string, t: string, sub: string, name = '') =>
+  layout([[4200, P('', { after: 0 })], [5260, P(date, { i: true, sz: 26, jc: 'center', after: 0, keep: true }) + P(t, { b: true, jc: 'center', after: 0, keep: true }) + P(sub, { i: true, sz: 26, jc: 'center', after: 0, keep: true }) + P('', { after: 0 }) + P('', { after: 0 }) + P('', { after: 0 }) + P(name, { b: true, jc: 'center', after: 120 })]], true);
+function dgHeader(v: Values, mau: string, mauSo: string) {
+  const box = `<w:tbl><w:tblPr><w:tblW w:w="2700" w:type="dxa"/><w:jc w:val="right"/>${B1}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="2700"/></w:tblGrid><w:tr>${tc(2700, P(mau, { b: true, i: true, sz: 24, jc: 'center', after: 0 }) + P(`(Mẫu số ${mauSo} theo Nghị định số 02/VBHN-BNV, ngày 09/11/2017)`, { i: true, sz: 22, jc: 'center', after: 0, line: 240 }))}</w:tr></w:tbl>`;
+  const left = P('ĐẠI HỌC QUỐC GIA HÀ NỘI', { sz: 26, jc: 'center', after: 0 }) + P(S(v, 'coQuan').toUpperCase() || 'TÊN ĐƠN VỊ……………………', { sz: 26, b: true, jc: 'center', after: 0 }) + rule(1150);
+  const right = P('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', { sz: 24, b: true, jc: 'center', after: 0 }) + P('Độc lập - Tự do - Hạnh phúc', { sz: 26, b: true, jc: 'center', after: 0 }) + rule(950);
+  return box + P('', { after: 0 }) + layout([[3900, left], [5560, right]]);
+}
+const kvDots = (label: string, value: string) => PR([[`${label}: `, {}], [value || dots + dots, {}]], { after: 60 });
+
 // ---------- Ô dùng chung ----------
 const ORG: Field[] = [
   { k: 'chuQuan', label: 'Cơ quan chủ quản', def: 'ĐẠI HỌC QUỐC GIA HÀ NỘI', me: true },
@@ -285,17 +306,95 @@ export const FORMS: FormDef[] = [
     body: (v) => title('PHIẾU TRÌNH GIẢI QUYẾT CÔNG VIỆC') + kv('Tên công việc', S(v, 'tenCongViec')) + kv('Đề xuất', S(v, 'deXuat')),
   },
   {
-    key: 'phieu-giao-viec', label: 'Phiếu giao việc', group: 'Hành chính',
-    note: 'Giao việc có nội dung, yêu cầu sản phẩm, thời hạn và người phối hợp; hai bên cùng ký.',
-    fields: [...ORG, { k: 'so', label: 'Số phiếu', ph: '01' }, { k: 'nguoiGiao', label: 'Người giao việc', me: true }, { k: 'chucVuGiao', label: 'Chức vụ người giao' }, { k: 'nguoiNhan', label: 'Người nhận việc' }, { k: 'donViNhan', label: 'Đơn vị người nhận' },
-      { k: 'viec', label: 'Công việc', type: 'rows', cols: [{ k: 'nd', label: 'Nội dung công việc', w: 3400 }, { k: 'yc', label: 'Yêu cầu, sản phẩm', w: 2600 }, { k: 'han', label: 'Thời hạn', w: 1300 }, { k: 'ph', label: 'Phối hợp', w: 1500 }], def: [['', '', '', '']] },
-      { k: 'ghiChu', label: 'Ghi chú', type: 'textarea', wide: true }],
-    file: (v) => `Phieu_giao_viec_${slugFile(S(v, 'nguoiNhan'))}`,
-    body: (v) => orgHeader(v, P(`Số: ${S(v, 'so') || '      '}/PGV`, { sz: 26, jc: 'center', after: 0 })) + title('PHIẾU GIAO VIỆC')
-      + kv('Người giao việc', [S(v, 'nguoiGiao'), S(v, 'chucVuGiao')].filter(Boolean).join(' - ')) + kv('Người nhận việc', [S(v, 'nguoiNhan'), S(v, 'donViNhan')].filter(Boolean).join(' - '))
-      + section('Nội dung công việc được giao:') + grid([{ k: 'nd', label: 'Nội dung công việc', w: 3400 }, { k: 'yc', label: 'Yêu cầu, sản phẩm', w: 2600 }, { k: 'han', label: 'Thời hạn', w: 1300 }, { k: 'ph', label: 'Phối hợp', w: 1500 }], RW(v, 'viec'), { minRows: 3 })
-      + (S(v, 'ghiChu') ? section('Ghi chú:') + textBlock(S(v, 'ghiChu')) : '')
-      + signs([{ t: 'NGƯỜI NHẬN VIỆC', name: S(v, 'nguoiNhan') }, { t: 'NGƯỜI GIAO VIỆC', name: S(v, 'nguoiGiao') }]),
+    key: 'danh-gia-cong-chuc', label: 'Phiếu đánh giá, phân loại công chức (ĐG.01)', group: 'Hành chính',
+    note: 'Mẫu ĐG.01 của ĐHQGHN (Mẫu số 02 theo Nghị định 02/VBHN-BNV). Bạn điền phần tự đánh giá; phần ý kiến tập thể, lãnh đạo và kết quả của Giám đốc ĐHQGHN để dòng chấm điền tay. Tiêu chí phân loại (Điều 18 đến 21) có trong mẫu gốc.',
+    original: { href: 'https://docs.google.com/document/d/1bEDSKVQcABC2u4046j1xHS8XzLXF_t0O/edit', label: 'Mở mẫu gốc (tài khoản VNU)' },
+    fields: [
+      { k: 'nam', label: 'Năm đánh giá', ph: '2026' }, { k: 'coQuan', label: 'Tên đơn vị', def: 'Trường Đại học Kinh tế', me: true },
+      { k: 'hoTen', label: 'Họ và tên', me: true }, { k: 'chucVu', label: 'Chức vụ, chức danh', me: true }, { k: 'donVi', label: 'Đơn vị công tác', me: true },
+      { k: 'ngach', label: 'Ngạch công chức' }, { k: 'bac', label: 'Bậc' }, { k: 'heSo', label: 'Hệ số lương' },
+      { k: 'c1', label: '1. Chấp hành đường lối, chủ trương, chính sách của Đảng và pháp luật của Nhà nước', type: 'textarea', wide: true },
+      { k: 'c2', label: '2. Phẩm chất chính trị, đạo đức, lối sống, tác phong và lề lối làm việc', type: 'textarea', wide: true },
+      { k: 'c3', label: '3. Năng lực, trình độ chuyên môn, nghiệp vụ', type: 'textarea', wide: true },
+      { k: 'c4', label: '4. Tiến độ và kết quả thực hiện nhiệm vụ', type: 'textarea', wide: true },
+      { k: 'c5', label: '5. Tinh thần trách nhiệm và phối hợp trong thực hiện nhiệm vụ', type: 'textarea', wide: true },
+      { k: 'c6', label: '6. Thái độ phục vụ nhân dân', type: 'textarea', wide: true },
+      { k: 'c7', label: '7. Kết quả hoạt động của cơ quan, tổ chức, đơn vị được giao lãnh đạo, quản lý (nếu có)', type: 'textarea', wide: true },
+      { k: 'c8', label: '8. Năng lực lãnh đạo, quản lý (nếu có)', type: 'textarea', wide: true },
+      { k: 'c9', label: '9. Năng lực tập hợp, đoàn kết công chức (nếu có)', type: 'textarea', wide: true },
+      { k: 'uuNhuoc', label: 'II.1. Đánh giá ưu, nhược điểm', type: 'textarea', wide: true },
+      { k: 'phanLoai', label: 'II.2. Tự phân loại', type: 'select', options: ['', 'Hoàn thành xuất sắc nhiệm vụ', 'Hoàn thành tốt nhiệm vụ', 'Hoàn thành nhiệm vụ nhưng còn hạn chế về năng lực', 'Không hoàn thành nhiệm vụ'], def: '' },
+      { k: 'ngay', label: 'Ngày tự đánh giá', type: 'date' },
+    ],
+    file: (v) => `DG01_${slugFile(S(v, 'hoTen'))}`,
+    body: (v) => {
+      const items = ['1. Chấp hành đường lối, chủ trương, chính sách của Đảng và pháp luật của Nhà nước:', '2. Phẩm chất chính trị, đạo đức, lối sống, tác phong và lề lối làm việc:', '3. Năng lực, trình độ chuyên môn, nghiệp vụ:', '4. Tiến độ và kết quả thực hiện nhiệm vụ:', '5. Tinh thần trách nhiệm và phối hợp trong thực hiện nhiệm vụ:', '6. Thái độ phục vụ nhân dân:', '7. Kết quả hoạt động của cơ quan, tổ chức, đơn vị được giao lãnh đạo, quản lý:', '8. Năng lực lãnh đạo, quản lý:', '9. Năng lực tập hợp, đoàn kết công chức:'];
+      return dgHeader(v, 'Mẫu ĐG 01', '02') + title('PHIẾU ĐÁNH GIÁ VÀ PHÂN LOẠI CÔNG CHỨC', `Năm ${S(v, 'nam') || '……'}`)
+        + kvDots('Họ và tên', S(v, 'hoTen')) + kvDots('Chức vụ, chức danh', S(v, 'chucVu')) + kvDots('Đơn vị công tác', S(v, 'donVi'))
+        + P(`Ngạch công chức: ${S(v, 'ngach') || '……………………'}    Bậc: ${S(v, 'bac') || '…………'}    Hệ số lương: ${S(v, 'heSo') || '…………'}`, { after: 60 })
+        + section('I. TỰ ĐÁNH GIÁ KẾT QUẢ CÔNG TÁC, TU DƯỠNG, RÈN LUYỆN CỦA CÔNG CHỨC')
+        + items.map((t, i) => P(t, { after: 0, keep: true }) + answer(S(v, `c${i + 1}`))).join('')
+        + section('II. TỰ ĐÁNH GIÁ, PHÂN LOẠI CỦA CÔNG CHỨC') + P('1. Đánh giá ưu, nhược điểm:', { after: 0, keep: true }) + answer(S(v, 'uuNhuoc'), 2)
+        + P('2. Phân loại đánh giá:', { after: 0, keep: true })
+        + P('Công chức căn cứ các tiêu chí từ điều 18 đến điều 21 Nghị định số 02/VBHN-BNV để tự phân loại đánh giá theo một trong bốn mức sau: Hoàn thành xuất sắc nhiệm vụ; hoàn thành tốt nhiệm vụ; hoàn thành nhiệm vụ nhưng còn hạn chế về năng lực; không hoàn thành nhiệm vụ.', { i: true, sz: 26, after: 60 })
+        + (S(v, 'phanLoai') ? P(S(v, 'phanLoai'), { b: true, first: 567, after: 60 }) : dotLines(1))
+        + signRight(dgDate(S(v, 'ngay')), 'Công chức tự đánh giá', '(ký, ghi rõ họ và tên)', S(v, 'hoTen'))
+        + section('III. Ý KIẾN CỦA TẬP THỂ ĐƠN VỊ VÀ LÃNH ĐẠO TRỰC TIẾP QUẢN LÝ CÔNG CHỨC')
+        + P('1. Ý kiến của tập thể đơn vị nơi công chức công tác:', { after: 0, keep: true }) + dotLines(2)
+        + P('2. Nhận xét của lãnh đạo trực tiếp quản lý công chức:', { after: 0, keep: true }) + dotLines(2)
+        + signRight(dgDate(''), 'Thủ trưởng trực tiếp đánh giá', '(ký, ghi rõ họ và tên)')
+        + section('IV. KẾT QUẢ ĐÁNH GIÁ, PHÂN LOẠI CÔNG CHỨC CỦA GIÁM ĐỐC ĐHQGHN')
+        + P('1. Nhận xét ưu, nhược điểm:', { after: 0, keep: true }) + dotLines(2)
+        + P('2. Kết quả đánh giá, phân loại công chức:', { after: 0, keep: true })
+        + P('(Phân loại đánh giá theo 1 trong 4 mức sau: Hoàn thành xuất sắc nhiệm vụ; hoàn thành tốt nhiệm vụ; hoàn thành nhiệm vụ nhưng còn hạn chế về năng lực; không hoàn thành nhiệm vụ)', { i: true, sz: 26, after: 60 }) + dotLines(2)
+        + signRight(dgDate(''), 'Giám đốc', '(ký, ghi rõ họ và tên, đóng dấu)');
+    },
+  },
+  {
+    key: 'danh-gia-vien-chuc', label: 'Phiếu đánh giá, phân loại viên chức, người lao động (ĐG.02)', group: 'Hành chính',
+    note: 'Mẫu ĐG.02 của ĐHQGHN (Mẫu số 03 theo Nghị định 02/VBHN-BNV), dùng cho giảng viên, chuyên viên, người lao động. Bạn điền phần tự đánh giá; phần ý kiến tập thể, lãnh đạo và cấp có thẩm quyền để dòng chấm điền tay. Tiêu chí phân loại (Điều 25 đến 28) có trong mẫu gốc.',
+    original: { href: 'https://docs.google.com/document/d/1eOFPVzBqSBorPlK5mRSAVh_1YmyE76ge/edit', label: 'Mở mẫu gốc (tài khoản VNU)' },
+    fields: [
+      { k: 'nam', label: 'Năm đánh giá', ph: '2026' }, { k: 'coQuan', label: 'Tên đơn vị', def: 'Trường Đại học Kinh tế', me: true },
+      { k: 'hoTen', label: 'Họ và tên', me: true }, { k: 'chucVu', label: 'Chức danh nghề nghiệp', me: true }, { k: 'donVi', label: 'Đơn vị công tác', me: true },
+      { k: 'hang', label: 'Hạng chức danh nghề nghiệp (viên chức)' }, { k: 'bac', label: 'Bậc' }, { k: 'heSo', label: 'Hệ số lương' },
+      { k: 'c1', label: '1. Kết quả thực hiện công việc hoặc nhiệm vụ theo hợp đồng làm việc/hợp đồng lao động đã ký kết và những nhiệm vụ đột xuất', type: 'textarea', wide: true },
+      { k: 'c2', label: '2. Việc thực hiện quy định về đạo đức nghề nghiệp', type: 'textarea', wide: true },
+      { k: 'c3', label: '3. Tinh thần trách nhiệm, thái độ phục vụ nhân dân, tinh thần hợp tác với đồng nghiệp và việc thực hiện quy tắc ứng xử', type: 'textarea', wide: true },
+      { k: 'c4', label: '4. Việc thực hiện các nghĩa vụ khác của viên chức/người lao động', type: 'textarea', wide: true },
+      { k: 'c5', label: '5. Năng lực lãnh đạo, quản lí, điều hành và tổ chức thực hiện nhiệm vụ (viên chức quản lí)', type: 'textarea', wide: true },
+      { k: 'c6', label: '6. Kết quả hoạt động của đơn vị được giao phụ trách (viên chức quản lí)', type: 'textarea', wide: true },
+      { k: 'uuNhuoc', label: 'II.1. Đánh giá ưu, nhược điểm', type: 'textarea', wide: true },
+      { k: 'phanLoai', label: 'II.2. Tự phân loại', type: 'select', options: ['', ...PHAN_LOAI], def: '' },
+      { k: 'ngay', label: 'Ngày tự đánh giá', type: 'date' },
+    ],
+    file: (v) => `DG02_${slugFile(S(v, 'hoTen'))}`,
+    body: (v) => {
+      const items = ['1. Kết quả thực hiện công việc hoặc nhiệm vụ theo hợp đồng làm việc/hợp đồng lao động đã ký kết và những nhiệm vụ đột xuất', '2. Việc thực hiện quy định về đạo đức nghề nghiệp', '3. Tinh thần trách nhiệm, thái độ phục vụ nhân dân, tinh thần hợp tác với đồng nghiệp và việc thực hiện quy tắc ứng xử của viên chức/người lao động', '4. Việc thực hiện các nghĩa vụ khác của viên chức/người lao động'];
+      const ql = ['5. Năng lực lãnh đạo, quản lí, điều hành và tổ chức thực hiện nhiệm vụ', '6. Kết quả hoạt động của đơn vị được giao phụ trách'];
+      return dgHeader(v, 'Mẫu ĐG 02', '03') + title('PHIẾU ĐÁNH GIÁ VÀ PHÂN LOẠI VIÊN CHỨC, NGƯỜI LAO ĐỘNG', `Năm ${S(v, 'nam') || '……'}`)
+        + kvDots('Họ và tên', S(v, 'hoTen')) + kvDots('Chức danh nghề nghiệp', S(v, 'chucVu')) + kvDots('Đơn vị công tác', S(v, 'donVi'))
+        + P(`Hạng chức danh nghề nghiệp (đối với viên chức): ${S(v, 'hang') || '…………'}    Bậc: ${S(v, 'bac') || '…………'}    Hệ số lương: ${S(v, 'heSo') || '…………'}`, { after: 60 })
+        + section('I. TỰ ĐÁNH GIÁ KẾT QUẢ CÔNG TÁC, TU DƯỠNG, RÈN LUYỆN')
+        + items.map((t, i) => P(t, { after: 0, keep: true }) + answer(S(v, `c${i + 1}`))).join('')
+        + P('Viên chức quản lí đánh giá thêm các nội dung sau:', { i: true, after: 0, keep: true })
+        + ql.map((t, i) => P(t, { after: 0, keep: true }) + answer(S(v, `c${i + 5}`))).join('')
+        + section('II. TỰ ĐÁNH GIÁ, PHÂN LOẠI CỦA VIÊN CHỨC, NGƯỜI LAO ĐỘNG') + P('1. Đánh giá ưu, nhược điểm', { after: 0, keep: true }) + answer(S(v, 'uuNhuoc'), 3)
+        + P('2. Phân loại đánh giá', { after: 0, keep: true })
+        + P('VC, NLĐ căn cứ vào quy định tại điều 25 đến điều 28 Nghị định số 02/VBHN để tự phân loại đánh giá theo một trong bốn mức sau: Hoàn thành xuất sắc nhiệm vụ; hoàn thành tốt nhiệm vụ; hoàn thành nhiệm vụ; không hoàn thành nhiệm vụ.', { i: true, sz: 26, after: 60 })
+        + (S(v, 'phanLoai') ? P(S(v, 'phanLoai'), { b: true, first: 567, after: 60 }) : dotLines(2))
+        + signRight(dgDate(S(v, 'ngay')), 'Viên chức/NLĐ tự đánh giá', '(ký, ghi rõ họ và tên)', S(v, 'hoTen'))
+        + section('III. Ý KIẾN CỦA TẬP THỂ ĐƠN VỊ VÀ LÃNH ĐẠO TRỰC TIẾP QUẢN LÍ VIÊN CHỨC VÀ NGƯỜI LAO ĐỘNG')
+        + P('1. Ý kiến của tập thể đơn vị nơi viên chức và người lao động công tác', { after: 0, keep: true }) + dotLines(3)
+        + P('2. Nhận xét của lãnh đạo trực tiếp quản lý viên chức và người lao động', { after: 0, keep: true }) + dotLines(3)
+        + P('3. Nhận xét ưu, nhược điểm', { after: 0, keep: true }) + dotLines(3)
+        + signRight(dgDate(''), 'Thủ trưởng trực tiếp đánh giá', '(ký, ghi rõ họ và tên)')
+        + section('IV. KẾT QUẢ ĐÁNH GIÁ, PHÂN LOẠI VIÊN CHỨC, NGƯỜI LAO ĐỘNG CỦA CẤP CÓ THẨM QUYỀN')
+        + P('1. Đánh giá ưu, nhược điểm', { after: 0, keep: true }) + dotLines(3)
+        + P('2. Kết quả phân loại viên chức, người lao động', { after: 0, keep: true })
+        + P('(Phân loại đánh giá theo 1 trong 4 mức sau: Hoàn thành xuất sắc nhiệm vụ; hoàn thành tốt nhiệm vụ; hoàn thành nhiệm vụ; không hoàn thành nhiệm vụ)', { i: true, sz: 26, after: 60 }) + dotLines(3)
+        + signRight(dgDate(''), 'THỦ TRƯỞNG ĐƠN VỊ', '(ký, ghi rõ họ và tên, đóng dấu)');
+    },
   },
   {
     key: 'bao-cao-cong-viec', label: 'Báo cáo công việc tuần, tháng', group: 'Hành chính',
@@ -328,23 +427,6 @@ export const FORMS: FormDef[] = [
       + P(`Trong thời gian đi công tác, công việc của tôi được bàn giao cho ${S(v, 'banGiao') || dots}. Tôi xin chấp hành đúng quy định và báo cáo kết quả sau chuyến công tác.`, { first: 567 })
       + P('Trân trọng cảm ơn./.', { first: 567 })
       + signs([{ t: 'Ý KIẾN CỦA LÃNH ĐẠO ĐƠN VỊ', sub: '(Ký, ghi rõ họ tên)' }, { t: 'NGƯỜI LÀM ĐƠN', name: S(v, 'hoTen') }], dateLine(S(v, 'diaDanh'), S(v, 'ngay'))),
-  },
-  {
-    key: 'don-nghi-phep', label: 'Đơn xin nghỉ phép (Mẫu 01 ĐHQGHN)', group: 'Hành chính',
-    note: 'Điền thẳng vào Mẫu 01 - Đơn xin nghỉ phép năm do ĐHQGHN ban hành (giữ nguyên bố cục, ô đánh dấu lý do nghỉ, chỗ ký). Mục để trống giữ dấu chấm để điền tay.',
-    original: { href: '/mau/Mau_01_Don_xin_nghi_phep_nam.docx', label: 'Tải mẫu gốc (trống)' },
-    build: async (v) => (await import('./nghiPhep')).buildNghiPhep(v),
-    fields: [
-      { k: 'kinhGui', label: 'Kính gửi', def: 'Lãnh đạo Trường Đại học Kinh tế', wide: true },
-      { k: 'hoTen', label: 'Họ và tên', me: true }, { k: 'donVi', label: 'Đơn vị', ph: 'Khoa Kinh tế phát triển', me: true },
-      { k: 'loai', label: 'Lý do nghỉ', type: 'select', options: ['Nghỉ phép năm', 'Nghỉ việc riêng không lương', 'Nghỉ ốm', 'Nghỉ lý do khác'], def: 'Nghỉ phép năm' },
-      { k: 'giayBs', label: 'Nghỉ ốm: có giấy chứng nhận của bác sĩ', type: 'select', options: ['', 'Có', 'Không'], def: '' },
-      { k: 'lyDoKhac', label: 'Nghỉ lý do khác: nêu rõ lý do', wide: true },
-      { k: 'soNgay', label: 'Số ngày nghỉ', type: 'number' }, { k: 'tuNgay', label: 'Từ ngày', type: 'date' }, { k: 'denNgay', label: 'Đến ngày', type: 'date' },
-      { k: 'banGiao', label: 'Bàn giao công việc cho', wide: true },
-      { k: 'diaDanh', label: 'Địa danh', def: 'Hà Nội', me: true }, { k: 'ngay', label: 'Ngày làm đơn', type: 'date' }],
-    file: (v) => `Don_nghi_phep_${slugFile(S(v, 'hoTen'))}`,
-    body: (v) => nationHeader() + title('ĐƠN XIN NGHỈ PHÉP') + kinhGui(S(v, 'kinhGui')) + kv('Tên tôi là', S(v, 'hoTen')) + kv('Đơn vị', S(v, 'donVi')),
   },
   {
     key: 'de-cuong-hoc-phan', label: 'Đề cương học phần', group: 'Giảng dạy, nghiên cứu',

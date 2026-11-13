@@ -148,7 +148,7 @@ export function FormMaker({ formKey }: { formKey: string }) {
             <p className="mt-1 max-w-3xl text-sm muted">{def.note}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {def.original && <a className="btn-secondary px-3 py-1.5 text-sm" href={def.original.href} download>{def.original.label}</a>}
+            {def.original && <a className="btn-secondary px-3 py-1.5 text-sm" href={def.original.href} {...(def.original.href.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : { download: true })}>{def.original.label}</a>}
             <button type="button" className="btn-secondary px-3 py-1.5 text-sm" onClick={reset}>Làm mới</button>
           </div>
         </div>

@@ -15,10 +15,10 @@ export function SoanThaoTabs({ current }: { current: 'cong-cu' | 'ghi-chu' | 'te
 export const TEMPLATES = [
   { key: 'van-ban', label: 'Khung văn bản hành chính', group: 'Hành chính' },
   { key: 'phieu-trinh', label: 'Phiếu trình', group: 'Hành chính' },
-  { key: 'phieu-giao-viec', label: 'Phiếu giao việc', group: 'Hành chính' },
   { key: 'bao-cao-cong-viec', label: 'Báo cáo tuần, tháng', group: 'Hành chính' },
   { key: 'don-cong-tac', label: 'Đơn xin đi công tác', group: 'Hành chính' },
-  { key: 'don-nghi-phep', label: 'Đơn xin nghỉ phép (Mẫu 01)', group: 'Hành chính' },
+  { key: 'danh-gia-cong-chuc', label: 'Phiếu đánh giá công chức (ĐG.01)', group: 'Hành chính' },
+  { key: 'danh-gia-vien-chuc', label: 'Phiếu đánh giá viên chức, NLĐ (ĐG.02)', group: 'Hành chính' },
   { key: 'du-toan', label: 'Dự toán, quyết toán kinh phí', group: 'Tài chính' },
   { key: 'de-nghi-thanh-toan', label: 'Giấy đề nghị thanh toán', group: 'Tài chính' },
   { key: 'de-nghi-tam-ung', label: 'Giấy đề nghị tạm ứng', group: 'Tài chính' },
