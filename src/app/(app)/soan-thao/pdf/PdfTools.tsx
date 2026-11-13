@@ -54,6 +54,7 @@ function MergeBox() {
   const [err, setErr] = useState('');
   const [drag, setDrag] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
 
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -95,11 +96,21 @@ function MergeBox() {
     [a[i], a[j]] = [a[j], a[i]];
     return a;
   });
-  const remove = (id: number) => setItems((cur) => {
-    const it = cur.find((x) => x.id === id);
-    if (it?.thumb) URL.revokeObjectURL(it.thumb);
-    return cur.filter((x) => x.id !== id);
+  const removeMany = (ids: Set<number>) => {
+    setItems((cur) => {
+      cur.forEach((x) => ids.has(x.id) && x.thumb && URL.revokeObjectURL(x.thumb));
+      return cur.filter((x) => !ids.has(x.id));
+    });
+    setPicked((p) => new Set([...p].filter((id) => !ids.has(id))));
+  };
+  const remove = (id: number) => removeMany(new Set([id]));
+  const toggle = (id: number) => setPicked((p) => {
+    const n = new Set(p);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
   });
+  const allPicked = items.length > 0 && items.every((x) => picked.has(x.id));
 
   // Dựng PDF ở một mức nén ảnh.
   async function build(level: [number, number, boolean]) {
@@ -177,9 +188,25 @@ function MergeBox() {
       {converting && <p className="text-sm muted">Đang đọc ảnh HEIC…</p>}
 
       {items.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={allPicked} onChange={() => setPicked(allPicked ? new Set() : new Set(items.map((x) => x.id)))} /> Chọn tất cả</label>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-2.5 py-1 text-red-700 hover:bg-red-50 disabled:opacity-40 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-900/20"
+            disabled={!picked.size}
+            title="Xóa các file đã chọn"
+            onClick={() => removeMany(new Set(picked))}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" /></svg>
+            {picked.size ? `Xóa ${picked.size} file đã chọn` : 'Xóa file đã chọn'}
+          </button>
+        </div>
+      )}
+      {items.length > 0 && (
         <ol className="space-y-2">
           {items.map((it, i) => (
             <li key={it.id} className="flex items-center gap-3 rounded-lg border border-gray-200 p-2 text-sm dark:border-gray-700">
+              <input type="checkbox" checked={picked.has(it.id)} onChange={() => toggle(it.id)} aria-label={`Chọn ${it.file.name}`} />
               <span className="w-6 text-center muted">{i + 1}</span>
               {it.thumb
                 ? <img src={it.thumb} alt="" className="h-12 w-12 rounded object-cover" />
@@ -204,7 +231,7 @@ function MergeBox() {
           <span className="-ml-2.5 inline-flex items-center gap-1"><input className="input w-20 py-1" inputMode="decimal" value={limit} disabled={!limitOn} onChange={(e) => setLimit(e.target.value)} aria-label="Dung lượng tối đa (MB)" /> MB</span>
         </div>
         <div className="flex gap-2">
-          {items.length > 0 && <button type="button" className="btn-secondary px-3 py-1.5 text-sm" onClick={() => { items.forEach((x) => x.thumb && URL.revokeObjectURL(x.thumb)); setItems([]); }}>Xóa hết</button>}
+          {items.length > 0 && <button type="button" className="btn-secondary px-3 py-1.5 text-sm" onClick={() => removeMany(new Set(items.map((x) => x.id)))}>Xóa hết</button>}
           <button type="button" className="btn" disabled={busy || converting || !items.length} onClick={make}>{busy ? 'Đang tạo…' : 'Tải file PDF'}</button>
         </div>
       </div>
