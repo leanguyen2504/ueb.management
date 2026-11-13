@@ -14,6 +14,7 @@ export function SoanThaoTabs({ current }: { current: 'cong-cu' | 'ghi-chu' | 'te
 
 export const TEMPLATES = [
   { key: 'van-ban', label: 'Khung văn bản hành chính', group: 'Hành chính' },
+  { key: 'phieu-trinh', label: 'Phiếu trình', group: 'Hành chính' },
   { key: 'phieu-giao-viec', label: 'Phiếu giao việc', group: 'Hành chính' },
   { key: 'bao-cao-cong-viec', label: 'Báo cáo tuần, tháng', group: 'Hành chính' },
   { key: 'don-cong-tac', label: 'Đơn xin đi công tác', group: 'Hành chính' },
