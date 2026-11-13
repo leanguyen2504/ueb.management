@@ -330,19 +330,21 @@ export const FORMS: FormDef[] = [
       + signs([{ t: 'Ý KIẾN CỦA LÃNH ĐẠO ĐƠN VỊ', sub: '(Ký, ghi rõ họ tên)' }, { t: 'NGƯỜI LÀM ĐƠN', name: S(v, 'hoTen') }], dateLine(S(v, 'diaDanh'), S(v, 'ngay'))),
   },
   {
-    key: 'don-nghi-phep', label: 'Đơn xin nghỉ phép', group: 'Hành chính',
-    note: 'Đơn xin nghỉ phép năm hoặc nghỉ việc riêng, có bàn giao công việc và liên hệ khi cần.',
-    fields: [{ k: 'kinhGui', label: 'Kính gửi', type: 'textarea', def: '- Hiệu trưởng Trường Đại học Kinh tế - ĐHQGHN;\n- Trưởng phòng Tổ chức Cán bộ;\n- Lãnh đạo đơn vị.', wide: true }, ...ME,
-      { k: 'loai', label: 'Loại nghỉ', type: 'select', options: ['nghỉ phép năm', 'nghỉ việc riêng', 'nghỉ ốm', 'nghỉ không hưởng lương'], def: 'nghỉ phép năm' }, { k: 'soNgay', label: 'Số ngày nghỉ', type: 'number' }, { k: 'tuNgay', label: 'Từ ngày', type: 'date' }, { k: 'denNgay', label: 'Đến ngày', type: 'date' },
-      { k: 'lyDo', label: 'Lý do', type: 'textarea', wide: true }, { k: 'noiNghi', label: 'Nơi nghỉ' }, { k: 'lienHe', label: 'Số điện thoại liên hệ' }, { k: 'banGiao', label: 'Người nhận bàn giao công việc', wide: true }, { k: 'diaDanh', label: 'Địa danh', def: 'Hà Nội', me: true }, { k: 'ngay', label: 'Ngày làm đơn', type: 'date' }],
+    key: 'don-nghi-phep', label: 'Đơn xin nghỉ phép (Mẫu 01 ĐHQGHN)', group: 'Hành chính',
+    note: 'Điền thẳng vào Mẫu 01 - Đơn xin nghỉ phép năm do ĐHQGHN ban hành (giữ nguyên bố cục, ô đánh dấu lý do nghỉ, chỗ ký). Mục để trống giữ dấu chấm để điền tay.',
+    original: { href: '/mau/Mau_01_Don_xin_nghi_phep_nam.docx', label: 'Tải mẫu gốc (trống)' },
+    build: async (v) => (await import('./nghiPhep')).buildNghiPhep(v),
+    fields: [
+      { k: 'kinhGui', label: 'Kính gửi', def: 'Lãnh đạo Trường Đại học Kinh tế', wide: true },
+      { k: 'hoTen', label: 'Họ và tên', me: true }, { k: 'donVi', label: 'Đơn vị', ph: 'Khoa Kinh tế phát triển', me: true },
+      { k: 'loai', label: 'Lý do nghỉ', type: 'select', options: ['Nghỉ phép năm', 'Nghỉ việc riêng không lương', 'Nghỉ ốm', 'Nghỉ lý do khác'], def: 'Nghỉ phép năm' },
+      { k: 'giayBs', label: 'Nghỉ ốm: có giấy chứng nhận của bác sĩ', type: 'select', options: ['', 'Có', 'Không'], def: '' },
+      { k: 'lyDoKhac', label: 'Nghỉ lý do khác: nêu rõ lý do', wide: true },
+      { k: 'soNgay', label: 'Số ngày nghỉ', type: 'number' }, { k: 'tuNgay', label: 'Từ ngày', type: 'date' }, { k: 'denNgay', label: 'Đến ngày', type: 'date' },
+      { k: 'banGiao', label: 'Bàn giao công việc cho', wide: true },
+      { k: 'diaDanh', label: 'Địa danh', def: 'Hà Nội', me: true }, { k: 'ngay', label: 'Ngày làm đơn', type: 'date' }],
     file: (v) => `Don_nghi_phep_${slugFile(S(v, 'hoTen'))}`,
-    body: (v) => nationHeader() + title('ĐƠN XIN NGHỈ PHÉP') + kinhGui(S(v, 'kinhGui'))
-      + kv('Tôi tên là', S(v, 'hoTen')) + kv('Chức vụ, chức danh', S(v, 'chucVu')) + kv('Đơn vị công tác', S(v, 'donVi'))
-      + P(`Tôi làm đơn này kính đề nghị cho tôi được ${S(v, 'loai') || 'nghỉ phép năm'} ${S(v, 'soNgay') ? `${S(v, 'soNgay')} ngày, ` : ''}từ ngày ${vnDate(S(v, 'tuNgay'))} đến hết ngày ${vnDate(S(v, 'denNgay'))}.`, { first: 567 })
-      + kv('Lý do', S(v, 'lyDo')) + kv('Nơi nghỉ', S(v, 'noiNghi')) + kv('Số điện thoại liên hệ', S(v, 'lienHe'))
-      + P(`Công việc trong thời gian nghỉ được bàn giao cho ${S(v, 'banGiao') || dots}. Tôi xin hứa trở lại làm việc đúng thời hạn.`, { first: 567 })
-      + P('Trân trọng cảm ơn./.', { first: 567 })
-      + signs([{ t: 'Ý KIẾN CỦA LÃNH ĐẠO ĐƠN VỊ', sub: '(Ký, ghi rõ họ tên)' }, { t: 'NGƯỜI LÀM ĐƠN', name: S(v, 'hoTen') }], dateLine(S(v, 'diaDanh'), S(v, 'ngay'))),
+    body: (v) => nationHeader() + title('ĐƠN XIN NGHỈ PHÉP') + kinhGui(S(v, 'kinhGui')) + kv('Tên tôi là', S(v, 'hoTen')) + kv('Đơn vị', S(v, 'donVi')),
   },
   {
     key: 'de-cuong-hoc-phan', label: 'Đề cương học phần', group: 'Giảng dạy, nghiên cứu',

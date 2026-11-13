@@ -1,7 +1,7 @@
 'use client';
 
 // Biểu mẫu gốc do ĐHQGHN công bố (cổng thủ tục hành chính tthc.vnu.edu.vn, trang vnu.edu.vn).
-// Chỉ liên kết tới file gốc để luôn đúng bản hiện hành; mục nào ĐHQGHN chưa đăng file thì mở trang thủ tục.
+// Mẫu nào đã đưa file gốc lên web thì điền ngay trong Template; còn lại liên kết tới file gốc hoặc trang thủ tục.
 import { useState } from 'react';
 
 type Item = { label: string; href: string; kind: string; note?: string };
@@ -11,9 +11,9 @@ const UP = 'https://vnu.edu.vn/upload/2023/06/33128/file/';
 
 export const OFFICIAL: { group: string; items: Item[] }[] = [
   {
-    group: 'Tổ chức cán bộ (chuyên viên, giảng viên, trợ giảng)',
+    group: 'Hành chính, tổ chức cán bộ',
     items: [
-      { label: 'Mẫu 01 - Đơn xin nghỉ phép năm', href: 'https://drive.google.com/uc?export=download&id=1J17tIsTY4251mmbIIFMkQa3BKs0cu3Hb', kind: 'Word (.doc)' },
+      { label: 'Mẫu 01 - Đơn xin nghỉ phép năm', href: '/soan-thao/template?loai=don-nghi-phep', kind: 'Điền trên web' },
       { label: 'Nghỉ phép, nghỉ không lương (Mẫu 01, 02): thủ tục và nộp trực tuyến', href: `${TT}xin-nghi-phep-nam-5c96b437`, kind: 'Trang thủ tục' },
       { label: 'Nghỉ ốm, thai sản (Mẫu 03, 04): thủ tục và nộp trực tuyến', href: `${TT}xin-nghi-om-thai-san-9f63feae`, kind: 'Trang thủ tục' },
       { label: 'ĐG.01 - Phiếu đánh giá viên chức quản lý', href: 'https://docs.google.com/document/d/1bEDSKVQcABC2u4046j1xHS8XzLXF_t0O/edit', kind: 'Google Docs', note: 'Đăng nhập tài khoản @vnu.edu.vn' },
@@ -21,11 +21,14 @@ export const OFFICIAL: { group: string; items: Item[] }[] = [
       { label: 'ĐG.04 - Bảng tổng hợp kết quả đánh giá, phân loại', href: 'https://docs.google.com/spreadsheets/d/1ES5ayd_qumYUaP4YIvN9k3XrMLf6D3xp/edit', kind: 'Google Sheets', note: 'Đăng nhập tài khoản @vnu.edu.vn' },
       { label: 'Đánh giá viên chức cuối năm (ĐG.01-ĐG.04): thủ tục', href: `${TT}danh-gia-cong-chuc-vien-chuc-nguoi-lao-dong-cuoi-nam-a51c85c6`, kind: 'Trang thủ tục' },
       { label: 'Phiếu sơ yếu lý lịch, lý lịch khoa học viên chức', href: 'https://docs.google.com/spreadsheets/d/1FJuwEpIFd5RAqe7FJOt5SMF5fVUvjazt/edit', kind: 'Excel trên Drive' },
+      { label: 'Đăng ký sử dụng Hội trường Nguyễn Văn Đạo', href: `${TT}dang-ky-su-dung-hoi-truong-nguyen-van-dao-042ad30b`, kind: 'Trang thủ tục' },
+      { label: 'Đăng ký tài khoản email, eOffice, Internet', href: `${TT}dang-ky-tai-khoan-su-dung-cac-dich-vu-mang-truy-cap-email-eoffice-internet-2016a2bb`, kind: 'Trang thủ tục' },
       { label: 'Xét danh hiệu thi đua, khen thưởng (trích ngang, báo cáo thành tích)', href: `${TT}xet-danh-hieu-thi-dua-khen-thuong-5bac7d6a`, kind: 'Trang thủ tục' },
+      { label: 'Tất cả thủ tục hành chính ĐHQGHN', href: 'https://tthc.vnu.edu.vn', kind: 'Cổng thủ tục' },
     ],
   },
   {
-    group: 'Khoa học công nghệ',
+    group: 'Giảng dạy, nghiên cứu khoa học',
     items: [
       { label: 'Bộ biểu mẫu nhiệm vụ KH&CN, ĐMST theo QĐ 2868/QĐ-ĐHQGHN (2026)', href: `${CDN}bieu-mau-nhiem-vu-khcn-dmst-2868.docx`, kind: 'Word (.docx)', note: 'Bộ mẫu mới nhất, gồm thuyết minh, lý lịch khoa học, đơn đăng ký chủ trì' },
       { label: 'QĐ 2868/QĐ-ĐHQGHN - Quy định quản lý nhiệm vụ KH&CN cấp ĐHQGHN', href: `${CDN}qd-2868-quy-dinh-quan-ly-nhiem-vu-khcn-cap-dhqghn-trinh-ky.pdf`, kind: 'PDF' },
@@ -47,14 +50,6 @@ export const OFFICIAL: { group: string; items: Item[] }[] = [
       { label: 'Ký thỏa thuận hợp tác, hợp đồng triển khai', href: `${TT}ky-van-ban-thoa-thuan-hop-tac-hop-dong-trien-khai-cua-cac-don-vi-truc-thuoc-9bc75200`, kind: 'Trang thủ tục' },
     ],
   },
-  {
-    group: 'Hành chính, văn phòng',
-    items: [
-      { label: 'Đăng ký sử dụng Hội trường Nguyễn Văn Đạo', href: `${TT}dang-ky-su-dung-hoi-truong-nguyen-van-dao-042ad30b`, kind: 'Trang thủ tục' },
-      { label: 'Đăng ký tài khoản email, eOffice, Internet', href: `${TT}dang-ky-tai-khoan-su-dung-cac-dich-vu-mang-truy-cap-email-eoffice-internet-2016a2bb`, kind: 'Trang thủ tục' },
-      { label: 'Tất cả thủ tục hành chính ĐHQGHN', href: 'https://tthc.vnu.edu.vn', kind: 'Cổng thủ tục' },
-    ],
-  },
 ];
 
 export function OfficialForms() {
@@ -64,7 +59,7 @@ export function OfficialForms() {
     <div className="card mb-5 flex flex-wrap items-center gap-3 text-sm">
       <div className="min-w-[220px] flex-1">
         <div className="font-semibold">Biểu mẫu gốc của ĐHQGHN</div>
-        <div className="text-xs muted">Mở hoặc tải đúng file ĐHQGHN đang công bố. Mục ghi “Trang thủ tục” là nơi ĐHQGHN hướng dẫn hồ sơ và nộp trực tuyến.</div>
+        <div className="text-xs muted">Mục ghi “Điền trên web” mở ngay mẫu gốc trong Template để điền và tải Word. Mục khác mở file ĐHQGHN đang công bố hoặc trang thủ tục hướng dẫn hồ sơ, nộp trực tuyến.</div>
       </div>
       <select className="input w-auto max-w-full py-1.5" value={sel} onChange={(e) => setSel(e.target.value)} aria-label="Chọn biểu mẫu gốc của ĐHQGHN">
         <option value="">Chọn biểu mẫu…</option>
@@ -74,7 +69,8 @@ export function OfficialForms() {
           </optgroup>
         ))}
       </select>
-      {item && (
+      {item?.href.startsWith('/') && <a className="btn px-3 py-1.5 text-sm" href={item.href}>Điền trên web</a>}
+      {item && !item.href.startsWith('/') && (
         <a className="btn px-3 py-1.5 text-sm" href={item.href} target="_blank" rel="noopener noreferrer">
           {item.kind.startsWith('Trang') || item.kind.startsWith('Cổng') ? 'Mở trang' : 'Mở / tải'} ({item.kind})
         </a>
