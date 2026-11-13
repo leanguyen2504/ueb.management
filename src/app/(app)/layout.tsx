@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SEARCH_SCOPES } from '@/lib/search-scopes';
 import { requireSession } from '@/lib/session';
 import { Icon, NavLinks, type NavItem } from '@/components/NavLinks';
 import { ThemeMenuItem, TopMenu } from '@/components/TopMenu';
@@ -64,6 +65,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <Icon name="search" className="h-4 w-4" />
               <span className="sr-only">Tìm kiếm</span>
               <input id="top-q" name="q" type="search" placeholder="Tìm cuộc họp, mã Jira, tài liệu, người…" className="w-full min-w-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100" />
+              {/* Chọn mảng để lọc ngay khi tìm; trên trang kết quả vẫn đổi mảng được bằng chip. */}
+              <select name="loai" aria-label="Tìm trong mảng" defaultValue="" className="hidden shrink-0 cursor-pointer border-l border-slate-200 bg-transparent pl-2 text-xs text-slate-500 outline-none sm:block dark:border-slate-700 dark:text-slate-400">
+                <option value="">Tất cả</option>
+                {SEARCH_SCOPES.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+              </select>
             </label>
           </form>
           <TopMenu label="Tạo mới" buttonClass="btn" button={<><Icon name="plus" className="h-4 w-4" /><span className="hidden sm:inline">Tạo mới</span></>}>
