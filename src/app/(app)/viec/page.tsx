@@ -4,9 +4,10 @@ import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
 import { TaskList } from '@/components/TaskList';
 import { EventForm, PersonalProjectForm, TaskForm } from '@/components/WorkForms';
+import { TaskGroupFilter, type FilterOption } from '@/components/TaskGroupFilter';
 import { loadPeople } from '@/lib/people';
 import { addDays, fmtDate, vnDay } from '@/lib/format';
-import { TASK_STATUS_LABEL, type Group, type Task, type TaskStatus } from '@/lib/types';
+import { KIND_LABEL, TASK_STATUS_LABEL, type Group, type GroupKind, type Task, type TaskStatus } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Việc của tôi' };
 
@@ -17,10 +18,10 @@ const TABS = [
   ['xong', 'Đã hoàn thành'],
 ] as const;
 
-type G = Pick<Group, 'id' | 'name' | 'parent_id' | 'owner_id'>;
+type G = Pick<Group, 'id' | 'name' | 'parent_id' | 'owner_id' | 'kind'>;
 
-export default async function MyTasksPage({ searchParams }: { searchParams: Promise<{ xem?: string; tb?: string; loi?: string }> }) {
-  const { xem = '', tb, loi } = await searchParams;
+export default async function MyTasksPage({ searchParams }: { searchParams: Promise<{ xem?: string; nhom?: string; tb?: string; loi?: string }> }) {
+  const { xem = '', nhom = '', tb, loi } = await searchParams;
   const { supabase, userId, ctx } = await requireSession();
 
   // Việc cần hiện (trừ "Tiến độ", cần biết mục cá nhân) được đọc song song với các bước dưới.
@@ -36,7 +37,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
   const { data: personalRoot } = await supabase.rpc('my_personal_group');
 
   const [{ data: groups }, { data: mine }] = await Promise.all([
-    supabase.from('groups').select('id, name, parent_id, owner_id').is('archived_at', null).order('name').returns<G[]>(),
+    supabase.from('groups').select('id, name, parent_id, owner_id, kind').is('archived_at', null).order('name').returns<G[]>(),
     supabase.from('group_members').select('group_id, can_create, is_manager').eq('user_id', userId),
   ]);
   const allGroups = groups ?? [];
@@ -57,7 +58,26 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
     if (personalIds.length) scope.push(`group_id.in.(${personalIds.join(',')})`);
     ({ data: tasks } = await base().or(scope.join(',')).limit(2000).returns<Task[]>());
   }
-  const list = tasks ?? [];
+  const allTasks = tasks ?? [];
+
+  // Lọc theo nhóm / dự án / tổ: chọn một nhóm thì gồm cả các nhóm con (tổ, dự án con) của nó.
+  const children = new Map<string, string[]>();
+  for (const g of allGroups) if (g.parent_id) children.set(g.parent_id, [...(children.get(g.parent_id) ?? []), g.id]);
+  const subtree = (id: string) => {
+    const out = new Set<string>();
+    const stack = [id];
+    while (stack.length) {
+      const x = stack.pop()!;
+      if (out.has(x)) continue;
+      out.add(x);
+      stack.push(...(children.get(x) ?? []));
+    }
+    return out;
+  };
+  const filterIds = nhom === 'ca-nhan' ? new Set(personalIds) : nhom && groupMap.has(nhom) ? subtree(nhom) : null;
+  const nhomValue = filterIds ? nhom : '';
+  const list = filterIds ? allTasks.filter((t) => filterIds.has(t.group_id)) : allTasks;
+
   const [{ name }, { data: myDelReqs }] = await Promise.all([
     loadPeople(supabase, list.map((t) => t.assignee_id)),
     supabase.from('delete_requests').select('item_id').eq('requester_id', userId).eq('item_type', 'task').eq('status', 'pending'),
@@ -69,7 +89,51 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
     pendingDel.has(t.id) ? 'pending' as const
     : personalIds.includes(t.group_id) || leadOf.has(t.group_id) || ((ctx.is_admin || ctx.all_groups_secretary) && !groupMap.get(t.group_id)?.owner_id) ? 'delete' as const
     : 'request' as const;
-  const back = xem ? `/viec?xem=${xem}` : '/viec';
+  const href = (x: string, n: string) => {
+    const q = new URLSearchParams();
+    if (x) q.set('xem', x);
+    if (n) q.set('nhom', n);
+    const qs = q.toString();
+    return qs ? `/viec?${qs}` : '/viec';
+  };
+  const back = href(xem, nhomValue);
+
+  // Lựa chọn của ô lọc: chỉ những nhóm có việc trong tab này (kèm nhóm cha để lọc cả cụm), số việc ở cuối.
+  const shown = new Set<string>();
+  for (const t of allTasks) {
+    let g = groupMap.get(t.group_id);
+    const seen = new Set<string>();
+    while (g && !g.owner_id && !seen.has(g.id)) {
+      seen.add(g.id);
+      shown.add(g.id);
+      g = g.parent_id ? groupMap.get(g.parent_id) : undefined;
+    }
+  }
+  const countIn = (ids: Set<string>) => allTasks.filter((t) => ids.has(t.group_id)).length;
+  const pathName = (g: G) => {
+    const parts = [g.name];
+    let p = g.parent_id ? groupMap.get(g.parent_id) : undefined;
+    for (let i = 0; p && i < 5; i++, p = p.parent_id ? groupMap.get(p.parent_id) : undefined) parts.unshift(p.name);
+    return parts.join(' › ');
+  };
+  const opt = (value: string, text: string, n: number): FilterOption => ({ value, label: `${text} (${n})`, href: href(xem, value) });
+  const personalCount = allTasks.filter((t) => personalIds.includes(t.group_id)).length;
+  const sectionOrder: GroupKind[] = ['unit', 'project', 'event', 'other'];
+  const filterSections = [
+    ...(personalCount ? [{ label: 'Cá nhân', options: [opt('ca-nhan', 'Cá nhân', personalCount)] }] : []),
+    ...sectionOrder.map((k) => ({
+      label: k === 'unit' ? 'Đơn vị, tổ' : KIND_LABEL[k],
+      options: allGroups
+        .filter((g) => g.kind === k && shown.has(g.id))
+        .map((g) => ({ g, path: pathName(g) }))
+        .sort((a, b) => a.path.localeCompare(b.path, 'vi'))
+        .map(({ g, path }) => opt(g.id, path, countIn(subtree(g.id)))),
+    })).filter((s) => s.options.length),
+  ];
+  // Mục đang chọn mà tab này không có việc vẫn giữ trong ô chọn, để người dùng thấy và bỏ lọc.
+  if (filterIds && !filterSections.some((s) => s.options.some((o) => o.value === nhomValue))) {
+    filterSections.push({ label: 'Đang chọn', options: [opt(nhomValue, nhomValue === 'ca-nhan' ? 'Cá nhân' : label(nhomValue), 0)] });
+  }
 
   // Nhóm tôi được tạo việc (chỉ để gợi ý; RLS kiểm tra lại). Mục cá nhân lên đầu.
   const creatable = new Set((mine ?? []).filter((m) => m.can_create).map((m) => m.group_id));
@@ -89,11 +153,16 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
       <PageHead title="Việc" sub="Việc của bạn trong các nhóm và trong mục Cá nhân (chỉ bạn thấy). Tự đặt hạn, lịch và theo dõi tiến độ." />
       {tb && <p role="status" className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{tb}</p>}
       {loi && <p role="alert" className="mb-4 rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">{loi}</p>}
-      <nav className="seg mb-5" aria-label="Lọc việc">
-        {TABS.map(([k, l]) => (
-          <a key={k} href={k ? `/viec?xem=${k}` : '/viec'} aria-current={xem === k ? 'page' : undefined}>{l}</a>
-        ))}
-      </nav>
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <nav className="seg" aria-label="Lọc việc">
+          {TABS.map(([k, l]) => (
+            <a key={k} href={href(k, nhomValue)} aria-current={xem === k ? 'page' : undefined}>{l}</a>
+          ))}
+        </nav>
+        {(filterSections.length > 0 || filterIds) && (
+          <TaskGroupFilter value={nhomValue} all={{ value: '', label: `Tất cả nhóm, dự án (${allTasks.length})`, href: href(xem, '') }} sections={filterSections} />
+        )}
+      </div>
       {(xem === '' || xem === 'da-giao') && (
         <div className="mb-4 flex flex-wrap gap-2">
           {counts.map(([s, n]) => (
@@ -115,7 +184,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
                 me={userId}
                 deleteState={deleteState}
                 back={back}
-                empty={xem === 'da-giao' ? 'Bạn chưa giao việc nào đang mở.' : xem === 'xong' ? 'Chưa có việc hoàn thành.' : 'Bạn không có việc nào đang mở. Tạo việc cá nhân ở khung bên cạnh.'}
+                empty={filterIds ? 'Không có việc nào trong nhóm, dự án đã chọn.' : xem === 'da-giao' ? 'Bạn chưa giao việc nào đang mở.' : xem === 'xong' ? 'Chưa có việc hoàn thành.' : 'Bạn không có việc nào đang mở. Tạo việc cá nhân ở khung bên cạnh.'}
               />
             </section>
           )}
