@@ -6,6 +6,7 @@ import { TemplateForm } from '../cong-cu/Tools';
 import { SlideMaker } from '../slide/SlideMaker';
 import { BudgetMaker } from './BudgetMaker';
 import { FormMaker } from './FormMaker';
+import { OfficialForms } from './OfficialForms';
 
 export const metadata: Metadata = { title: 'Template' };
 
@@ -24,6 +25,7 @@ export default async function TemplatePage({ searchParams }: { searchParams: Pro
       <PageHead title="Soạn thảo" sub={SUB[cur] ?? 'Điền các ô, tải file Word đã trình bày sẵn. Thông tin cá nhân (họ tên, đơn vị…) được nhớ cho các mẫu sau.'} />
       <SoanThaoTabs current="template" />
       <TemplatePicker current={cur} />
+      <OfficialForms />
       {cur === 'van-ban' && <TemplateForm />}
       {cur === 'slide' && <SlideMaker />}
       {cur === 'du-toan' && <BudgetMaker />}
