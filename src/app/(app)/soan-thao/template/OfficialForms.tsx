@@ -13,11 +13,11 @@ export const OFFICIAL: { group: string; items: Item[] }[] = [
   {
     group: 'Hành chính, tổ chức cán bộ',
     items: [
-      { label: 'Mẫu 01 - Đơn xin nghỉ phép năm', href: '/soan-thao/template?loai=don-nghi-phep', kind: 'Điền trên web' },
+      { label: 'Mẫu 01 - Đơn xin nghỉ phép năm', href: '/mau/Mau_01_Don_xin_nghi_phep_nam.docx', kind: 'Word (.docx)' },
       { label: 'Nghỉ phép, nghỉ không lương (Mẫu 01, 02): thủ tục và nộp trực tuyến', href: `${TT}xin-nghi-phep-nam-5c96b437`, kind: 'Trang thủ tục' },
       { label: 'Nghỉ ốm, thai sản (Mẫu 03, 04): thủ tục và nộp trực tuyến', href: `${TT}xin-nghi-om-thai-san-9f63feae`, kind: 'Trang thủ tục' },
-      { label: 'ĐG.01 - Phiếu đánh giá viên chức quản lý', href: 'https://docs.google.com/document/d/1bEDSKVQcABC2u4046j1xHS8XzLXF_t0O/edit', kind: 'Google Docs', note: 'Đăng nhập tài khoản @vnu.edu.vn' },
-      { label: 'ĐG.02 - Phiếu đánh giá giảng viên, nghiên cứu viên', href: 'https://docs.google.com/document/d/1eOFPVzBqSBorPlK5mRSAVh_1YmyE76ge/edit', kind: 'Google Docs', note: 'Đăng nhập tài khoản @vnu.edu.vn' },
+      { label: 'ĐG.01 - Phiếu đánh giá, phân loại công chức', href: '/soan-thao/template?loai=danh-gia-cong-chuc', kind: 'Điền trên web' },
+      { label: 'ĐG.02 - Phiếu đánh giá, phân loại viên chức, người lao động', href: '/soan-thao/template?loai=danh-gia-vien-chuc', kind: 'Điền trên web' },
       { label: 'ĐG.04 - Bảng tổng hợp kết quả đánh giá, phân loại', href: 'https://docs.google.com/spreadsheets/d/1ES5ayd_qumYUaP4YIvN9k3XrMLf6D3xp/edit', kind: 'Google Sheets', note: 'Đăng nhập tài khoản @vnu.edu.vn' },
       { label: 'Đánh giá viên chức cuối năm (ĐG.01-ĐG.04): thủ tục', href: `${TT}danh-gia-cong-chuc-vien-chuc-nguoi-lao-dong-cuoi-nam-a51c85c6`, kind: 'Trang thủ tục' },
       { label: 'Phiếu sơ yếu lý lịch, lý lịch khoa học viên chức', href: 'https://docs.google.com/spreadsheets/d/1FJuwEpIFd5RAqe7FJOt5SMF5fVUvjazt/edit', kind: 'Excel trên Drive' },
@@ -69,8 +69,8 @@ export function OfficialForms() {
           </optgroup>
         ))}
       </select>
-      {item?.href.startsWith('/') && <a className="btn px-3 py-1.5 text-sm" href={item.href}>Điền trên web</a>}
-      {item && !item.href.startsWith('/') && (
+      {item?.href.startsWith('/soan-thao') && <a className="btn px-3 py-1.5 text-sm" href={item.href}>Điền trên web</a>}
+      {item && !item.href.startsWith('/soan-thao') && (
         <a className="btn px-3 py-1.5 text-sm" href={item.href} target="_blank" rel="noopener noreferrer">
           {item.kind.startsWith('Trang') || item.kind.startsWith('Cổng') ? 'Mở trang' : 'Mở / tải'} ({item.kind})
         </a>
