@@ -269,6 +269,22 @@ export const FORMS: FormDef[] = [
     },
   },
   {
+    key: 'phieu-trinh', label: 'Phiếu trình giải quyết công việc', group: 'Hành chính',
+    note: 'Điền thẳng vào mẫu Phiếu trình của Trường (giữ nguyên bảng luân chuyển: ngày giờ nhận, ký, trả, chuyển cho). Mục để trống giữ dấu chấm để điền tay.',
+    original: { href: '/mau/Phieu_trinh_giai_quyet_cong_viec.docx', label: 'Tải mẫu gốc (trống)' },
+    build: async (v) => (await import('./phieuTrinh')).buildPhieuTrinh(v),
+    fields: [
+      { k: 'boPhan', label: 'Khoa, phòng trình', ph: 'Khoa Kinh tế phát triển', me: true },
+      { k: 'kinhGui', label: 'Kính gửi', def: 'Ban Giám hiệu Trường Đại học Kinh tế', wide: true },
+      { k: 'tenCongViec', label: 'Tên công việc', type: 'textarea', wide: true, ph: 'Trình kế hoạch tổ chức chương trình …' },
+      { k: 'deXuat', label: 'Đề xuất', type: 'textarea', wide: true, ph: 'Kính trình BGH và Phòng … xem xét, phê duyệt' },
+      { k: 'hoSo', label: 'Hồ sơ kèm theo (mỗi dòng một tài liệu)', type: 'textarea', wide: true },
+      { k: 'canBo', label: 'Cán bộ thực hiện (mỗi dòng một người)', type: 'textarea', me: true },
+    ],
+    file: (v) => `Phieu_trinh_${slugFile(S(v, 'tenCongViec').slice(0, 40))}`,
+    body: (v) => title('PHIẾU TRÌNH GIẢI QUYẾT CÔNG VIỆC') + kv('Tên công việc', S(v, 'tenCongViec')) + kv('Đề xuất', S(v, 'deXuat')),
+  },
+  {
     key: 'phieu-giao-viec', label: 'Phiếu giao việc', group: 'Hành chính',
     note: 'Giao việc có nội dung, yêu cầu sản phẩm, thời hạn và người phối hợp; hai bên cùng ký.',
     fields: [...ORG, { k: 'so', label: 'Số phiếu', ph: '01' }, { k: 'nguoiGiao', label: 'Người giao việc', me: true }, { k: 'chucVuGiao', label: 'Chức vụ người giao' }, { k: 'nguoiNhan', label: 'Người nhận việc' }, { k: 'donViNhan', label: 'Đơn vị người nhận' },
