@@ -46,7 +46,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <span className="relative flex h-11 w-10 items-center justify-center rounded-t-md rounded-b-[20px] bg-[#8b1c24] pb-1 font-display text-xs font-semibold tracking-wide text-white ring-2 ring-inset ring-gold-500">
             <span className="absolute inset-x-2.5 top-2 h-0.5 rounded bg-gold-500" />UEB
           </span>
-          <span className="leading-tight"><span className="block font-display text-sm font-semibold">Quản trị công việc</span><span className="text-xs muted">Hiệu trưởng và tổ thư ký</span></span>
+          <span className="leading-tight"><span className="block font-display text-sm font-semibold">Quản trị công việc</span><span className="text-xs muted">Trường Đại học Kinh tế - ĐHQGHN</span></span>
         </Link>
         <nav className="flex flex-col gap-1" aria-label="Điều hướng chính"><NavLinks items={items} variant="side" /></nav>
         <div className="mt-auto space-y-2">

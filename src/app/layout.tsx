@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: { default: 'Quản trị công việc UEB', template: '%s · Quản trị công việc UEB' },
-  description: 'Theo dõi nhóm, dự án, sự kiện, cuộc họp, tài liệu và đầu việc của Hiệu trưởng và tổ thư ký.',
+  description: 'Theo dõi nhóm, dự án, sự kiện, cuộc họp, tài liệu và đầu việc của Trường Đại học Kinh tế - ĐHQGHN.',
 };
 
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' };
