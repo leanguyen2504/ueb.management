@@ -9,6 +9,16 @@ const STORE = 'soan-thao:slide';
 const DEFAULTS: DeckInfo = {
   khoa: 'Trường Đại học Kinh tế - ĐHQGHN', monHoc: '', tieuDe: '', phuDe: '', giangVien: '', dienThoai: '', email: '', loiCamOn: 'XIN CẢM ƠN!',
 };
+// Trang slide tương ứng với dòng thứ `line` của dàn ý (0 là trang bìa).
+function slideAtLine(info: DeckInfo, src: string, line: number) {
+  const lines = src.split('\n');
+  const specs = parseOutline(lines.slice(0, line + 1).join('\n'));
+  if (!specs.length) return 0;
+  const all = parseOutline(src);
+  const appendix = info.loiCamOn.trim() ? all.findIndex((x) => x.kind === 'section' && /^phụ lục/i.test(x.title.trim())) : -1;
+  const i = specs.length - 1;
+  return 1 + i + (appendix >= 0 && i >= appendix ? 1 : 0);
+}
 const slug = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '').slice(0, 60);
 
 const pct = (v: number, of: number) => `${(v / of) * 100}%`;
@@ -104,6 +114,26 @@ export function SlideMaker() {
   const [err, setErr] = useState('');
   const [loaded, setLoaded] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
+  const [cur, setCur] = useState(0); // trang đang xem lớn
+  const strip = useRef<HTMLDivElement>(null);
+  // Theo con trỏ trong dàn ý: đang sửa trang nào thì xem lớn trang đó.
+  const follow = (el: HTMLTextAreaElement, text = el.value) => setCur(slideAtLine(info, text, text.slice(0, el.selectionStart).split('\n').length - 1));
+  // Bấm ảnh nhỏ: xem lớn trang đó và đưa con trỏ tới dòng đầu của trang trong dàn ý.
+  function pick(i: number) {
+    setCur(i);
+    const el = area.current;
+    if (!el || i === 0) return;
+    const ls = outline.split('\n');
+    for (let l = 0; l < ls.length; l++) {
+      if (ls[l].trim() && slideAtLine(info, outline, l) === i) {
+        const pos = ls.slice(0, l).join('\n').length + (l ? 1 : 0);
+        el.focus();
+        el.setSelectionRange(pos, pos);
+        el.scrollTop = Math.max(0, (l - 2) * (el.scrollHeight / Math.max(1, ls.length)));
+        return;
+      }
+    }
+  }
   // Chèn mẫu một loại trang vào vị trí con trỏ (hoặc cuối dàn ý).
   function insert(text: string) {
     const el = area.current;
@@ -132,6 +162,10 @@ export function SlideMaker() {
   }, [info, outline, loaded]);
 
   const slides = useMemo(() => layoutDeck(info, parseOutline(outline)), [info, outline]);
+  useEffect(() => {
+    const el = strip.current?.children[cur] as HTMLElement | undefined;
+    if (el && strip.current) strip.current.scrollTo({ left: el.offsetLeft - strip.current.clientWidth / 2 + el.clientWidth / 2, behavior: 'smooth' });
+  }, [cur]);
   const set = (k: keyof DeckInfo, v: string) => setInfo((cur) => ({ ...cur, [k]: v }));
 
   async function make() {
@@ -204,7 +238,8 @@ export function SlideMaker() {
             ref={area}
             className="input min-h-[420px] font-mono text-[13px] leading-relaxed"
             value={outline}
-            onChange={(e) => setOutline(e.target.value)}
+            onChange={(e) => { setOutline(e.target.value); follow(e.currentTarget, e.target.value); }}
+            onSelect={(e) => follow(e.currentTarget)}
             onKeyDown={(e) => {
               if (e.key !== 'Tab') return;
               e.preventDefault();
@@ -233,14 +268,24 @@ export function SlideMaker() {
             <button type="button" className="btn" disabled={busy} onClick={make}>{busy ? 'Đang tạo…' : 'Tải slide (.pptx)'}</button>
           </div>
           {err && <p role="alert" className="text-sm text-orange-700 dark:text-orange-300">{err}</p>}
-          <div className="grid max-h-[760px] gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
+          <div>
+            <SlideView slide={slides[Math.min(cur, slides.length - 1)]} n={Math.min(cur, slides.length - 1) + 1} />
+            <div className="mt-2 flex items-center justify-center gap-3 text-sm">
+              <button type="button" className="btn-secondary px-3 py-1 text-xs" aria-label="Trang trước" disabled={cur <= 0} onClick={() => pick(Math.max(0, cur - 1))}>←</button>
+              <span className="tabular-nums">Trang {Math.min(cur, slides.length - 1) + 1} / {slides.length}</span>
+              <button type="button" className="btn-secondary px-3 py-1 text-xs" aria-label="Trang sau" disabled={cur >= slides.length - 1} onClick={() => pick(Math.min(slides.length - 1, cur + 1))}>→</button>
+            </div>
+          </div>
+          <div ref={strip} className="flex gap-2 overflow-x-auto pb-2" aria-label="Tất cả các trang">
             {slides.map((s, i) => (
-              <div key={i}>
+              <button key={i} type="button" onClick={() => pick(i)} aria-label={`Trang ${i + 1}`} aria-current={i === cur ? 'true' : undefined}
+                className={`w-36 shrink-0 rounded-md p-0.5 text-left ${i === cur ? 'ring-2 ring-brand-600' : 'opacity-80 hover:opacity-100'}`}>
                 <SlideView slide={s} n={i + 1} />
-                <div className="mt-1 text-center text-xs muted">{i + 1}</div>
-              </div>
+                <span className="mt-0.5 block text-center text-[11px] muted">{i + 1}</span>
+              </button>
             ))}
           </div>
+          <p className="text-xs muted">Trang lớn đi theo con trỏ trong dàn ý; bấm ảnh nhỏ để chuyển tới trang đó.</p>
           <p className="text-xs muted">File mở được bằng PowerPoint, Google Slides, Keynote. Mọi chữ, khung, bảng đều sửa tiếp được trong PowerPoint.</p>
         </section>
       </div>
