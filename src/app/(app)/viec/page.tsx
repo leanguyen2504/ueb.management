@@ -38,7 +38,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
 
   const [{ data: groups }, { data: mine }] = await Promise.all([
     supabase.from('groups').select('id, name, parent_id, owner_id, kind').is('archived_at', null).order('name').returns<G[]>(),
-    supabase.from('group_members').select('group_id, can_create, is_manager').eq('user_id', userId),
+    supabase.from('group_members').select('group_id, can_create, can_edit, is_manager').eq('user_id', userId),
   ]);
   const allGroups = groups ?? [];
   const personal = allGroups.filter((g) => g.owner_id === userId);
@@ -78,11 +78,24 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
   const nhomValue = filterIds ? nhom : '';
   const list = filterIds ? allTasks.filter((t) => filterIds.has(t.group_id)) : allTasks;
 
+  // Sửa thông tin việc: mục Cá nhân, nhóm tôi có quyền Sửa hoặc là Trưởng nhóm, quản trị và thư ký toàn trường.
+  const editIn = new Set([...personalIds, ...(mine ?? []).filter((m) => m.can_edit || m.is_manager).map((m) => m.group_id)]);
+  const canEditTask = (t: Task) => editIn.has(t.group_id) || ((ctx.is_admin || ctx.all_groups_secretary) && !groupMap.get(t.group_id)?.owner_id);
+  const editGroups = [...new Set(list.filter(canEditTask).map((t) => t.group_id))].filter((g) => !groupMap.get(g)?.owner_id);
+  const { data: editMembers } = editGroups.length
+    ? await supabase.from('group_members').select('group_id, user_id').in('group_id', editGroups)
+    : { data: [] as { group_id: string; user_id: string }[] };
+
   const [{ name }, { data: myDelReqs }] = await Promise.all([
-    loadPeople(supabase, list.map((t) => t.assignee_id)),
+    loadPeople(supabase, [...list.map((t) => t.assignee_id), ...(editMembers ?? []).map((m) => m.user_id)]),
     supabase.from('delete_requests').select('item_id').eq('requester_id', userId).eq('item_type', 'task').eq('status', 'pending'),
   ]);
   // Xóa: Trưởng nhóm, quản trị, thư ký toàn trường và chủ mục Cá nhân xóa ngay; người khác gửi đề nghị.
+  const membersOf = new Map<string, { id: string; label: string }[]>();
+  for (const m of editMembers ?? []) membersOf.set(m.group_id, [...(membersOf.get(m.group_id) ?? []), { id: m.user_id, label: name(m.user_id) }]);
+  for (const v of membersOf.values()) v.sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+  // Việc cá nhân luôn giao cho chính mình nên không hiện ô Người thực hiện.
+  const peopleFor = (t: Task) => (groupMap.get(t.group_id)?.owner_id ? undefined : membersOf.get(t.group_id) ?? []);
   const leadOf = new Set((mine ?? []).filter((m) => m.is_manager).map((m) => m.group_id));
   const pendingDel = new Set((myDelReqs ?? []).map((r) => r.item_id as string));
   const deleteState = (t: Task) =>
@@ -173,7 +186,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           {xem === 'tien-do' ? (
-            <Progress tasks={list} label={label} me={userId} deleteState={deleteState} back={back} />
+            <Progress tasks={list} label={label} me={userId} deleteState={deleteState} back={back} canEdit={canEditTask} people={peopleFor} />
           ) : (
             <section className="card">
               <TaskList
@@ -184,6 +197,8 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
                 me={userId}
                 deleteState={deleteState}
                 back={back}
+                canEdit={canEditTask}
+                people={peopleFor}
                 empty={filterIds ? 'Không có việc nào trong nhóm, dự án đã chọn.' : xem === 'da-giao' ? 'Bạn chưa giao việc nào đang mở.' : xem === 'xong' ? 'Chưa có việc hoàn thành.' : 'Bạn không có việc nào đang mở. Tạo việc cá nhân ở khung bên cạnh.'}
               />
             </section>
@@ -219,7 +234,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
 }
 
 // Bảng tiến độ theo nhóm/dự án: tỷ lệ xong, quá hạn, gấp, hạn gần nhất; rồi danh sách việc cần xử lý.
-function Progress({ tasks, label, me, deleteState, back }: { tasks: Task[]; label: (id: string) => string; me: string; deleteState: (t: Task) => 'delete' | 'request' | 'pending'; back: string }) {
+function Progress({ tasks, label, me, deleteState, back, canEdit, people }: { tasks: Task[]; label: (id: string) => string; me: string; deleteState: (t: Task) => 'delete' | 'request' | 'pending'; back: string; canEdit: (t: Task) => boolean; people: (t: Task) => { id: string; label: string }[] | undefined }) {
   const today = vnDay();
   const soon = addDays(today, 3);
   const week = addDays(today, 7);
@@ -294,7 +309,7 @@ function Progress({ tasks, label, me, deleteState, back }: { tasks: Task[]; labe
       </section>
       <section className="card">
         <h2 className="mb-3 text-lg font-semibold">Cần xử lý: quá hạn và hạn trong 7 ngày</h2>
-        <TaskList tasks={attention} name={() => 'Bạn'} groupName={label} showProgress me={me} deleteState={deleteState} back={back} empty="Không có việc quá hạn hay sắp đến hạn." />
+        <TaskList tasks={attention} name={() => 'Bạn'} groupName={label} showProgress me={me} deleteState={deleteState} back={back} canEdit={canEdit} people={people} empty="Không có việc quá hạn hay sắp đến hạn." />
       </section>
     </>
   );

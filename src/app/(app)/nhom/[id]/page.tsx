@@ -170,6 +170,9 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const canAddTask = canCreate && !group.archived_at;
   // Xóa: Trưởng nhóm (hoặc chủ không gian cá nhân) xóa ngay; người khác gửi đề nghị để Trưởng nhóm duyệt.
   const canDeleteHere = isPersonal ? group.owner_id === userId : isLead;
+  // Sửa thông tin việc: người có quyền Sửa trong nhóm, chủ mục Cá nhân (trigger tasks_check kiểm tra lại).
+  const canEditTasks = !group.archived_at && (isPersonal ? group.owner_id === userId : canEdit);
+  const editPeople = isPersonal ? undefined : memberOptions;
   const pendingDel = new Set((delReqs ?? []).map((r) => `${r.item_type}:${r.item_id}`));
   const othersDelReqs = canDeleteHere ? (delReqs ?? []).filter((r) => r.requester_id !== userId) : [];
   const myDelReqs = (delReqs ?? []).filter((r) => r.requester_id === userId);
@@ -344,7 +347,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
           <div className="space-y-5">
             <section className="card">
               <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-semibold">Việc sắp đến hạn</h2><Link href={tabHref('viec')} className="link text-sm">{openTasks.length} việc mở</Link></div>
-              <TaskList tasks={openTasks.slice(0, 5)} name={name} empty="Chưa có việc đang mở." links={links} canNudge={canNudge} canAttach={canAttach} me={userId} />
+              <TaskList tasks={openTasks.slice(0, 5)} name={name} empty="Chưa có việc đang mở." links={links} canNudge={canNudge} canAttach={canAttach} me={userId} canEdit={canEditTasks} people={editPeople} />
             </section>
             <section className="card">
               <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-semibold">Lịch sắp tới</h2><Link href={tabHref('lich')} className="link text-sm">Mở</Link></div>
@@ -358,11 +361,11 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         <div className="grid items-start gap-5 lg:grid-cols-[1fr_360px]">
           <section className="card">
             <h2 className="mb-3 text-lg font-semibold">Đầu việc ({openTasks.length} đang mở)</h2>
-            <TaskList tasks={openTasks} name={name} canDelete={canDeleteHere} empty="Chưa có việc đang mở." links={links} canNudge={canNudge} canAttach={canAttach} me={userId} />
+            <TaskList tasks={openTasks} name={name} canDelete={canDeleteHere} empty="Chưa có việc đang mở." links={links} canNudge={canNudge} canAttach={canAttach} me={userId} canEdit={canEditTasks} people={editPeople} />
             {doneTasks.length > 0 && (
               <details className="mt-3">
                 <summary className="cursor-pointer text-sm muted">Đã hoàn thành ({doneTasks.length})</summary>
-                <TaskList tasks={doneTasks} name={name} canDelete={canDeleteHere} links={links} canAttach={canAttach} me={userId} />
+                <TaskList tasks={doneTasks} name={name} canDelete={canDeleteHere} links={links} canAttach={canAttach} me={userId} canEdit={canEditTasks} people={editPeople} />
               </details>
             )}
           </section>

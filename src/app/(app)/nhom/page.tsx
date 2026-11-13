@@ -102,7 +102,7 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
         {loai === 'ca-nhan' && (
           <section className="card">
             <h2 className="mb-3 text-lg font-semibold">Việc cá nhân chưa xong <span className="chip ml-1 align-middle">{personalTasks?.length ?? 0}</span></h2>
-            <TaskList tasks={personalTasks ?? []} name={() => 'Bạn'} groupName={(gid) => { const g = (groups ?? []).find((x) => x.id === gid); return g ? (g.parent_id ? `Cá nhân › ${g.name}` : 'Cá nhân') : 'Cá nhân'; }} showProgress me={userId} empty="Chưa có việc cá nhân nào. Tạo nhanh ở trang Việc." />
+            <TaskList tasks={personalTasks ?? []} name={() => 'Bạn'} groupName={(gid) => { const g = (groups ?? []).find((x) => x.id === gid); return g ? (g.parent_id ? `Cá nhân › ${g.name}` : 'Cá nhân') : 'Cá nhân'; }} showProgress me={userId} canEdit empty="Chưa có việc cá nhân nào. Tạo nhanh ở trang Việc." />
           </section>
         )}
         {others.length > 0 && (

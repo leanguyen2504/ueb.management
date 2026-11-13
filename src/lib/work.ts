@@ -49,6 +49,38 @@ export async function createTask(_prev: FormState, form: FormData): Promise<Form
   return { ok: 'Đã tạo việc.' };
 }
 
+// Sửa thông tin đầu việc (tên, mô tả, người thực hiện, ngày, ưu tiên). Trigger tasks_check chỉ cho
+// người có quyền Sửa trong nhóm đổi các trường này; người được giao chỉ đổi được trạng thái.
+export async function updateTask(_prev: FormState, form: FormData): Promise<FormState> {
+  const id = uuidOrNull(text(form, 'id'));
+  const title = text(form, 'title');
+  const priority = (text(form, 'priority') || 'normal') as TaskPriority;
+  const due = text(form, 'due_date');
+  const start = text(form, 'start_date');
+  if (!id) return { error: 'Thiếu việc.' };
+  if (!title) return { error: 'Hãy nhập tên việc.' };
+  if (title.length > 300) return { error: 'Tên việc quá dài.' };
+  if (!PRIORITIES.includes(priority)) return { error: 'Mức ưu tiên không hợp lệ.' };
+  if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return { error: 'Hạn hoàn thành không hợp lệ.' };
+  if (start && !/^\d{4}-\d{2}-\d{2}$/.test(start)) return { error: 'Ngày bắt đầu không hợp lệ.' };
+  if (start && due && start > due) return { error: 'Ngày bắt đầu phải trước hạn.' };
+  const patch: Record<string, string | null> = {
+    title,
+    description: text(form, 'description') || null,
+    priority,
+    due_date: due || null,
+    start_date: start || null,
+  };
+  // Ô Người thực hiện chỉ có khi biết danh sách thành viên; không có thì giữ nguyên.
+  if (form.has('assignee_id')) patch.assignee_id = uuidOrNull(text(form, 'assignee_id'));
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('tasks').update(patch).eq('id', id).select('group_id').maybeSingle();
+  if (error) return { error: errText(error) };
+  if (!data) return { error: 'Không sửa được: bạn không có quyền sửa việc này.' };
+  refresh(data.group_id);
+  return { ok: 'Đã lưu thay đổi.' };
+}
+
 export async function setTaskStatus(form: FormData) {
   const id = uuidOrNull(text(form, 'id'));
   const status = text(form, 'status') as TaskStatus;
