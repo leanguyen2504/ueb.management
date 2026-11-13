@@ -99,17 +99,7 @@ export function byProductType(items: JiraIssueRow[], field: string | null) {
   return [...map.values()].sort((a, b) => b.converted - a.converted || b.count - a.count);
 }
 
-// Quy định của trường: mã việc mình có log work chỉ được tính là đã hoàn thành sản phẩm khi mình đã comment
-// trên mã đó. my_last_comment_at là undefined khi nguồn dữ liệu không có cột này (hàm chia sẻ cũ): khi đó không lọc.
-export const hasMyComment = (i: JiraIssueRow) => i.my_last_comment_at === undefined || Boolean(i.my_last_comment_at);
-const doneByMe = (i: JiraIssueRow) => i.has_my_worklog && i.status_category === 'done' && Boolean(i.resolved_at);
-// Sản phẩm: mã việc tôi có log work, đã sang nhóm trạng thái "Xong" và tôi đã comment trên mã đó.
-export const isProduct = (i: JiraIssueRow) => doneByMe(i) && hasMyComment(i);
-// Đã xong, có log work của tôi, nhưng tôi chưa comment: chưa được tính là sản phẩm, cần vào Jira comment.
-export const productsMissingComment = (issues: JiraIssueRow[]) =>
-  issues.filter((i) => doneByMe(i) && !hasMyComment(i)).sort((a, b) => (b.resolved_at ?? '').localeCompare(a.resolved_at ?? ''));
-
-// Sản phẩm đã nộp theo tháng hoàn thành (xem isProduct).
+// Sản phẩm đã nộp: việc của tôi (được giao hoặc có log work) đã sang nhóm trạng thái "Xong", theo tháng hoàn thành.
 export function submittedByMonth(issues: JiraIssueRow[], field: string | null, months: number, now = new Date()) {
   const out: { key: string; label: string; count: number; converted: number; items: JiraIssueRow[] }[] = [];
   let k = vnDay(now).slice(0, 7);
@@ -120,8 +110,8 @@ export function submittedByMonth(issues: JiraIssueRow[], field: string | null, m
   }
   const byKey = new Map(out.map((r) => [r.key, r]));
   for (const it of issues) {
-    if (!isProduct(it)) continue;
-    const row = byKey.get(vnDay(it.resolved_at!).slice(0, 7));
+    if (!isMine(it) || it.status_category !== 'done' || !it.resolved_at) continue;
+    const row = byKey.get(vnDay(it.resolved_at).slice(0, 7));
     if (!row) continue;
     row.count += 1;
     row.converted += field ? numberOf(it.custom?.[field]) ?? 0 : 0;
@@ -199,6 +189,27 @@ export function waitingOnOthers(issues: JiraIssueRow[]) {
     delegated: issues.filter((i) => !isMine(i) && (i.is_reporter || i.is_watcher) && notDone(i)),
     blocked: issues.filter((i) => isMine(i) && notDone(i) && blockedBy(i).length > 0),
   };
+}
+
+// ---- Thiếu minh chứng sản phẩm ----
+// Quy định: mã việc mình có log work phải có comment và file sản phẩm đính kèm của chính mình trên Jira.
+// Chỉ xét việc đang mở, hoặc đã xong từ đầu tháng trước, để danh sách không kéo theo việc cũ.
+export type MissingProof = { issue: JiraIssueRow; noComment: boolean; noFile: boolean };
+export function missingProof(issues: JiraIssueRow[], now = new Date()): MissingProof[] {
+  const today = vnDay(now);
+  const [y, m] = today.split('-').map(Number);
+  const from = m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`;
+  return issues
+    .filter((i) => i.has_my_worklog && (i.status_category !== 'done' || (i.resolved_at ? vnDay(i.resolved_at) >= from : false)))
+    .map((i) => ({
+      issue: i,
+      noComment: !i.my_last_comment_at,
+      // Dữ liệu đồng bộ trước khi có thông tin file (null/undefined): chưa kết luận được, không báo.
+      noFile: i.my_attachment_count != null && i.my_attachment_count <= 0,
+    }))
+    .filter((x) => x.noComment || x.noFile)
+    .sort((a, b) => Number(b.issue.status_category === 'done') - Number(a.issue.status_category === 'done')
+      || (b.issue.resolved_at ?? b.issue.updated_at_jira ?? '').localeCompare(a.issue.resolved_at ?? a.issue.updated_at_jira ?? ''));
 }
 
 export const fmtDuration = (sec: number | null | undefined) => (sec == null ? '' : `${fmtHours(hours(sec))} giờ`);

@@ -182,6 +182,8 @@ export async function collectMyJira(
       });
     }
     const lc = comments.length ? comments[comments.length - 1] : null;
+    // File sản phẩm chính mình đính kèm (quy định: mã có log work phải có comment và file đính kèm).
+    const myAttachmentCount = ((f.attachment as any[]) || []).filter((a) => same(a && a.author, me)).length;
     const custom: Record<string, any> = {};
     let startDate: string | null = null;
     let epicKey: string | null = null;
@@ -267,6 +269,7 @@ export async function collectMyJira(
       components: ((f.components as any[]) || []).map((c) => String(c.name)).slice(0, 10),
       lastComment: lc ? { author: str(lc.author && lc.author.displayName), isMe: same(lc.author, me), created: lc.created, body: String(lc.body || '').slice(0, 300) } : null,
       myLastCommentAt,
+      myAttachmentCount,
     });
   }
   say(`Xong: ${issues.length} mã việc, ${worklogs.length} worklog, ${mentions.length} comment nhắc tên bạn.`);

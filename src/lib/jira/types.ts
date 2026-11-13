@@ -43,6 +43,7 @@ export type JiraSnapshot = {
     components: string[];
     lastComment: JiraLastComment | null;
     myLastCommentAt: string | null;
+    myAttachmentCount: number;
   }[];
   worklogs: { id: string; issueKey: string; started: string; seconds: number; comment: string | null }[];
   mentions: { id: string; issueKey: string; author: string | null; body: string; created: string; answered: boolean }[];
@@ -110,8 +111,9 @@ export type JiraIssueRow = {
   labels: string[];
   components: string[];
   last_comment: JiraLastComment | null;
-  // Lần cuối mình comment trên mã này; dùng để tính sản phẩm (xem isProduct). undefined: nguồn không có cột này.
-  my_last_comment_at?: string | null;
+  my_last_comment_at: string | null;
+  // Số file chính mình đính kèm trên mã này. undefined/null: dữ liệu cũ chưa có thông tin này.
+  my_attachment_count?: number | null;
 };
 
 export type JiraMentionRow = { comment_id: string; issue_key: string; author_name: string | null; body: string; created_at: string; answered: boolean };

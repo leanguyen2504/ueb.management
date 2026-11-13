@@ -23,7 +23,7 @@ set role service_role;
 select public.jira_save_snapshot(:tv4, 'bookmarklet', $${
   "me": {"name": "tv4", "displayName": "Thành viên 4"},
   "issues": [{"key": "DA-1", "summary": "Báo cáo dự án", "statusCategory": "done", "isAssignee": true, "resolved": "2026-11-05T10:00:00.000+0700",
-    "custom": {"Sản phẩm": "5-Biên bản loại 1-1h"}, "hasMyWorklog": true, "myLastCommentAt": "2026-11-05T09:00:00.000+0700", "lastComment": {"author": "A", "isMe": false, "created": "2026-11-06T09:00:00.000+0700", "body": "bí mật"}}],
+    "custom": {"Sản phẩm": "5-Biên bản loại 1-1h"}, "lastComment": {"author": "A", "isMe": false, "created": "2026-11-06T09:00:00.000+0700", "body": "bí mật"}}],
   "worklogs": [{"id": "1", "issueKey": "DA-1", "started": "2026-11-04T08:00:00.000+0700", "seconds": 3600, "comment": "viết"}],
   "mentions": [{"id": "9", "issueKey": "DA-1", "author": "A", "body": "[~tv4] xem", "created": "2026-11-06T09:00:00.000+0700"}],
   "customFieldNames": ["Sản phẩm"]
@@ -48,7 +48,6 @@ select t.ok(t.count('select * from public.jira_related_people()') = 1, 'Trưởn
 select t.ok((select groups -> 0 ->> 'name' = 'Dự án Jira chung' from public.jira_related_people() where user_id = :tv4), 'kèm nhóm chung');
 select t.ok(t.count(format('select * from public.jira_related_issues(array[%L]::uuid[])', :tv4)) = 1, 'Trưởng nhóm thấy mã việc tv4');
 select t.ok((select custom ->> 'Sản phẩm' = '5-Biên bản loại 1-1h' from public.jira_related_issues(array[:tv4]::uuid[])), 'có trường Sản phẩm để tính giờ quy đổi');
-select t.ok((select my_last_comment_at is not null from public.jira_related_issues(array[:tv4]::uuid[])), 'có thời điểm comment để tính sản phẩm');
 select t.ok(t.count(format($$select * from public.jira_related_worklogs(array[%L]::uuid[], '2026-11-01', '2026-12-01')$$, :tv4)) = 1, 'Trưởng nhóm thấy worklog tv4');
 select t.ok(t.count(format($$select * from public.jira_related_worklogs(array[%L]::uuid[], '2026-12-01', '2027-01-01')$$, :tv4)) = 0, 'worklog lọc theo kỳ');
 -- Bảng gốc vẫn chỉ chủ đọc được (comment, lời nhắc tên không lộ).
