@@ -20,6 +20,7 @@ export type FormDef = {
   fields: Field[];
   file: (v: Values) => string;
   body: (v: Values) => string;
+  build?: (v: Values) => Promise<Uint8Array>; // dựng từ file mẫu gốc thay cho body
   original?: { href: string; label: string };
 };
 
@@ -135,7 +136,7 @@ export function buildFormXml(def: FormDef, v: Values) {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${def.body(v)}${sect}</w:body></w:document>`;
 }
-export const buildFormDocx = (def: FormDef, v: Values) => packDocx(buildFormXml(def, v));
+export const buildFormDocx = (def: FormDef, v: Values) => (def.build ? def.build(v) : packDocx(buildFormXml(def, v)));
 
 // ---------- Ô dùng chung ----------
 const ORG: Field[] = [
@@ -465,13 +466,14 @@ export const FORMS: FormDef[] = [
   },
   {
     key: 'ly-lich-khoa-hoc', label: 'Lý lịch khoa học (Mẫu 04/KHCN)', group: 'Giảng dạy, nghiên cứu',
-    note: 'Theo Mẫu 04/KHCN của ĐHQGHN, dành cho cán bộ đăng ký chủ nhiệm và tham gia nhiệm vụ KH&CN. Các mục để trống in sẵn dấu chấm để điền tay.',
+    note: 'Điền thẳng vào file Mẫu 04/KHCN gốc của ĐHQGHN (giữ nguyên phông, cỡ chữ, bố cục). Mục để trống giữ dấu chấm để điền tay.',
+    build: async (v) => (await import('./mau04')).buildMau04(v),
     original: { href: '/mau/Mau_04_KHCN_Ly_lich_khoa_hoc.docx', label: 'Tải mẫu gốc (trống)' },
     fields: [
       { k: 'hoTen', label: '1. Họ và tên', me: true }, { k: 'namSinh', label: '2. Năm sinh', me: true }, { k: 'gioiTinh', label: 'Giới tính', type: 'select', options: ['', 'Nam', 'Nữ'], def: '' },
       { k: 'diaChi', label: '3. Địa chỉ liên hệ', wide: true, me: true }, { k: 'dienThoai', label: 'Điện thoại', me: true }, { k: 'email', label: 'Email', me: true },
-      { k: 'hocVi', label: '4.1. Học vị', me: true }, { k: 'hocHam', label: '4.2. Học hàm', me: true }, { k: 'pgs', label: 'Năm, tổ chức bổ nhiệm PGS', me: true }, { k: 'gs', label: 'Năm, tổ chức bổ nhiệm GS', me: true },
-      { k: 'coQuanCt', label: '5. Tên cơ quan', def: 'Trường Đại học Kinh tế - ĐHQGHN', me: true }, { k: 'boMon', label: 'Phòng TN, Bộ môn, Trung tâm, Khoa, Viện', me: true }, { k: 'diaChiCq', label: 'Địa chỉ cơ quan', def: '144 Xuân Thủy, Cầu Giấy, Hà Nội', wide: true, me: true },
+      { k: 'hocVi', label: '4.1. Học vị', me: true }, { k: 'hocHam', label: '4.2. Học hàm', me: true }, { k: 'pgsNam', label: 'Năm bổ nhiệm PGS', me: true }, { k: 'pgsNoi', label: 'Tổ chức bổ nhiệm PGS', me: true }, { k: 'gsNam', label: 'Năm bổ nhiệm GS', me: true }, { k: 'gsNoi', label: 'Tổ chức bổ nhiệm GS', me: true },
+      { k: 'coQuanCt', label: '5. Tên cơ quan', def: 'Trường Đại học Kinh tế - ĐHQGHN', me: true }, { k: 'boMon', label: 'Phòng TN, Bộ môn, Trung tâm, Khoa, Viện', me: true }, { k: 'diaChiCq', label: 'Địa chỉ cơ quan', def: '144 Xuân Thủy, Cầu Giấy, Hà Nội', wide: true, me: true }, { k: 'dtCq', label: 'Điện thoại cơ quan', me: true }, { k: 'emailCq', label: 'Email cơ quan', me: true },
       { k: 'daoTao', label: '6. Quá trình đào tạo', type: 'rows', cols: [{ k: 'bac', label: 'Bậc đào tạo', w: 1500 }, { k: 'noi', label: 'Nơi đào tạo', w: 3400 }, { k: 'cm', label: 'Chuyên môn', w: 2600 }, { k: 'nam', label: 'Năm tốt nghiệp', w: 1300 }], def: [['Đại học', '', '', ''], ['Thạc sĩ', '', '', ''], ['Tiến sĩ', '', '', ''], ['TSKH', '', '', '']] },
       { k: 'khoaKhac', label: '7. Các khóa đào tạo khác', type: 'rows', cols: [{ k: 'vb', label: 'Văn bằng', w: 1800 }, { k: 'ten', label: 'Tên khóa đào tạo', w: 3200 }, { k: 'noi', label: 'Nơi đào tạo', w: 2400 }, { k: 'tg', label: 'Thời gian đào tạo', w: 1400 }], def: [['', '', '', '']] },
       { k: 'sach', label: '8. Sách chuyên khảo, giáo trình (mỗi dòng một sách)', type: 'textarea', wide: true },
@@ -511,7 +513,7 @@ export const FORMS: FormDef[] = [
         + kv('1. Họ và tên', S(v, 'hoTen')) + PR([[`2. Năm sinh: ${n('namSinh')}`, {}], [`\t\t\tGiới tính: ${n('gioiTinh')}`, {}]])
         + kv('3. Địa chỉ liên hệ', S(v, 'diaChi')) + kvS('Điện thoại', S(v, 'dienThoai')) + kv('Email', S(v, 'email'))
         + P('4. Học hàm, học vị:', { after: 60 }) + kv('4.1. Học vị', S(v, 'hocVi')) + kv('4.2. Học hàm', S(v, 'hocHam'))
-        + kv('Năm được bổ nhiệm chức danh Phó Giáo sư, tổ chức bổ nhiệm', S(v, 'pgs')) + kv('Năm được bổ nhiệm chức danh Giáo sư, tổ chức bổ nhiệm', S(v, 'gs'))
+        + kv('Năm được bổ nhiệm chức danh Phó Giáo sư, tổ chức bổ nhiệm', [S(v, 'pgsNam'), S(v, 'pgsNoi')].filter(Boolean).join(', ')) + kv('Năm được bổ nhiệm chức danh Giáo sư, tổ chức bổ nhiệm', [S(v, 'gsNam'), S(v, 'gsNoi')].filter(Boolean).join(', '))
         + P('5. Cơ quan công tác:', { after: 60 }) + kv('Tên cơ quan', S(v, 'coQuanCt')) + kv('Phòng TN, Bộ môn, Trung tâm, Khoa, Viện', S(v, 'boMon')) + kv('Địa chỉ Cơ quan', S(v, 'diaChiCq'))
         + section('6. Quá trình đào tạo') + grid([{ k: 'bac', label: 'Bậc đào tạo', w: 1500 }, { k: 'noi', label: 'Nơi đào tạo', w: 3400 }, { k: 'cm', label: 'Chuyên môn', w: 2600 }, { k: 'nam', label: 'Năm tốt nghiệp', w: 1300 }], RW(v, 'daoTao').length ? RW(v, 'daoTao') : [['Đại học'], ['Thạc sĩ'], ['Tiến sĩ'], ['TSKH']], { stt: false, minRows: 4 })
         + section('7. Các khoá đào tạo khác (nếu có)') + grid([{ k: 'vb', label: 'Văn bằng', w: 1800 }, { k: 'ten', label: 'Tên khoá đào tạo', w: 3200 }, { k: 'noi', label: 'Nơi đào tạo', w: 2400 }, { k: 'tg', label: 'Thời gian đào tạo', w: 1400 }], RW(v, 'khoaKhac'), { stt: false })
