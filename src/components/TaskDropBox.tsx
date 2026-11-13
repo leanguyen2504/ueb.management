@@ -2,6 +2,7 @@
 
 // Ô gắn sản phẩm cho đầu việc: kéo thả tệp từ máy (tải thẳng lên Supabase Storage),
 // thả/dán link, hoặc gõ thẳng nội dung rồi bấm Enter.
+// Mặc định thu gọn thành nút nhỏ "Gắn sản phẩm" cho danh sách đỡ rối; bấm (hoặc kéo tệp vào nút) mới mở ra.
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
@@ -16,6 +17,7 @@ const URL_RE = /^https:\/\/(drive|docs)\.google\.com\/\S*$/;
 export function TaskDropBox({ taskId, groupId }: { taskId: string; groupId: string }) {
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState('');
   const [text, setText] = useState('');
@@ -51,7 +53,7 @@ export function TaskDropBox({ taskId, groupId }: { taskId: string; groupId: stri
       setBusy('Đang gắn…');
       const res = await attachTaskDrop({ task_id: taskId, group_id: groupId, files: uploaded, links, body });
       setMsg(res);
-      if (res?.ok) { setText(''); router.refresh(); }
+      if (res?.ok) { setText(''); setOpen(false); router.refresh(); }
     } catch (e) {
       setMsg({ error: `Có lỗi khi tải lên: ${(e as Error).message}` });
     } finally {
@@ -60,17 +62,41 @@ export function TaskDropBox({ taskId, groupId }: { taskId: string; groupId: stri
     }
   }
 
+  const dropFiles = (e: React.DragEvent) => {
+    e.preventDefault();
+    setOver(false);
+    const files = [...e.dataTransfer.files];
+    send(files, files.length ? '' : e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain'));
+  };
+  const status = (
+    <>
+      {msg?.error && <p role="alert" className="mt-1 text-xs text-orange-700 dark:text-orange-300">{msg.error}</p>}
+      {msg?.ok && <p role="status" className="mt-1 text-xs text-green-700 dark:text-green-300">{msg.ok}</p>}
+    </>
+  );
+
+  if (!open && !busy) {
+    return (
+      <div className="mt-1">
+        <button type="button" onClick={() => setOpen(true)}
+          onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+          onDragLeave={() => setOver(false)}
+          onDrop={dropFiles}
+          title="Gắn tệp, link hoặc nội dung sản phẩm (có thể kéo thả tệp vào đây)"
+          className={`rounded-lg px-1.5 py-0.5 text-xs transition-colors ${over ? 'bg-brand-50 text-brand-600 ring-1 ring-brand-600 dark:bg-brand-900/30' : 'muted hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800'}`}>
+          📎 Gắn sản phẩm
+        </button>
+        {status}
+      </div>
+    );
+  }
+
   return (
     <div className="mt-1.5 max-w-xl">
       <div
         onDragOver={(e) => { e.preventDefault(); setOver(true); }}
         onDragLeave={() => setOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setOver(false);
-          const files = [...e.dataTransfer.files];
-          send(files, files.length ? '' : e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain'));
-        }}
+        onDrop={dropFiles}
         className={`flex items-start gap-2 rounded-xl border border-dashed px-2.5 py-1.5 transition-colors ${over ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30' : 'border-slate-300 dark:border-slate-700'} ${busy ? 'opacity-70' : ''}`}
       >
         <textarea
@@ -79,7 +105,11 @@ export function TaskDropBox({ taskId, groupId }: { taskId: string; groupId: stri
           value={busy || text}
           disabled={!!busy}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send([], text); } }}
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send([], text); }
+            if (e.key === 'Escape' && !text.trim()) setOpen(false);
+          }}
           placeholder="Kéo thả tệp vào đây, dán link hoặc gõ nội dung sản phẩm rồi Enter"
           className="min-h-7 flex-1 resize-y bg-transparent py-1 text-sm placeholder:text-slate-400 focus:outline-none field-sizing-content"
         />
@@ -88,10 +118,12 @@ export function TaskDropBox({ taskId, groupId }: { taskId: string; groupId: stri
         {text.trim() && !busy && (
           <button type="button" onClick={() => send([], text)} className="btn-secondary shrink-0 px-2 py-1 text-xs">Gắn</button>
         )}
+        {!text.trim() && !busy && (
+          <button type="button" onClick={() => setOpen(false)} aria-label="Thu gọn" title="Thu gọn" className="shrink-0 rounded-lg px-1.5 py-1 text-xs muted hover:text-slate-900 dark:hover:text-white">✕</button>
+        )}
         <input ref={fileInput} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => send([...(e.target.files ?? [])], '')} />
       </div>
-      {msg?.error && <p role="alert" className="mt-1 text-xs text-orange-700 dark:text-orange-300">{msg.error}</p>}
-      {msg?.ok && <p role="status" className="mt-1 text-xs text-green-700 dark:text-green-300">{msg.ok}</p>}
+      {status}
     </div>
   );
 }
