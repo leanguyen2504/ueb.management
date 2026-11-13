@@ -1,6 +1,6 @@
 'use client';
 
-// Chuyển sang PDF ngay trên trình duyệt: Word (.docx) qua hộp thoại In, ảnh và PDF gộp thành một file.
+// Chuyển sang PDF (trong Công cụ soạn thảo) ngay trên trình duyệt: Word (.docx) qua hộp thoại In, ảnh và PDF gộp thành một file.
 import { useEffect, useRef, useState } from 'react';
 import { download } from '../ReviewBox';
 
@@ -111,7 +111,7 @@ function MergeBox() {
   return (
     <section className="card space-y-4">
       <div>
-        <h2 className="text-base font-semibold">Ảnh, PDF sang một file PDF</h2>
+        <h2 className="text-base font-semibold">Chuyển ảnh sang PDF, gộp PDF</h2>
         <p className="mt-1 text-sm muted">Chọn nhiều ảnh (JPG, PNG, WebP…) và/hoặc file PDF, sắp xếp thứ tự rồi gộp thành một file PDF. Mỗi ảnh là một trang.</p>
       </div>
       <label
@@ -224,7 +224,7 @@ html,body{margin:0;padding:0;background:#fff}
     <section className="card space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold">Word sang PDF</h2>
+          <h2 className="text-base font-semibold">Chuyển Word sang PDF</h2>
           <p className="mt-1 max-w-3xl text-sm muted">
             Chọn file .docx, xem trước rồi bấm <b>Lưu thành PDF</b>; ở hộp thoại In chọn máy in <b>Lưu dưới dạng PDF</b> (Save as PDF).
             Bản xem trước không có đầu trang, chân trang (số trang); văn bản cần giữ đúng từng chi tiết thì mở bằng Word, chọn Lưu thành PDF.

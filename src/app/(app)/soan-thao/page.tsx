@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
 import { SoanThaoTabs } from './tabs';
 import { ReviewBox } from './ReviewBox';
+import { PdfTools } from './pdf/PdfTools';
 
 export const metadata: Metadata = { title: 'Soạn thảo' };
 
@@ -29,10 +30,11 @@ export default async function SoanThaoPage() {
   await requireSession();
   return (
     <>
-      <PageHead title="Soạn thảo" sub="Rà soát thể thức văn bản hành chính theo Nghị định 30/2020/NĐ-CP. Các mẫu văn bản, slide, dự toán nằm ở thẻ Template." />
+      <PageHead title="Soạn thảo" sub="Rà soát thể thức văn bản hành chính theo Nghị định 30/2020/NĐ-CP, chuyển Word, ảnh sang PDF. Các mẫu văn bản, slide, dự toán nằm ở thẻ Template." />
       <SoanThaoTabs current="cong-cu" />
       <div className="space-y-5">
         <ReviewBox />
+        <PdfTools />
         <section className="card">
           <h2 className="text-base font-semibold">Thể thức từng thành phần</h2>
           <p className="mt-1 text-xs muted">Khổ A4, Times New Roman, chữ đen. Lề trên, dưới 20-25 mm; trái 30-35 mm; phải 15-20 mm.</p>
