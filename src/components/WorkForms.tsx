@@ -1,11 +1,11 @@
 'use client';
 
-import { useActionState, useEffect } from 'react';
-import { createEvent, createPersonalProject, createTask, updateEvent } from '@/lib/work';
+import { useActionState, useEffect, useState } from 'react';
+import { createEvent, createPersonalProject, createTask, updateEvent, updateTask } from '@/lib/work';
 import { useCalDraft, vnLocalInput } from '@/components/calendar/draft';
 import { FormMessage } from '@/components/FormMessage';
 import { SubmitButton } from '@/components/SubmitButton';
-import { EVENT_KIND_LABEL, TASK_PRIORITY_LABEL } from '@/lib/types';
+import { EVENT_KIND_LABEL, TASK_PRIORITY_LABEL, type Task } from '@/lib/types';
 
 export type Option = { id: string; label: string };
 
@@ -106,5 +106,62 @@ export function PersonalProjectForm() {
       </div>
       <FormMessage state={state} />
     </form>
+  );
+}
+
+/**
+ * Nút "Sửa" trên từng đầu việc: mở khung sửa tên, mô tả, người thực hiện, ngày bắt đầu, hạn, ưu tiên.
+ * Trả về hai phần tử flex: nút (cạnh nút Lưu/Xóa) và khung sửa chiếm trọn một dòng bên dưới.
+ * people: danh sách thành viên để đổi người thực hiện; không truyền thì giữ nguyên người được giao.
+ */
+export function TaskEditButton({ task, people }: { task: Task; people?: Option[] }) {
+  const [open, setOpen] = useState(false);
+  const [state, action] = useActionState(updateTask, null);
+  useEffect(() => { if (state?.ok) setOpen(false); }, [state]);
+  const p = `te-${task.id}`;
+  const options = people && task.assignee_id && !people.some((o) => o.id === task.assignee_id)
+    ? [{ id: task.assignee_id, label: 'Người đang được giao' }, ...people]
+    : people;
+  return (
+    <>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="btn-secondary px-2 py-1 text-xs">
+        {open ? 'Đóng' : 'Sửa'}
+      </button>
+      {open && (
+        <form action={action} className="basis-full space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+          <input type="hidden" name="id" value={task.id} />
+          <div><label className="label" htmlFor={`${p}-title`}>Tên việc</label><input id={`${p}-title`} name="title" required maxLength={300} defaultValue={task.title} className="input" autoFocus /></div>
+          <div className="grid gap-3 sm:grid-cols-4">
+            {options && (
+              <div>
+                <label className="label" htmlFor={`${p}-assignee`}>Người thực hiện</label>
+                <select id={`${p}-assignee`} name="assignee_id" className="input" defaultValue={task.assignee_id ?? ''}>
+                  <option value="">Chưa giao</option>
+                  {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </div>
+            )}
+            <div><label className="label" htmlFor={`${p}-start`}>Bắt đầu</label><input id={`${p}-start`} name="start_date" type="date" defaultValue={task.start_date ?? ''} className="input" /></div>
+            <div><label className="label" htmlFor={`${p}-due`}>Hạn</label><input id={`${p}-due`} name="due_date" type="date" defaultValue={task.due_date ?? ''} className="input" /></div>
+            <div>
+              <label className="label" htmlFor={`${p}-pri`}>Ưu tiên</label>
+              <select id={`${p}-pri`} name="priority" defaultValue={task.priority} className="input">
+                {Object.entries(TASK_PRIORITY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="label" htmlFor={`${p}-desc`}>Mô tả</label>
+            <textarea id={`${p}-desc`} name="description" rows={3} defaultValue={task.description ?? ''} className="input" />
+            <p className="mt-1 text-xs muted">Ghi &quot;Người phụ trách: …&quot; hoặc &quot;Phối hợp: …&quot; (mỗi ý một dòng) để hiện thành Bên phụ trách, Bên phối hợp.</p>
+          </div>
+          <FormMessage state={state} />
+          <div className="flex gap-2">
+            <SubmitButton pendingText="Đang lưu…">Lưu thay đổi</SubmitButton>
+            <button type="button" onClick={() => setOpen(false)} className="btn-secondary">Hủy</button>
+          </div>
+        </form>
+      )}
+    </>
   );
 }

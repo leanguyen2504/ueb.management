@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { TaskDropBox } from '@/components/TaskDropBox';
 import { deleteOrRequestTask, deleteTask, deleteTaskLink, nudgeTask, setTaskStatus } from '@/lib/work';
 import { ConfirmButton } from '@/components/ConfirmButton';
+import { TaskEditButton, type Option } from '@/components/WorkForms';
 import { fmtDate, vnDay } from '@/lib/format';
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, type Task, type TaskLink } from '@/lib/types';
 
@@ -41,6 +42,8 @@ export function TaskList({
   showProgress = false,
   deleteState,
   back,
+  canEdit,
+  people,
 }: {
   tasks: Task[];
   name: (id: string | null) => string;
@@ -59,6 +62,10 @@ export function TaskList({
   deleteState?: (t: Task) => 'delete' | 'request' | 'pending' | null;
   /** Trang quay về sau khi xóa hoặc gửi đề nghị. */
   back?: string;
+  /** Ai được sửa thông tin việc (quyền Sửa của nhóm); cơ sở dữ liệu kiểm tra lại. */
+  canEdit?: boolean | ((t: Task) => boolean);
+  /** Thành viên để đổi người thực hiện, theo từng việc; không có thì không hiện ô đó. */
+  people?: Option[] | ((t: Task) => Option[] | undefined);
 }) {
   if (!tasks.length) return <p className="text-sm muted">{empty}</p>;
   const today = vnDay();
@@ -105,6 +112,9 @@ export function TaskList({
               </select>
               <button className="btn-secondary px-2 py-1 text-xs">Lưu</button>
             </form>
+            {(typeof canEdit === 'function' ? canEdit(t) : canEdit) && (
+              <TaskEditButton task={t} people={typeof people === 'function' ? people(t) : people} />
+            )}
             {deleteState && (() => {
               const st = deleteState(t);
               if (st === 'pending') return <span className="chip px-2 py-1 text-xs" title="Đã gửi đề nghị xóa, chờ Trưởng nhóm duyệt">Chờ duyệt xóa</span>;
