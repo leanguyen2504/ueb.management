@@ -137,7 +137,10 @@ export function DataTable({ id, columns, rows, empty = 'Không có dữ liệu.'
     setSort(!sort || sort.key !== key ? { key, dir: 'asc' } : sort.dir === 'asc' ? { key, dir: 'desc' } : null);
 
   const hasTotals = cols.some((c) => c.total);
-  const hasDetail = rows.some((r) => r.detail?.length);
+  const shownSet = new Set(cols.map((c) => c.key));
+  // Bỏ các mục chi tiết đã có sẵn trên dòng (cột tương ứng đang hiện).
+  const detailOf = (r: Row) => r.detail?.filter((d) => !d.cols?.length || !d.cols.every((k) => shownSet.has(k))) ?? [];
+  const hasDetail = rows.some((r) => detailOf(r).length);
   const pad = dense ? '!py-1 !px-2' : '';
 
   const download = () => {
@@ -250,14 +253,15 @@ export function DataTable({ id, columns, rows, empty = 'Không có dữ liệu.'
           </thead>
           <tbody>
             {filtered.slice(0, limit).map((r) => {
-              const isOpen = expanded.has(r.id);
+              const detail = detailOf(r);
+              const isOpen = expanded.has(r.id) && detail.length > 0;
               const bg = r.tone === 'today' ? 'bg-gold-50 dark:bg-gold-600/10' : r.tone === 'weekend' ? 'bg-slate-50/70 dark:bg-slate-900/40' : r.tone === 'warn' ? 'bg-orange-50/60 dark:bg-orange-950/20' : '';
               return (
                 <RowFrag key={r.id}>
                   <tr className={`${bg} hover:bg-slate-50 dark:hover:bg-slate-800/40`}>
                     {hasDetail && (
                       <td className={`!px-2 ${pad}`}>
-                        {r.detail?.length ? (
+                        {detail.length ? (
                           <button type="button" aria-expanded={isOpen} aria-label={isOpen ? 'Thu gọn' : 'Xem chi tiết'}
                             onClick={() => { const n = new Set(expanded); if (isOpen) n.delete(r.id); else n.add(r.id); setExpanded(n); }}
                             className="rounded p-0.5 hover:bg-slate-100 dark:hover:bg-slate-800">
@@ -272,12 +276,12 @@ export function DataTable({ id, columns, rows, empty = 'Không có dữ liệu.'
                       </td>
                     ))}
                   </tr>
-                  {isOpen && r.detail && (
+                  {isOpen && (
                     <tr className="bg-slate-50/60 dark:bg-slate-900/40">
                       <td />
                       <td colSpan={cols.length} className="!pt-1">
                         <dl className="grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2 xl:grid-cols-3">
-                          {r.detail.map((d) => (
+                          {detail.map((d) => (
                             <div key={d.label} className="min-w-0">
                               <dt className="text-xs muted">{d.label}</dt>
                               <dd className="min-w-0 break-words"><CellView c={d.value} /></dd>

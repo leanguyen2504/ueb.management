@@ -236,6 +236,8 @@ function dayRow(d: DayRow, o: { today: string; month: string; browse: (k: string
   const reqs = [...d.leave, ...d.overtime];
   const findings = d.day <= o.today ? punchFindings(d.punch, d.leave) : [];
   const excuses = [d.punch?.excuse_am, d.punch?.excuse_pm].flatMap((e) => (e ?? '').split(';')).map((x) => x.trim()).filter(Boolean);
+  // Một danh sách sản phẩm dùng chung cho cột và phần mở rộng: phần mở rộng chỉ hiện khi cột đang ẩn.
+  const products = d.products.map((p) => ({ t: p.key, href: o.browse(p.key) ?? undefined, ext: true, sub: `${p.summary}${p.converted ? ` · ${fmtHours(p.converted)} giờ QĐ` : ''}` }));
   return {
     id: d.day,
     tone: findings.length ? 'warn' : d.day === o.today ? 'today' : d.weekend ? 'weekend' : undefined,
@@ -265,17 +267,17 @@ function dayRow(d: DayRow, o: { today: string; month: string; browse: (k: string
       teach: d.teachHours || null,
       hours: total ? { v: total, sub: [d.worklogHours && `log ${fmtHours(d.worklogHours)}`, d.teachHours && `giảng ${fmtHours(d.teachHours)}`].filter(Boolean).join(' · ') || undefined } : null,
       products: d.products.length || null,
-      productList: { items: d.products.map((p) => ({ t: p.key, href: o.browse(p.key) ?? undefined, ext: true, sub: p.summary })) },
+      productList: { items: products },
       converted: d.converted || null,
       overtimeHours: d.overtimeHours || null,
       verdict: VERDICT_LABEL[d.verdict] ? { v: VERDICT_LABEL[d.verdict], tone: VERDICT_TONE[d.verdict], sub: d.verdict === 'mot-phan' ? `cần ${fmtHours(d.target)} giờ` : undefined } : null,
       note: d.checkin?.note ?? null,
     },
     detail: d.products.length || d.checkin?.note || reqs.length || d.punch ? [
-      ...(d.punch ? [{ label: 'Máy chấm công', value: `${punchSpan(d.punch) || 'Không có lần chấm'}${d.punch.error_count ? ` · ${d.punch.error_count} lỗi, ${d.punch.minutes_converted} phút quy đổi` : ''}${excuses.length ? ` · giải trình: ${excuses.join('; ')}` : ''}` }] : []),
+      ...(d.punch ? [{ label: 'Máy chấm công', cols: ['punch', 'punchErrors', 'punchMinutes', 'excuse'], value: `${punchSpan(d.punch) || 'Không có lần chấm'}${d.punch.error_count ? ` · ${d.punch.error_count} lỗi, ${d.punch.minutes_converted} phút quy đổi` : ''}${excuses.length ? ` · giải trình: ${excuses.join('; ')}` : ''}` }] : []),
       ...(d.checkin ? [{ label: 'Điểm danh', value: `${CHECKIN_LABEL[d.checkin.place]} lúc ${hhmm(d.checkin.checked_at)}${d.checkin.note ? ` · ${d.checkin.note}` : ''}` }] : []),
-      ...(d.products.length ? [{ label: `Sản phẩm hoàn thành (${d.products.length})`, value: { items: d.products.map((p) => ({ t: p.key, href: o.browse(p.key) ?? undefined, ext: true, sub: `${p.summary}${p.converted ? ` · ${fmtHours(p.converted)} giờ QĐ` : ''}` })) } }] : []),
       ...(reqs.length ? [{ label: 'Đơn trên Jira', value: { items: reqs.map((r) => ({ t: r.key, href: o.browse(r.key) ?? undefined, ext: true, sub: r.title })) } }] : []),
+      ...(d.products.length ? [{ label: `Sản phẩm hoàn thành (${d.products.length})`, cols: ['productList'], value: { items: products } }] : []),
     ] : undefined,
   };
 }

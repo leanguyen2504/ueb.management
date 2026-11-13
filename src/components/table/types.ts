@@ -45,8 +45,9 @@ export type Row = {
   cells: Record<string, Cell>;
   // Tô nền: hôm nay, cuối tuần, cần chú ý.
   tone?: 'today' | 'weekend' | 'warn';
-  // Thông tin thêm khi mở rộng dòng.
-  detail?: { label: string; value: Cell }[];
+  // Thông tin thêm khi mở rộng dòng. `cols`: mục này lặp lại nội dung các cột đó,
+  // nên được ẩn khi tất cả các cột ấy đang hiện trên bảng (tránh thấy một thứ hai lần).
+  detail?: { label: string; value: Cell; cols?: string[] }[];
 };
 
 export const TONE_CLASS: Record<Tone, string> = {
