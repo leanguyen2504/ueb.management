@@ -14,7 +14,7 @@ select public.jira_save_snapshot(:tv1, 'bookmarklet', $${
   "me": {"name": "tv1", "key": "tv1", "displayName": "Thành viên 1"},
   "issues": [
     {"key": "KTPT-1", "summary": "Bài báo", "status": "Done", "statusCategory": "done", "isAssignee": true,
-     "resolved": "2026-11-05T10:00:00.000+0700", "mySeconds": 7200, "custom": {"Giờ quy đổi": 12.5},
+     "resolved": "2026-11-05T10:00:00.000+0700", "mySeconds": 7200, "myAttachmentCount": 2, "custom": {"Giờ quy đổi": 12.5},
      "links": [{"type": "Blocks", "dir": "inward", "key": "TCT-3", "statusCategory": "new"}], "reopenCount": 2,
      "labels": ["bao-cao"], "fixVersions": ["Đợt 1"], "originalEstimate": 36000, "startDate": "2026-11-01",
      "transitions": [{"at": "2026-11-02T08:00:00.000+0700", "from": "Open", "to": "Done"}], "lastComment": {"author": "A", "isMe": false, "created": "2026-11-06T09:00:00.000+0700", "body": "x"}},
@@ -39,6 +39,8 @@ select t.ok((select reopen_count = 2 and labels = array['bao-cao'] and fix_versi
   and start_date = '2026-11-01' and links -> 0 ->> 'key' = 'TCT-3' and jsonb_array_length(transitions) = 1 and last_comment ->> 'author' = 'A'
   from public.jira_issues where issue_key = 'KTPT-1'), 'giữ các trường quản lý đầu việc');
 select t.ok((select links = '[]' and labels = '{}' and reopen_count = 0 from public.jira_issues where issue_key = 'KTPT-2'), 'giá trị mặc định khi thiếu');
+select t.ok((select my_attachment_count = 2 from public.jira_issues where issue_key = 'KTPT-1'), 'lưu số file mình đính kèm');
+select t.ok((select my_attachment_count is null from public.jira_issues where issue_key = 'KTPT-2'), 'không có thông tin file thì để trống');
 select t.ok((select issue_count = 2 and worklog_count = 1 and jira_username = 'tv1' and custom_field_names = array['Giờ quy đổi'] from public.jira_accounts), 'trạng thái kết nối');
 -- Bí mật không đọc được qua API, kể cả của chính mình.
 select t.denied('select * from public.jira_secrets', 'đọc bảng bí mật');

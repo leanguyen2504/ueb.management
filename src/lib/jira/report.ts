@@ -191,4 +191,25 @@ export function waitingOnOthers(issues: JiraIssueRow[]) {
   };
 }
 
+// ---- Thiếu minh chứng sản phẩm ----
+// Quy định: mã việc mình có log work phải có comment và file sản phẩm đính kèm của chính mình trên Jira.
+// Chỉ xét việc đang mở, hoặc đã xong từ đầu tháng trước, để danh sách không kéo theo việc cũ.
+export type MissingProof = { issue: JiraIssueRow; noComment: boolean; noFile: boolean };
+export function missingProof(issues: JiraIssueRow[], now = new Date()): MissingProof[] {
+  const today = vnDay(now);
+  const [y, m] = today.split('-').map(Number);
+  const from = m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`;
+  return issues
+    .filter((i) => i.has_my_worklog && (i.status_category !== 'done' || (i.resolved_at ? vnDay(i.resolved_at) >= from : false)))
+    .map((i) => ({
+      issue: i,
+      noComment: !i.my_last_comment_at,
+      // Dữ liệu đồng bộ trước khi có thông tin file (null/undefined): chưa kết luận được, không báo.
+      noFile: i.my_attachment_count != null && i.my_attachment_count <= 0,
+    }))
+    .filter((x) => x.noComment || x.noFile)
+    .sort((a, b) => Number(b.issue.status_category === 'done') - Number(a.issue.status_category === 'done')
+      || (b.issue.resolved_at ?? b.issue.updated_at_jira ?? '').localeCompare(a.issue.resolved_at ?? a.issue.updated_at_jira ?? ''));
+}
+
 export const fmtDuration = (sec: number | null | undefined) => (sec == null ? '' : `${fmtHours(hours(sec))} giờ`);

@@ -163,7 +163,13 @@ export async function collectMyJira(
       });
     }
     let mentionsMe = false;
-    const comments: any[] = (f.comment && f.comment.comments) || [];
+    let comments: any[] = (f.comment && f.comment.comments) || [];
+    // Comment của mình quyết định mã việc có được tính là sản phẩm không: đọc đủ khi trang tìm kiếm trả thiếu.
+    if (wlKeys.has(it.key) && f.comment && f.comment.total > comments.length) {
+      say(`Đang đọc comment của ${it.key}…`);
+      const full = await get(`/rest/api/2/issue/${encodeURIComponent(it.key)}/comment`, { maxResults: '1000' }).catch(() => null);
+      if (full && Array.isArray(full.comments)) comments = full.comments;
+    }
     let myLastCommentAt: string | null = null;
     for (const c of comments) if (same(c.author, me) && (!myLastCommentAt || c.created > myLastCommentAt)) myLastCommentAt = c.created;
     for (const c of comments) {
@@ -176,6 +182,8 @@ export async function collectMyJira(
       });
     }
     const lc = comments.length ? comments[comments.length - 1] : null;
+    // File sản phẩm chính mình đính kèm (quy định: mã có log work phải có comment và file đính kèm).
+    const myAttachmentCount = ((f.attachment as any[]) || []).filter((a) => same(a && a.author, me)).length;
     const custom: Record<string, any> = {};
     let startDate: string | null = null;
     let epicKey: string | null = null;
@@ -261,6 +269,7 @@ export async function collectMyJira(
       components: ((f.components as any[]) || []).map((c) => String(c.name)).slice(0, 10),
       lastComment: lc ? { author: str(lc.author && lc.author.displayName), isMe: same(lc.author, me), created: lc.created, body: String(lc.body || '').slice(0, 300) } : null,
       myLastCommentAt,
+      myAttachmentCount,
     });
   }
   say(`Xong: ${issues.length} mã việc, ${worklogs.length} worklog, ${mentions.length} comment nhắc tên bạn.`);

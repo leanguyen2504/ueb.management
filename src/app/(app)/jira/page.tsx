@@ -6,7 +6,7 @@ import { features, publicEnv, serverEnv } from '@/lib/env';
 import { fmtDate, fmtDateTime, vnDay } from '@/lib/format';
 import {
   blockedBy, blocking, byProductType, daysBetween, dueState, fmtHours, groupWorklogs, hours, inProgressNoLog,
-  pickConvertedField, submittedByMonth, todoList, waitingOnMe, waitingOnOthers, periodLabel, weekStart, type Worklog,
+  missingProof, pickConvertedField, submittedByMonth, type MissingProof, todoList, waitingOnMe, waitingOnOthers, periodLabel, weekStart, type Worklog,
 } from '@/lib/jira/report';
 import type { JiraAccount, JiraIssueRow, JiraMentionRow } from '@/lib/jira/types';
 import { DataTable } from '@/components/table/DataTable';
@@ -45,6 +45,7 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
 
   const field = pickConvertedField(acc?.custom_field_names ?? [], process.env.JIRA_CONVERTED_HOURS_FIELD);
   const submitted = submittedByMonth(issues, field, 12);
+  const proof = missingProof(issues);
   const todo = todoList(issues);
   const noLog = inProgressNoLog(issues, worklogs);
   const onMe = waitingOnMe(issues, mentions);
@@ -100,6 +101,15 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
         </p>
       )}
 
+      {synced && proof.length > 0 && (
+        <p role="alert" className="-mt-2 mb-4 rounded-xl bg-orange-50 px-4 py-2.5 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">
+          <b>{proof.length} mã Jira bạn đã log work còn thiếu comment hoặc file sản phẩm.</b>{' '}
+          {proof.slice(0, 6).map((x, n) => <span key={x.issue.issue_key}>{n > 0 && ', '}<IssueLink k={x.issue.issue_key} href={browse(x.issue.issue_key)} title={x.issue.summary} /></span>)}
+          {proof.length > 6 && '…'}{' '}
+          <Link href={`${q({ muc: 'can-lam' })}#thieu-minh-chung`} className="font-semibold underline">Xem chi tiết</Link>
+        </p>
+      )}
+
       {synced && (
         <div className="mb-6 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
           <section className="card !p-0" aria-label="Việc cần chú ý">
@@ -146,6 +156,14 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
               <Link href={q({ kieu: 'bang' })} aria-current={sp.kieu === 'bang' ? 'page' : undefined}>Dạng bảng</Link>
             </nav>
           </div>
+          {proof.length > 0 && (
+            <div id="thieu-minh-chung" className="mb-4 scroll-mt-20">
+              <Panel title="Thiếu comment hoặc file sản phẩm" count={proof.length}
+                note="Mã bạn có log work (đang mở, hoặc đã xong từ đầu tháng trước) nhưng bạn chưa comment hoặc chưa đính kèm file sản phẩm trên Jira. Bổ sung trên Jira rồi bấm Cập nhật dữ liệu.">
+                <ProofList items={proof} ctx={ctx} />
+              </Panel>
+            </div>
+          )}
           {noLog.length > 0 && (
             <p className="mb-4 rounded-xl bg-gold-50 px-4 py-2.5 text-sm dark:bg-gold-600/10">
               <b className="text-gold-600 dark:text-gold-500">Chưa log work tuần này:</b>{' '}
@@ -342,6 +360,22 @@ function Panel({ title, note, count, right, children }: { title: string; note?: 
 
 function IssueLink({ k, href, title }: { k: string; href: string | null; title?: string }) {
   return href ? <a className="link whitespace-nowrap" href={href} target="_blank" rel="noreferrer" title={title}>{k}</a> : <span className="font-medium" title={title}>{k}</span>;
+}
+
+function ProofList({ items, ctx }: { items: MissingProof[]; ctx: RowCtx }) {
+  return (
+    <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+      {items.map(({ issue: i, noComment, noFile }) => (
+        <li key={i.issue_key} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 text-sm">
+          <IssueLink k={i.issue_key} href={ctx.browse(i.issue_key)} />
+          <span className="min-w-0 flex-1 truncate font-medium" title={i.summary}>{i.summary}</span>
+          {noComment && <span className="chip bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300">Chưa comment</span>}
+          {noFile && <span className="chip bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300">Chưa đính kèm file</span>}
+          <span className="chip bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{i.status ?? ''}</span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 const TONE = {
