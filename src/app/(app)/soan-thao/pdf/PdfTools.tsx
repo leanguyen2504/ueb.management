@@ -5,12 +5,20 @@ import { useEffect, useRef, useState } from 'react';
 import { download } from '../ReviewBox';
 
 const PDF_MIME = 'application/pdf';
-const IMG_EXT = /\.(jpe?g|png|webp|gif|bmp|avif)$/i;
+const IMG_EXT = /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif)$/i;
+const HEIC = (f: File) => /\.(heic|heif)$/i.test(f.name) || /image\/hei[cf]/i.test(f.type);
 const A4: [number, number] = [595.28, 841.89]; // pt
 const baseName = (n: string) => n.replace(/\.[^.]+$/, '');
 
 type Item = { id: number; file: File; kind: 'image' | 'pdf'; thumb?: string };
 let seq = 0;
+
+// Ảnh HEIC/HEIF (iPhone): trình duyệt Chrome, Edge không đọc được, đổi sang JPEG ngay trên máy (thư viện libheif).
+async function fromHeic(f: File) {
+  const { heicTo } = await import('heic-to/next');
+  const blob = await heicTo({ blob: f, type: 'image/jpeg', quality: 0.92 });
+  return new File([blob], `${baseName(f.name)}.jpg`, { type: 'image/jpeg' });
+}
 
 // Ảnh → bytes để nhúng vào PDF: xoay theo EXIF, thu về tối đa ~300 dpi khổ A4, nền trắng.
 async function prepareImage(file: File) {
@@ -37,22 +45,40 @@ function MergeBox() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [drag, setDrag] = useState(false);
+  const [converting, setConverting] = useState(false);
 
   const itemsRef = useRef(items);
   itemsRef.current = items;
   useEffect(() => () => itemsRef.current.forEach((i) => i.thumb && URL.revokeObjectURL(i.thumb)), []);
 
-  function add(files: FileList | File[]) {
+  async function add(files: FileList | File[]) {
     setErr('');
+    const list = Array.from(files);
     const bad: string[] = [];
+    const broken: string[] = [];
     const next: Item[] = [];
-    for (const f of Array.from(files)) {
-      if (IMG_EXT.test(f.name) || f.type.startsWith('image/')) next.push({ id: ++seq, file: f, kind: 'image', thumb: URL.createObjectURL(f) });
-      else if (/\.pdf$/i.test(f.name) || f.type === PDF_MIME) next.push({ id: ++seq, file: f, kind: 'pdf' });
+    if (list.some(HEIC)) setConverting(true);
+    for (let f of list) {
+      if (IMG_EXT.test(f.name) || f.type.startsWith('image/')) {
+        if (HEIC(f)) {
+          try {
+            f = await fromHeic(f);
+          } catch {
+            broken.push(f.name);
+            continue;
+          }
+        }
+        next.push({ id: ++seq, file: f, kind: 'image', thumb: URL.createObjectURL(f) });
+      } else if (/\.pdf$/i.test(f.name) || f.type === PDF_MIME) next.push({ id: ++seq, file: f, kind: 'pdf' });
       else bad.push(f.name);
     }
+    setConverting(false);
     setItems((cur) => [...cur, ...next]);
-    if (bad.length) setErr(`Bỏ qua ${bad.join(', ')}: chỉ nhận ảnh và PDF ở đây (file Word dùng ô bên trên).`);
+    const msg = [
+      bad.length ? `Bỏ qua ${bad.join(', ')}: chỉ nhận ảnh và PDF ở đây (file Word dùng ô bên trên).` : '',
+      broken.length ? `Không đọc được ảnh ${broken.join(', ')}.` : '',
+    ].filter(Boolean).join(' ');
+    if (msg) setErr(msg);
   }
   const move = (i: number, d: number) => setItems((cur) => {
     const j = i + d;
@@ -112,7 +138,7 @@ function MergeBox() {
     <section className="card space-y-4">
       <div>
         <h2 className="text-base font-semibold">Chuyển ảnh sang PDF, gộp PDF</h2>
-        <p className="mt-1 text-sm muted">Chọn nhiều ảnh (JPG, PNG, WebP…) và/hoặc file PDF, sắp xếp thứ tự rồi gộp thành một file PDF. Mỗi ảnh là một trang.</p>
+        <p className="mt-1 text-sm muted">Chọn nhiều ảnh (JPG, PNG, HEIC của iPhone, WebP…) và/hoặc file PDF, sắp xếp thứ tự rồi gộp thành một file PDF. Mỗi ảnh là một trang.</p>
       </div>
       <label
         className={`block cursor-pointer rounded-xl border-2 border-dashed p-6 text-center text-sm ${drag ? 'border-brand-500 bg-brand-50 dark:bg-brand-600/10' : 'border-gray-300 dark:border-gray-600'}`}
@@ -120,9 +146,10 @@ function MergeBox() {
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => { e.preventDefault(); setDrag(false); add(e.dataTransfer.files); }}
       >
-        <input type="file" multiple accept="image/*,.pdf,application/pdf" className="sr-only" onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ''; }} />
+        <input type="file" multiple accept="image/*,.heic,.heif,.pdf,application/pdf" className="sr-only" onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ''; }} />
         <b>Chọn file</b> hoặc kéo thả ảnh, PDF vào đây
       </label>
+      {converting && <p className="text-sm muted">Đang đọc ảnh HEIC…</p>}
 
       {items.length > 0 && (
         <ol className="space-y-2">
@@ -151,7 +178,7 @@ function MergeBox() {
         </div>
         <div className="flex gap-2">
           {items.length > 0 && <button type="button" className="btn-secondary px-3 py-1.5 text-sm" onClick={() => { items.forEach((x) => x.thumb && URL.revokeObjectURL(x.thumb)); setItems([]); }}>Xóa hết</button>}
-          <button type="button" className="btn" disabled={busy || !items.length} onClick={make}>{busy ? 'Đang tạo…' : 'Tải file PDF'}</button>
+          <button type="button" className="btn" disabled={busy || converting || !items.length} onClick={make}>{busy ? 'Đang tạo…' : 'Tải file PDF'}</button>
         </div>
       </div>
       {err && <p className="text-sm text-red-600 dark:text-red-400">{err}</p>}
