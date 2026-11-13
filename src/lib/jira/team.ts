@@ -2,7 +2,7 @@
 // Dữ liệu người khác chỉ có khi người đó tự bật chia sẻ (xem migration chia_se_jira).
 import { addDays, dayStartIso, vnDay } from '@/lib/format';
 import type { XCell, XSheet } from '@/lib/xlsx';
-import { blockedBy, dueState, hours, isMine, numberOf, productLabel, roleChips } from './report';
+import { blockedBy, dueState, hours, isMine, isProduct, numberOf, productLabel, roleChips } from './report';
 import type { JiraIssueRow } from './types';
 
 export type SharePerson = {
@@ -38,7 +38,7 @@ export function normalizeIssue(r: Partial<TeamIssue> & { user_id: string; issue_
     updated_at_jira: null, resolved_at: null, due_date: null, my_seconds: 0, custom: {}, priority: null, priority_rank: null,
     start_date: null, original_estimate: null, remaining_estimate: null, time_spent: null, parent_key: null, parent_summary: null,
     epic_key: null, subtask_total: 0, subtask_done: 0, links: [], transitions: [], status_since: null, reopen_count: 0, sprint: null,
-    fix_versions: [], labels: [], components: [], last_comment: null, my_last_comment_at: null,
+    fix_versions: [], labels: [], components: [], last_comment: null, my_last_comment_at: undefined,
     ...r,
   } as TeamIssue;
 }
@@ -86,7 +86,7 @@ export type PersonStats = {
 export function personStats(issues: TeamIssue[], worklogs: TeamWorklog[], field: string | null, p: Period, today = vnDay()): PersonStats {
   const mine = issues.filter(isMine);
   const open = mine.filter((i) => i.status_category !== 'done');
-  const products = mine.filter((i) => i.status_category === 'done' && inPeriod(i.resolved_at, p));
+  const products = issues.filter((i) => isProduct(i) && inPeriod(i.resolved_at, p));
   const wl = worklogs.filter((w) => inPeriod(w.started_at, p));
   return {
     open: open.length,
@@ -186,7 +186,7 @@ export function buildReportSheets(r: ReportInput): XSheet[] {
   const productRows: XCell[][] = [];
   const typeMap = new Map<string, { uid: string; label: string; count: number; converted: number }>();
   for (const p of r.people) {
-    for (const i of (iss.get(p.id) ?? []).filter((x) => isMine(x) && x.status_category === 'done' && inPeriod(x.resolved_at, r.period))
+    for (const i of (iss.get(p.id) ?? []).filter((x) => isProduct(x) && inPeriod(x.resolved_at, r.period))
       .sort((a, b) => (a.resolved_at ?? '').localeCompare(b.resolved_at ?? ''))) {
       const conv = p.field ? numberOf(i.custom?.[p.field]) : null;
       const label = (p.field && productLabel(i.custom?.[p.field])) || i.issue_type || 'Khác';

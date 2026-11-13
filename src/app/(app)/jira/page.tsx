@@ -6,7 +6,7 @@ import { features, publicEnv, serverEnv } from '@/lib/env';
 import { fmtDate, fmtDateTime, vnDay } from '@/lib/format';
 import {
   blockedBy, blocking, byProductType, daysBetween, dueState, fmtHours, groupWorklogs, hours, inProgressNoLog,
-  pickConvertedField, submittedByMonth, todoList, waitingOnMe, waitingOnOthers, periodLabel, weekStart, type Worklog,
+  pickConvertedField, productsMissingComment, submittedByMonth, todoList, waitingOnMe, waitingOnOthers, periodLabel, weekStart, type Worklog,
 } from '@/lib/jira/report';
 import type { JiraAccount, JiraIssueRow, JiraMentionRow } from '@/lib/jira/types';
 import { DataTable } from '@/components/table/DataTable';
@@ -45,6 +45,7 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
 
   const field = pickConvertedField(acc?.custom_field_names ?? [], process.env.JIRA_CONVERTED_HOURS_FIELD);
   const submitted = submittedByMonth(issues, field, 12);
+  const noComment = productsMissingComment(issues);
   const todo = todoList(issues);
   const noLog = inProgressNoLog(issues, worklogs);
   const onMe = waitingOnMe(issues, mentions);
@@ -117,7 +118,8 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
               <Kpi href={q({ muc: 'worklog' })} label="Giờ log tuần này" value={fmtHours(hours(totals.weekSec))}
                 hint={`Tuần trước ${fmtHours(hours(totals.lastWeekSec))} · tháng ${fmtHours(hours(totals.monthSec))}`}
                 extra={<Spark values={[...weeks].reverse().map((w) => hours(w.seconds))} />} />
-              <Kpi href={q({ muc: 'da-lam' })} label="Sản phẩm tháng này" value={totals.submittedMonth} hint={field ? `${fmtHours(totals.convertedMonth)} giờ quy đổi` : undefined} />
+              <Kpi href={q({ muc: 'da-lam' })} label="Sản phẩm tháng này" value={totals.submittedMonth}
+                hint={[field ? `${fmtHours(totals.convertedMonth)} giờ quy đổi` : null, noComment.length ? `${noComment.length} mã chưa comment` : null].filter(Boolean).join(' · ') || undefined} />
               <Kpi href={q({ muc: 'da-lam' })} label="Giờ quy đổi năm nay" value={field ? fmtHours(totals.convertedYear) : '—'} hint={field ? `Trường "${field}"` : 'Chưa thấy trường quy đổi'} />
             </div>
           </section>
@@ -195,8 +197,17 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
         const maxCount = Math.max(1, ...submitted.map((s) => s.count));
         return (
           <>
+            {noComment.length > 0 && (
+              <div className="mb-4">
+                <Panel title="Đã xong nhưng bạn chưa comment" count={noComment.length}
+                  note="Mã việc bạn có log work đã hoàn thành, nhưng bạn chưa comment trên Jira nên chưa được tính là sản phẩm. Vào từng mã comment rồi bấm Cập nhật dữ liệu.">
+                  <DataTable id="jira-chua-comment" columns={PRODUCT_COLUMNS.filter((c) => field || c.key !== 'converted')} rows={noComment.map((i) => productRow(i, ctx))}
+                    exportName="chua-comment" initialSort={{ key: 'resolved', dir: 'desc' }} empty="Không có." />
+                </Panel>
+              </div>
+            )}
             <div className="mb-4 grid gap-4 lg:grid-cols-2">
-              <Panel title="Theo tháng, 12 tháng gần nhất" note="Việc của bạn chuyển sang trạng thái hoàn thành, theo tháng hoàn thành.">
+              <Panel title="Theo tháng, 12 tháng gần nhất" note="Mã việc bạn có log work, đã hoàn thành và bạn đã comment trên Jira, theo tháng hoàn thành.">
                 <ul className="space-y-1">
                   {submitted.map((s) => (
                     <li key={s.key} className="flex items-center gap-3 text-sm">
