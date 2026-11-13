@@ -20,10 +20,15 @@ async function fromHeic(f: File) {
   return new File([blob], `${baseName(f.name)}.jpg`, { type: 'image/jpeg' });
 }
 
-// Ảnh → bytes để nhúng vào PDF: xoay theo EXIF, thu về tối đa ~300 dpi khổ A4, nền trắng.
-async function prepareImage(file: File) {
+// Mức nén ảnh, thử lần lượt tới khi PDF vừa giới hạn dung lượng: cạnh dài tối đa (px), chất lượng JPEG,
+// có đổi PNG sang JPEG hay không. 3508 px ≈ 300 dpi khổ A4; 1300 px vẫn đọc rõ chữ văn bản chụp.
+const LEVELS: [number, number, boolean][] = [[3508, 0.9, false], [2800, 0.85, false], [2400, 0.8, true], [2000, 0.75, true], [1700, 0.7, true], [1500, 0.65, true], [1300, 0.6, true], [1100, 0.55, true]];
+const MB = (n: number) => `${(n / 1e6).toFixed(1)} MB`;
+
+// Ảnh → bytes để nhúng vào PDF: xoay theo EXIF, thu nhỏ theo mức nén, nền trắng.
+async function prepareImage(file: File, [maxPx, q, jpegOnly]: [number, number, boolean] = LEVELS[0]) {
   const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
-  const k = Math.min(1, 3508 / Math.max(bmp.width, bmp.height));
+  const k = Math.min(1, maxPx / Math.max(bmp.width, bmp.height));
   const w = Math.round(bmp.width * k), h = Math.round(bmp.height * k);
   const c = document.createElement('canvas');
   c.width = w;
@@ -33,8 +38,8 @@ async function prepareImage(file: File) {
   g.fillRect(0, 0, w, h);
   g.drawImage(bmp, 0, 0, w, h);
   bmp.close();
-  const png = /\.(png|gif|bmp)$/i.test(file.name); // ảnh chụp màn hình, sơ đồ: giữ nét
-  const blob = await new Promise<Blob>((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error('canvas'))), png ? 'image/png' : 'image/jpeg', 0.9));
+  const png = !jpegOnly && /\.(png|gif|bmp)$/i.test(file.name); // ảnh chụp màn hình, sơ đồ: giữ nét
+  const blob = await new Promise<Blob>((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error('canvas'))), png ? 'image/png' : 'image/jpeg', q));
   return { bytes: new Uint8Array(await blob.arrayBuffer()), png, w, h };
 }
 
@@ -42,6 +47,9 @@ function MergeBox() {
   const [items, setItems] = useState<Item[]>([]);
   const [size, setSize] = useState<'a4' | 'fit'>('a4');
   const [margin, setMargin] = useState(true);
+  const [limitOn, setLimitOn] = useState(true);
+  const [limit, setLimit] = useState('10.9');
+  const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [drag, setDrag] = useState(false);
@@ -93,42 +101,59 @@ function MergeBox() {
     return cur.filter((x) => x.id !== id);
   });
 
+  // Dựng PDF ở một mức nén ảnh.
+  async function build(level: [number, number, boolean]) {
+    const { PDFDocument } = await import('pdf-lib');
+    const out = await PDFDocument.create();
+    for (const it of items) {
+      if (it.kind === 'pdf') {
+        let src;
+        try {
+          src = await PDFDocument.load(new Uint8Array(await it.file.arrayBuffer()));
+        } catch {
+          throw new Error(`Không đọc được "${it.file.name}" (file có mật khẩu hoặc bị hỏng).`);
+        }
+        for (const p of await out.copyPages(src, src.getPageIndices())) out.addPage(p);
+        continue;
+      }
+      const im = await prepareImage(it.file, level).catch(() => { throw new Error(`Không đọc được ảnh "${it.file.name}".`); });
+      const img = im.png ? await out.embedPng(im.bytes) : await out.embedJpg(im.bytes);
+      if (size === 'fit') {
+        const k = Math.min(1, 1190 / Math.max(im.w, im.h)); // tối đa khổ A3
+        const pw = Math.max(1, im.w * k), ph = Math.max(1, im.h * k);
+        out.addPage([pw, ph]).drawImage(img, { x: 0, y: 0, width: pw, height: ph });
+      } else {
+        const [pw, ph] = im.w > im.h ? [A4[1], A4[0]] : A4;
+        const m = margin ? 28.35 : 0; // 10 mm
+        const k = Math.min((pw - 2 * m) / im.w, (ph - 2 * m) / im.h);
+        const w = im.w * k, h = im.h * k;
+        out.addPage([pw, ph]).drawImage(img, { x: (pw - w) / 2, y: (ph - h) / 2, width: w, height: h });
+      }
+    }
+    return out.save();
+  }
+
   async function make() {
     if (!items.length) return;
     setBusy(true);
     setErr('');
+    setInfo('');
     try {
-      const { PDFDocument } = await import('pdf-lib');
-      const out = await PDFDocument.create();
-      for (const it of items) {
-        if (it.kind === 'pdf') {
-          let src;
-          try {
-            src = await PDFDocument.load(new Uint8Array(await it.file.arrayBuffer()));
-          } catch {
-            throw new Error(`Không đọc được "${it.file.name}" (file có mật khẩu hoặc bị hỏng).`);
-          }
-          for (const p of await out.copyPages(src, src.getPageIndices())) out.addPage(p);
-          continue;
-        }
-        const im = await prepareImage(it.file).catch(() => { throw new Error(`Không đọc được ảnh "${it.file.name}".`); });
-        const img = im.png ? await out.embedPng(im.bytes) : await out.embedJpg(im.bytes);
-        if (size === 'fit') {
-          const k = Math.min(1, 1190 / Math.max(im.w, im.h)) ; // tối đa khổ A3
-          const pw = Math.max(1, im.w * k), ph = Math.max(1, im.h * k);
-          out.addPage([pw, ph]).drawImage(img, { x: 0, y: 0, width: pw, height: ph });
-        } else {
-          const [pw, ph] = im.w > im.h ? [A4[1], A4[0]] : A4;
-          const m = margin ? 28.35 : 0; // 10 mm
-          const k = Math.min((pw - 2 * m) / im.w, (ph - 2 * m) / im.h);
-          const w = im.w * k, h = im.h * k;
-          out.addPage([pw, ph]).drawImage(img, { x: (pw - w) / 2, y: (ph - h) / 2, width: w, height: h });
-        }
+      const max = limitOn ? (Number(limit.replace(',', '.')) || Infinity) * 1e6 : Infinity;
+      const hasImg = items.some((i) => i.kind === 'image');
+      let bytes = await build(LEVELS[0]);
+      for (let i = 1; bytes.length > max && hasImg && i < LEVELS.length; i++) {
+        setInfo(`Bản đầu ${MB(bytes.length)}, đang nén ảnh cho vừa ${MB(max)}…`);
+        bytes = await build(LEVELS[i]);
       }
       const name = items.length === 1 ? baseName(items[0].file.name) : `Gop_${items.length}_file`;
-      download(await out.save(), `${name}.pdf`, PDF_MIME);
+      download(bytes, `${name}.pdf`, PDF_MIME);
+      setInfo(bytes.length > max
+        ? `File PDF ${MB(bytes.length)}, vẫn lớn hơn ${MB(max)} dù đã nén ảnh hết mức (phần lớn dung lượng nằm ở các file PDF gộp vào). Hãy tách thành nhiều file.`
+        : `Đã tải file PDF ${MB(bytes.length)}.`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Không tạo được PDF.');
+      setInfo('');
     } finally {
       setBusy(false);
     }
@@ -175,12 +200,15 @@ function MergeBox() {
           <label className="inline-flex items-center gap-1.5"><input type="radio" checked={size === 'a4'} onChange={() => setSize('a4')} /> Khổ A4 (tự xoay ngang/dọc)</label>
           <label className="inline-flex items-center gap-1.5"><input type="radio" checked={size === 'fit'} onChange={() => setSize('fit')} /> Vừa khít ảnh</label>
           {size === 'a4' && <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={margin} onChange={(e) => setMargin(e.target.checked)} /> Chừa lề 1 cm</label>}
+          <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={limitOn} onChange={(e) => setLimitOn(e.target.checked)} /> Không quá</label>
+          <span className="-ml-2.5 inline-flex items-center gap-1"><input className="input w-20 py-1" inputMode="decimal" value={limit} disabled={!limitOn} onChange={(e) => setLimit(e.target.value)} aria-label="Dung lượng tối đa (MB)" /> MB</span>
         </div>
         <div className="flex gap-2">
           {items.length > 0 && <button type="button" className="btn-secondary px-3 py-1.5 text-sm" onClick={() => { items.forEach((x) => x.thumb && URL.revokeObjectURL(x.thumb)); setItems([]); }}>Xóa hết</button>}
           <button type="button" className="btn" disabled={busy || converting || !items.length} onClick={make}>{busy ? 'Đang tạo…' : 'Tải file PDF'}</button>
         </div>
       </div>
+      {info && <p className="text-sm muted">{info}</p>}
       {err && <p className="text-sm text-red-600 dark:text-red-400">{err}</p>}
     </section>
   );
