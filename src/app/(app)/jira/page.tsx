@@ -291,28 +291,70 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
       {tab === 'bao-cao' && <ReportTab sp={sp} userId={userId} supabase={supabase} synced={synced} shareScope={acc?.share_scope} />}
 
       {tab === 'ket-noi' && (
-        <section id="ket-noi" className="grid gap-4 lg:grid-cols-2">
+        <section id="ket-noi" className="space-y-4">
           <div className="card">
-            <h2 className="mb-1 font-semibold">{synced ? 'Cập nhật dữ liệu: nút trên trang Jira' : 'Kết nối Jira: nút trên trang Jira'}</h2>
-            <p className="mb-3 text-sm muted">Dùng được cả khi Jira chỉ mở trong mạng trường. Mỗi lần muốn cập nhật số liệu, mở Jira và bấm nút.</p>
-            <BookmarkletSetup appUrl={publicEnv.appUrl().replace(/\/+$/, '')} hasKey={Boolean(acc?.has_sync_key)} jiraUrl={jiraUrl} />
+            <h2 className="font-semibold">Cập nhật số liệu Jira như thế nào?</h2>
+            <p className="mt-1 text-sm muted">
+              Jira của trường chỉ mở trong mạng trường và không cấp Token, nên web không tự vào Jira đọc được. Thay vào đó bạn dùng một <b>nút trên thanh dấu trang</b>:
+              khi bạn bấm nút lúc đang mở Jira, trình duyệt của bạn đọc dữ liệu của riêng bạn và gửi về đây. Sau đó, khi tab Jira còn mở, nút tự cập nhật lại mỗi 30 phút.
+            </p>
+            <div className="mt-3 grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/40">
+                <h3 className="mb-1.5 text-sm font-semibold">Lần đầu (chỉ làm một lần trên mỗi máy)</h3>
+                <ol className="list-decimal space-y-1 pl-5 text-sm">
+                  <li>Hiện thanh dấu trang: Chrome, Edge bấm <b>Ctrl+Shift+B</b> (Mac: <b>⌘+Shift+B</b>); Safari vào menu View → Show Favorites Bar.</li>
+                  <li>Ở ô bên dưới, bấm <b>Tạo nút</b>.</li>
+                  <li>Giữ chuột vào nút đỏ <b>Đồng bộ Jira → UEB</b>, kéo thả lên thanh dấu trang.</li>
+                </ol>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/40">
+                <h3 className="mb-1.5 text-sm font-semibold">Mỗi khi cần số liệu mới</h3>
+                <ol className="list-decimal space-y-1 pl-5 text-sm">
+                  <li>Mở {jiraUrl ? <a className="link" href={jiraUrl} target="_blank" rel="noreferrer">Jira của trường</a> : 'Jira của trường'} và đăng nhập (trong mạng trường hoặc VPN).</li>
+                  <li>Bấm nút <b>Đồng bộ Jira → UEB</b> trên thanh dấu trang.</li>
+                  <li>Đợi ô đỏ góc phải dưới báo <b>Đã cập nhật…</b>, rồi tải lại trang này. Cứ để tab Jira mở thì số liệu tự mới lại mỗi 30 phút.</li>
+                </ol>
+              </div>
+            </div>
+            <details className="mt-3 text-sm">
+              <summary className="cursor-pointer font-medium">Gặp trục trặc?</summary>
+              <ul className="mt-2 list-disc space-y-1 pl-5 muted">
+                <li><b>Không kéo được nút</b> (Safari, máy công ty khóa): bấm <b>Chép mã nút</b>, tạo một dấu trang mới bất kỳ, sửa dấu trang đó và dán mã vào ô URL/Địa chỉ.</li>
+                <li><b>Bấm nút không thấy gì:</b> phải bấm khi đang ở trang Jira của trường (không phải trang này), và đã đăng nhập Jira.</li>
+                <li><b>Báo &quot;Thiếu mã đồng bộ&quot; hoặc lỗi 401:</b> nút đã cũ. Bấm <b>Tạo lại nút</b> rồi kéo nút mới lên thay nút cũ.</li>
+                <li><b>Đổi máy, đổi trình duyệt:</b> làm lại phần &quot;Lần đầu&quot;, hoặc dùng Chép mã nút để tạo dấu trang trên máy kia. Tạo lại nút sẽ làm nút trên máy cũ hết hiệu lực.</li>
+                <li>Cũng nút đó, bấm khi đang mở <a className="link" href="https://chamcong4lan.ueb.edu.vn/ChamCong/BaoCao" target="_blank" rel="noreferrer">trang Báo cáo chấm công</a> để lấy giờ vào/ra về Lịch → Chấm công.</li>
+              </ul>
+            </details>
           </div>
-          <div className="card space-y-3">
-            <h2 className="font-semibold">Đồng bộ tự động hằng ngày</h2>
-            {features.jiraServerSync() ? (
-              <>
-                <p className="text-sm muted">Máy chủ web tự đọc Jira mỗi sáng bằng Personal Access Token của bạn. Chỉ chạy được nếu Jira mở ra Internet.</p>
-                <TokenForm hasToken={Boolean(acc?.has_token)} />
-              </>
-            ) : (
-              <p className="text-sm muted">Chưa bật. Cần Jira của trường mở ra Internet; quản trị hệ thống bật bằng biến FEATURE_JIRA (xem tài liệu docs/jira.md).</p>
-            )}
-            {acc?.last_error && <p role="alert" className="rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-700 dark:bg-orange-950 dark:text-orange-300">Lần đồng bộ gần nhất lỗi: {acc.last_error}</p>}
-            {acc && (
-              <form action={disconnectJira} className="border-t border-slate-200 pt-3 dark:border-slate-800">
-                <button className="btn-danger text-sm">Ngắt kết nối và xóa dữ liệu Jira đã lưu</button>
-              </form>
-            )}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="card">
+              <h2 className="mb-1 font-semibold">{acc?.has_sync_key ? 'Nút của bạn' : 'Tạo nút Đồng bộ Jira'}</h2>
+              <p className="mb-3 text-sm muted">
+                {synced ? <>Lần cập nhật gần nhất: <b>{fmtDateTime(acc!.last_synced_at)}</b>{acc!.last_source === 'server' ? ' (tự động)' : ' (nút trên Jira)'}.</> : 'Chưa có dữ liệu Jira nào được gửi về.'}
+              </p>
+              <BookmarkletSetup appUrl={publicEnv.appUrl().replace(/\/+$/, '')} hasKey={Boolean(acc?.has_sync_key)} jiraUrl={jiraUrl} />
+            </div>
+            <div className="card space-y-3">
+              <h2 className="font-semibold">Đồng bộ bằng Token (không bắt buộc)</h2>
+              {features.jiraServerSync() ? (
+                <>
+                  <p className="text-sm muted">
+                    Chỉ dùng được nếu trang hồ sơ Jira của bạn (bấm ảnh đại diện góc phải → Profile) có mục <b>Personal Access Tokens</b> ở cột trái.
+                    Jira của trường hiện chưa có mục này, nên phần lớn mọi người <b>bỏ qua</b> ô này và dùng nút bên cạnh.
+                  </p>
+                  <TokenForm hasToken={Boolean(acc?.has_token)} />
+                </>
+              ) : (
+                <p className="text-sm muted">Chưa bật. Hãy dùng nút bên cạnh.</p>
+              )}
+              {acc?.last_error && <p role="alert" className="rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-700 dark:bg-orange-950 dark:text-orange-300">Lần đồng bộ gần nhất lỗi: {acc.last_error}</p>}
+              {acc && (
+                <form action={disconnectJira} className="border-t border-slate-200 pt-3 dark:border-slate-800">
+                  <button className="btn-danger text-sm">Ngắt kết nối và xóa dữ liệu Jira đã lưu</button>
+                </form>
+              )}
+            </div>
           </div>
         </section>
       )}

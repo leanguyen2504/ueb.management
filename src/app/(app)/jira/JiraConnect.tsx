@@ -22,12 +22,6 @@ export function BookmarkletSetup({ appUrl, hasKey, jiraUrl }: { appUrl: string; 
 
   return (
     <div className="space-y-3">
-      <ol className="list-decimal space-y-1.5 pl-5 text-sm">
-        <li>Bấm <b>{hasKey ? 'Tạo lại nút' : 'Tạo nút'}</b> bên dưới.</li>
-        <li>Kéo nút đỏ <b>Đồng bộ Jira → UEB</b> thả lên thanh dấu trang (bookmark) của trình duyệt. Nếu không thấy thanh dấu trang: Chrome bấm Ctrl+Shift+B (Mac: ⌘+Shift+B).</li>
-        <li>Mở {jiraUrl ? <a className="link" href={jiraUrl} target="_blank" rel="noreferrer">Jira của trường</a> : 'Jira của trường'}, đăng nhập như bình thường, rồi bấm nút vừa lưu. Dữ liệu của bạn được đọc ngay trong trình duyệt và gửi về đây; mật khẩu Jira không đi đâu cả.</li>
-        <li>Cũng nút đó, bấm khi đang mở <a className="link" href="https://chamcong4lan.ueb.edu.vn/ChamCong/BaoCao" target="_blank" rel="noreferrer">trang Báo cáo chấm công</a> của trường: web lấy giờ vào/ra, vi phạm và giải trình 3 tháng gần nhất của riêng bạn để hiện ở Lịch → Chấm công, và tự cập nhật mỗi 10 phút khi tab đó còn mở.</li>
-      </ol>
       {key ? (
         <div className="space-y-2 rounded-xl border border-gold-500/40 bg-gold-100/40 p-3 dark:bg-gold-600/10">
           <a ref={link} href="#" onClick={(e) => { e.preventDefault(); alert('Hãy kéo nút này lên thanh dấu trang, rồi bấm nó khi đang mở trang Jira.'); }}
