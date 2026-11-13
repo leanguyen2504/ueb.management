@@ -158,6 +158,75 @@ const KP_ROWS = ['Trả công lao động trực tiếp và thuê chuyên gia', 
 // "01/2027" → "01 năm 2027"; trống thì để chỗ điền tay.
 const monthYear = (s: string) => { const m = s.match(/^(\d{1,2})\s*[/.-]\s*(\d{4})$/); return m ? `${m[1].padStart(2, '0')} năm ${m[2]}` : s || '…… năm ……'; };
 
+// ---------- Đề cương NCKH: tiến độ và phụ lục dự toán ----------
+const PAGE = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+// "0,8" hoặc "0.8" → 0.8; "25.000.000" → 25000000.
+const num = (s: string) => { const t = String(s ?? '').trim(); if (!t) return 0; return Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t) || 0; };
+const isTitle = (t: string) => /^\s*(chuyên đề|thù lao)/i.test(t);
+const isTask = (t: string) => /^\s*công việc/i.test(t);
+// Bảng có cột TT tự đánh cho dòng chuyên đề; dòng "Công việc …" in nghiêng, không đánh số.
+function rowsTable(cols: Col[], rows: { cells: string[]; no: string; b?: boolean; i?: boolean }[], foot?: string[]) {
+  const total = cols.reduce((a, c) => a + c.w, 0);
+  const ws = cols.map((c) => Math.round((c.w * TW) / total));
+  const cell = (w: number, t: string, c: Col, o: R = {}) => tc(w, P(t, { sz: TSZ, jc: c.type === 'money' || c.type === 'number' ? 'right' : c.k === '_stt' ? 'center' : 'left', after: 0, line: 240, ...o }));
+  const head = `<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>${cols.map((c, i) => tc(ws[i], P(c.label, { b: true, sz: TSZ, jc: 'center', after: 0, line: 240 }))).join('')}</w:tr>`;
+  const body = rows.map((r) => `<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="400"/></w:trPr>${cols.map((c, i) => cell(ws[i], i === 0 ? r.no : r.cells[i - 1] ?? '', c, { b: r.b, i: r.i })).join('')}</w:tr>`).join('');
+  const f = foot ? `<w:tr><w:trPr><w:cantSplit/></w:trPr>${cols.map((c, i) => cell(ws[i], foot[i] ?? '', c, { b: true })).join('')}</w:tr>` : '';
+  return `<w:tbl><w:tblPr><w:tblW w:w="${TW}" w:type="dxa"/>${B1}<w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar><w:tblLook w:val="04A0"/></w:tblPr><w:tblGrid>${ws.map((w) => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>${head}${body}${f}</w:tbl>${P('', { after: 60 })}`;
+}
+const TT: Col = { k: '_stt', label: 'TT', w: 600 };
+function tienDoTable(rows: string[][]) {
+  const f = rows.filter((r) => r.some((x) => String(x ?? '').trim()));
+  let n = 0;
+  const out = (f.length ? f : [['', '', '', ''], ['', '', '', ''], ['', '', '', '']]).map((r) => (isTask(r[0] ?? '') ? { cells: r, no: '', i: true } : { cells: r, no: r.some((x) => x?.trim()) ? String(++n) : '' }));
+  return rowsTable([TT, { k: 'hd', label: 'Hoạt động nghiên cứu', w: 4000 }, { k: 'tu', label: 'Từ tháng', w: 1000 }, { k: 'den', label: 'Đến tháng', w: 1000 }, { k: 'sp', label: 'Sản phẩm khoa học', w: 2600 }], out);
+}
+type CongLd = { rows: { cells: string[]; no: string; b?: boolean; i?: boolean }[]; total: number };
+// Phụ lục 2: thành tiền = hệ số × định mức × số tháng quy đổi (cột 7 = 3 × 5 × 6); dòng tiêu đề cộng các dòng bên dưới.
+function congLd(rows: string[][]): CongLd {
+  const f = rows.filter((r) => r.some((x) => String(x ?? '').trim()));
+  const amt = f.map((r) => (num(r[1]) && num(r[4]) ? Math.round(num(r[1]) * parseMoney(r[3] ?? '') * num(r[4])) : 0));
+  const head = f.map((r) => !num(r[1]) && !num(r[4]));
+  const sub = f.map((r, i) => {
+    if (!head[i]) return amt[i];
+    let t = 0;
+    for (let j = i + 1; j < f.length; j++) {
+      if ((head[j] && (!isTask(f[j][0] ?? '') || isTask(r[0] ?? ''))) || (!head[j] && isTitle(f[j][0] ?? ''))) break; // chuyên đề cộng cả các công việc; dừng ở tiêu đề kế tiếp hoặc dòng thù lao
+      if (!head[j]) t += amt[j];
+    }
+    return t;
+  });
+  let n = 0;
+  return {
+    total: amt.reduce((a, b) => a + b, 0),
+    rows: f.map((r, i) => ({
+      cells: [r[0] ?? '', r[1] ?? '', r[2] ?? '', parseMoney(r[3] ?? '') ? vnd(parseMoney(r[3] ?? '')) : '', r[4] ?? '', sub[i] ? vnd(sub[i]) : ''],
+      no: (head[i] && !isTask(r[0] ?? '')) || (!head[i] && isTitle(r[0] ?? '')) ? String(++n) : '',
+      b: head[i] && !isTask(r[0] ?? ''),
+      i: isTask(r[0] ?? ''),
+    })),
+  };
+}
+function phuLuc(tong: number[], khoan: number[], nam2: number[], pl2: CongLd, chiKhac: string[][]) {
+  const m = (n: number) => (n ? vnd(n) : '');
+  const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
+  const nam1 = tong.map((t, i) => Math.max(0, t - nam2[i]));
+  const title = (a: string, b: string) => P(a, { b: true, jc: 'center', after: 0, keep: true }) + P(b, { b: true, jc: 'center', after: 60, keep: true }) + P('Đơn vị tính: đồng', { i: true, jc: 'right', after: 0, keep: true });
+  const pl1 = rowsTable([TT, { k: 'nd', label: 'Nội dung các khoản chi', w: 2300 }, { k: 't', label: 'Tổng kinh phí', w: 1600, type: 'money' }, { k: 'k', label: 'Trong đó, khoán chi theo quy định', w: 1600, type: 'money' }, { k: 'n1', label: 'Năm thứ nhất', w: 1600, type: 'money' }, { k: 'n2', label: 'Năm thứ hai', w: 1600, type: 'money' }],
+    KP_ROWS.map((name, i) => ({ cells: [name, m(tong[i]), m(khoan[i]), m(nam1[i]), m(nam2[i])], no: String(i + 1) })),
+    ['', 'Tổng cộng', m(sum(tong)), m(sum(khoan)), m(sum(nam1)), m(sum(nam2))]);
+  const pl2t = pl2.rows.length ? pl2.rows : [{ cells: ['', '', '', '', '', ''], no: '' }, { cells: ['', '', '', '', '', ''], no: '' }];
+  const pl2Table = rowsTable([TT, { k: 'nd', label: 'Các nội dung, công việc', w: 2900 }, { k: 'hs', label: 'Hệ số lao động khoa học', w: 900, type: 'number' }, { k: 'sn', label: 'Số người', w: 800, type: 'number' }, { k: 'dm', label: 'Định mức thù lao tháng', w: 1500, type: 'money' }, { k: 'th', label: 'Số tháng quy đổi', w: 900, type: 'number' }, { k: 'tt', label: 'Thành tiền (7=3×5×6)', w: 1600, type: 'money' }],
+    pl2t, ['', 'CỘNG', '', '', '', '', m(pl2.total)]);
+  const ck = chiKhac.filter((r) => r.some((x) => String(x ?? '').trim()));
+  const pl3 = rowsTable([TT, { k: 'nd', label: 'Nội dung', w: 3300 }, { k: 'dg', label: 'Diễn giải (số lượng × đơn giá)', w: 3300 }, { k: 't', label: 'Thành tiền', w: 1800, type: 'money' }],
+    (ck.length ? ck : [['', '', ''], ['', '', '']]).map((r, i) => ({ cells: [r[0] ?? '', r[1] ?? '', m(parseMoney(r[2] ?? ''))], no: ck.length ? String(i + 1) : '' })),
+    ['', 'CỘNG', '', m(ck.reduce((a, r) => a + parseMoney(r[2] ?? ''), 0))]);
+  return PAGE + P('Phụ lục 1', { b: true, i: true, after: 0 }) + title('DỰ TOÁN KINH PHÍ', '') + pl1
+    + PAGE + P('Phụ lục 2', { b: true, i: true, after: 0 }) + title('DỰ TOÁN CÔNG LAO ĐỘNG KHOA HỌC', '') + pl2Table
+    + PAGE + P('Phụ lục 3', { b: true, i: true, after: 0 }) + title('DỰ TOÁN CHI KHÁC', '') + pl3;
+}
+
 // ---------- Các mẫu ----------
 export const FORMS: FormDef[] = [
   {
@@ -311,9 +380,18 @@ export const FORMS: FormDef[] = [
       { k: 'sanPham', label: '18.2 Kết quả ứng dụng (sản phẩm)', type: 'rows', cols: [{ k: 'nhom', label: 'Nhóm sản phẩm', w: 3000 }, { k: 'sp', label: 'Sản phẩm dự kiến/minh chứng nghiệm thu', w: 5800 }], def: [['Báo cáo tổng hợp', ''], ['Bài báo khoa học', '']] },
       { k: 'tiepNhan', label: 'Địa chỉ tiếp nhận dự kiến', wide: true },
       { k: 'kqDaoTao', label: '18.3 Kết quả đào tạo', type: 'textarea', wide: true }, { k: 'kqNangLuc', label: '18.4 Tăng cường năng lực và khả năng ứng dụng', type: 'textarea', wide: true },
-      { k: 'tienDo', label: '19. Nội dung và tiến độ thực hiện', type: 'rows', cols: [{ k: 'hd', label: 'Hoạt động nghiên cứu', w: 4000 }, { k: 'tu', label: 'Từ tháng', w: 1100 }, { k: 'den', label: 'Đến tháng', w: 1100 }, { k: 'sp', label: 'Sản phẩm khoa học', w: 2600 }], def: [['', '', '', '']] },
+      { k: 'khungTienDo', label: '19. Khung tiến độ', type: 'textarea', wide: true, def: 'Khung tiến độ dự kiến: 12 tháng kể từ khi nhiệm vụ được phê duyệt. Các mốc thời gian trong bảng được ký hiệu từ T1 đến T12, tương ứng với các tháng thực hiện.' },
+      { k: 'tienDo', label: '19. Nội dung và tiến độ thực hiện (dòng "Công việc …" ghi dưới chuyên đề)', type: 'rows', cols: [{ k: 'hd', label: 'Hoạt động nghiên cứu', w: 4000 }, { k: 'tu', label: 'Từ tháng', w: 1100 }, { k: 'den', label: 'Đến tháng', w: 1100 }, { k: 'sp', label: 'Sản phẩm khoa học', w: 2600 }],
+        def: [['Xây dựng đề cương chi tiết, kế hoạch khảo sát và phân công nhiệm vụ', 'T1', 'T1', 'Đề cương triển khai'], ['Chuyên đề 1: ', 'T1', 'T2', 'Báo cáo chuyên đề'], ['Công việc 1: ', '', '', ''], ['Chuyên đề 2: ', 'T2', 'T3', 'Báo cáo chuyên đề'], ['Hoàn thiện báo cáo tổng hợp, hồ sơ nghiệm thu', 'T12', 'T12', 'Báo cáo tổng hợp']] },
+      { k: 'luuY', label: 'Lưu ý về tiến độ (nếu có)', type: 'textarea', wide: true },
       { k: 'nguon', label: '20. Nguồn kinh phí', type: 'select', options: ['Quỹ phát triển tiềm lực KH&CN', 'Nguồn ngân sách nhà nước', 'Nguồn khác'], def: 'Quỹ phát triển tiềm lực KH&CN' },
-      { k: 'kinhPhi', label: '20. Phân bổ kinh phí dự kiến', type: 'rows', cols: [{ k: 'kc', label: 'Khoản chi', w: 4400 }, { k: 'tong', label: 'Tổng số (đồng)', w: 2200, type: 'money' }, { k: 'khoan', label: 'Trong đó khoán chi (đồng)', w: 2200, type: 'money' }], sum: 'tong', def: KP_ROWS.map((r) => [r, '', '']) },
+      { k: 'canCuKp', label: '20. Căn cứ xác định kinh phí', type: 'textarea', wide: true, ph: 'Kinh phí được xác định theo khối lượng thực hiện các chuyên đề, phạm vi khảo sát, số buổi hội thảo và định mức chi của đơn vị chủ trì.' },
+      { k: 'kinhPhi', label: '20. Phân bổ kinh phí dự kiến (để trống "Trả công lao động" và "Chi khác" thì lấy tổng từ Phụ lục 2, Phụ lục 3)', type: 'rows', cols: [{ k: 'kc', label: 'Khoản chi', w: 3400 }, { k: 'tong', label: 'Tổng số (đồng)', w: 1800, type: 'money' }, { k: 'khoan', label: 'Trong đó khoán chi (đồng)', w: 1800, type: 'money' }, { k: 'nam2', label: 'Phần chi năm thứ hai (đồng)', w: 1800, type: 'money' }], def: KP_ROWS.map((r) => [r, '', '', '']) },
+      { k: 'phuLuc', label: 'Kèm phụ lục dự toán', type: 'select', options: ['Có', 'Không'], def: 'Có' },
+      { k: 'congLd', label: 'Phụ lục 2. Dự toán công lao động khoa học (dòng "Chuyên đề …", "Công việc …" để trống hệ số; thành tiền = hệ số × định mức × số tháng)', type: 'rows', cols: [{ k: 'nd', label: 'Nội dung, công việc / chức danh', w: 3800 }, { k: 'hs', label: 'Hệ số', w: 900 }, { k: 'sn', label: 'Số người', w: 900 }, { k: 'dm', label: 'Định mức (đồng/tháng)', w: 1800, type: 'money' }, { k: 'th', label: 'Số tháng quy đổi', w: 1100 }],
+        def: [['Chuyên đề 1: ', '', '', '', ''], ['Công việc 1: ', '', '', '', ''], ['Thành viên chính đề tài', '0,8', '1', '25000000', '0,3'], ['Chuyên đề 2: ', '', '', '', ''], ['Công việc 1: ', '', '', '', ''], ['Thành viên chính đề tài', '0,8', '1', '25000000', '0,3'], ['Thù lao chủ nhiệm đề tài', '1,0', '1', '25000000', '1,2'], ['Thù lao thư ký khoa học', '0,3', '1', '25000000', '1,2']] },
+      { k: 'chiKhac', label: 'Phụ lục 3. Dự toán chi khác', type: 'rows', cols: [{ k: 'nd', label: 'Nội dung', w: 3400 }, { k: 'dg', label: 'Diễn giải (số lượng × đơn giá)', w: 3400 }, { k: 'tien', label: 'Thành tiền (đồng)', w: 2000, type: 'money' }], sum: 'tien',
+        def: [['Kinh phí quản lý, điều phối nhiệm vụ', '', ''], ['Hội thảo khoa học', '', ''], ['Nghiệm thu và đánh giá kết quả', '', ''], ['In ấn, văn phòng phẩm', '', '']] },
       { k: 'tlViet', label: '21.1 Tài liệu tiếng Việt (mỗi dòng một tài liệu)', type: 'textarea', wide: true, rows: 3 }, { k: 'tlAnh', label: '21.2 Tài liệu tiếng Anh', type: 'textarea', wide: true, rows: 3 },
       { k: 'diaDanh', label: 'Địa danh', def: 'Hà Nội', me: true }, { k: 'ngay', label: 'Ngày', type: 'date' }],
     file: (v) => `De_cuong_NCKH_${slugFile(S(v, 'ten'))}`,
@@ -325,7 +403,10 @@ export const FORMS: FormDef[] = [
       const kp = RW(v, 'kinhPhi');
       const kpCols: Col[] = [{ k: 'n', label: 'Nguồn kinh phí', w: 2150 }, { k: 't', label: 'Tổng số', w: 1200, type: 'number' }, ...KP_ROWS.map((l, i) => ({ k: `c${i}`, label: l, w: 1200, type: 'number' as const }))];
       const byKhoan = (col: number) => KP_ROWS.map((name, i) => parseMoney((kp.find((r) => r[0] === name) ?? kp[i] ?? [])[col] ?? ''));
-      const tong = byKhoan(1), khoan = byKhoan(2), khong = tong.map((t, i) => Math.max(0, t - khoan[i]));
+      const pl2 = congLd(RW(v, 'congLd'));
+      const pl3 = RW(v, 'chiKhac').reduce((a, r) => a + parseMoney(r[2] ?? ''), 0);
+      const tong = byKhoan(1).map((n, i) => n || (i === 0 ? pl2.total : i === 4 ? pl3 : 0)), khoan = byKhoan(2), khong = tong.map((t, i) => Math.max(0, t - khoan[i]));
+      const nam2 = byKhoan(3);
       const sumOf = (a: number[]) => a.reduce((x, y) => x + y, 0);
       const tr = (n: number) => { if (!n) return ''; const t = Math.round(n / 1000) / 1000; const [i, f] = String(t).split('.'); return vnd(Number(i)) + (f ? `,${f}` : ''); };
       const row = (label: string, a: number[]) => [label, tr(sumOf(a)), ...a.map(tr)];
@@ -348,7 +429,7 @@ export const FORMS: FormDef[] = [
         + grid([{ k: 'tg', label: 'Thời gian', w: 1000 }, { k: 'ten', label: 'Tên đề tài/công trình', w: 3600 }, { k: 'tc', label: 'Tư cách tham gia', w: 1600 }, { k: 'cap', label: 'Cấp quản lý/nơi công bố', w: 2600 }], RW(v, 'hoatDong'), { stt: false, minRows: 3 })
         + P('Đào tạo sau đại học trong 5 năm gần nhất', { i: true, keep: true })
         + grid([{ k: 'tg', label: 'Thời gian', w: 1400 }, { k: 'ncs', label: 'Tên nghiên cứu sinh', w: 3700 }, { k: 'ths', label: 'Tên học viên cao học', w: 3700 }], RW(v, 'sdh'), { stt: false })
-        + section('6. Cơ quan phối hợp và cộng tác viên chính') + P('(Gửi kèm Lý lịch khoa học của cộng tác viên chính)', { i: true, keep: true })
+        + section('6. Cơ quan phối hợp và cộng tác viên chính') + P('(Ghi rõ các đơn vị và cá nhân đã được mời và nhận lời mời tham gia đề tài; mỗi cá nhân tham gia đề tài phải có bản Lý lịch khoa học theo biểu mẫu BM 02/2008/ĐHKT-NCKH và ý kiến xác nhận đồng ý tham gia thực hiện đề tài)', { i: true, keep: true })
         + grid([{ k: 'cq', label: 'Cơ quan phối hợp', w: 3200 }, { k: 'ten', label: 'Họ và tên', w: 3000 }, { k: 'vt', label: 'Vai trò', w: 2600 }], RW(v, 'phoiHop'))
         + section('7. THUYẾT MINH SỰ CẦN THIẾT HÌNH THÀNH ĐỀ ÁN/DỰ ÁN')
         + sub('7.1. Tổng quan cơ sở lý luận và các nghiên cứu liên quan') + textBlock(S(v, 'tongQuan'))
@@ -373,11 +454,13 @@ export const FORMS: FormDef[] = [
         + kv('Địa chỉ tiếp nhận dự kiến', S(v, 'tiepNhan'))
         + sub('18.3. Kết quả đào tạo') + textBlock(S(v, 'kqDaoTao'))
         + sub('18.4. Tăng cường năng lực và khả năng ứng dụng') + textBlock(S(v, 'kqNangLuc'))
-        + section('19. NỘI DUNG VÀ TIẾN ĐỘ THỰC HIỆN') + grid([{ k: 'hd', label: 'Hoạt động nghiên cứu', w: 4000 }, { k: 'tu', label: 'Từ tháng', w: 1100 }, { k: 'den', label: 'Đến tháng', w: 1100 }, { k: 'sp', label: 'Sản phẩm khoa học', w: 2600 }], RW(v, 'tienDo'), { minRows: 4 })
-        + section('20. PHÂN BỔ KINH PHÍ DỰ KIẾN') + P('Đơn vị tính: triệu đồng', { i: true, jc: 'right', after: 0, keep: true })
+        + section('19. NỘI DUNG VÀ TIẾN ĐỘ THỰC HIỆN') + (S(v, 'khungTienDo') ? P(`- ${S(v, 'khungTienDo').replace(/^-\s*/, '')}`, { first: 567 }) : '')
+        + tienDoTable(RW(v, 'tienDo')) + (S(v, 'luuY') ? PR([['Lưu ý: ', { b: true, i: true }], [S(v, 'luuY'), { i: true }]]) : '')
+        + section('20. PHÂN BỔ KINH PHÍ DỰ KIẾN') + (S(v, 'canCuKp') ? textBlock(S(v, 'canCuKp'), { keep: true }) : '') + P('Đơn vị tính: triệu đồng', { i: true, jc: 'right', after: 0, keep: true })
         + grid(kpCols, kpRows, { stt: false, minRows: kpRows.length })
         + section('21. TÀI LIỆU THAM KHẢO') + sub('21.1. Tài liệu tiếng Việt') + tl(S(v, 'tlViet')) + sub('21.2. Tài liệu tiếng Anh') + tl(S(v, 'tlAnh'))
-        + signs([{ t: '', sub: '' }, { t: 'CHỦ NHIỆM NHIỆM VỤ', name: S(v, 'hoTen') }], dateLine(S(v, 'diaDanh'), S(v, 'ngay')));
+        + signs([{ t: '', sub: '' }, { t: 'CHỦ NHIỆM NHIỆM VỤ', name: S(v, 'hoTen') }], dateLine(S(v, 'diaDanh'), S(v, 'ngay')))
+        + (S(v, 'phuLuc') === 'Không' ? '' : phuLuc(tong, khoan, nam2, pl2, RW(v, 'chiKhac')));
     },
   },
   {

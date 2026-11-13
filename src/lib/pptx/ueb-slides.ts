@@ -37,7 +37,7 @@ export type DeckInfo = {
   dienThoai: string;
   email: string;
   loiCamOn: string; // để trống thì không thêm trang cuối
-  kieu?: 'bai-giang' | 'hoi-thao';
+  kieu?: 'bai-giang' | 'hoi-thao' | 'bao-ve';
 };
 
 // ---------- Phân tích dàn ý ----------
@@ -173,7 +173,7 @@ function titleSlide(d: DeckInfo): SlideOut {
   sh.push({ t: 'text', title: true, x, y, w, h: 1463040, paras: [{ runs: [{ text: title, b: true, color: UEB.green, sz: tsz }], line: 95 }] });
   y += 1508760;
   if (d.phuDe.trim()) sh.push({ t: 'text', x, y, w, h: 600000, paras: [{ runs: [{ text: d.phuDe.trim(), color: UEB.gray, sz: 16 }] }] });
-  const info = ([[d.kieu === 'hoi-thao' ? 'Báo cáo viên:' : 'Giảng viên:', d.giangVien], ['Điện thoại:', d.dienThoai], ['Email:', d.email]] as const).filter(([, v]) => v.trim());
+  const info = ([[d.kieu === 'hoi-thao' ? 'Báo cáo viên:' : d.kieu === 'bao-ve' ? 'Chủ nhiệm:' : 'Giảng viên:', d.giangVien], ['Điện thoại:', d.dienThoai], ['Email:', d.email]] as const).filter(([, v]) => v.trim());
   info.forEach(([k, v], n) => {
     const ry = 4300000 + n * 320000;
     sh.push({ t: 'text', x: 2000000, y: ry, w: 1500000, h: 300000, paras: [{ runs: [{ text: k, b: true, color: UEB.red, sz: 14 }] }] });
@@ -187,7 +187,7 @@ function sectionSlide(s: Extract<SlideSpec, { kind: 'section' }>, n: number): Sl
   return {
     shapes: [
       { t: 'box', geom: 'rect', fill: UEB.red, x: W / 2 - 457200, y: 2250000, w: 914400, h: 54864 },
-      { t: 'text', x: MX, y: 2452078, w: CW, h: 477300, paras: [{ align: 'ctr', runs: [{ text: `PHẦN ${s.no}`, b: true, color: UEB.red, sz: 28 }] }] },
+      { t: 'text', x: MX, y: 2452078, w: CW, h: 477300, paras: [{ align: 'ctr', runs: [{ text: isAppendix(s.title) ? 'PHỤ LỤC' : `PHẦN ${s.no}`, b: true, color: UEB.red, sz: 28 }] }] },
       { t: 'text', title: true, x: MX, y: 3050000, w: CW, h: 1700000, anchor: 't', paras: [{ align: 'ctr', line: 95, runs: [{ text: s.title || `Phần ${s.no}`, b: true, color: UEB.green, sz: tsz }] }] },
       numShape(n),
     ],
@@ -501,13 +501,22 @@ function thanksSlide(text: string): SlideOut {
   };
 }
 
+// Phần "## Phụ lục…" ghi nhãn PHỤ LỤC; trang cảm ơn đặt ngay trước phụ lục để kết thúc phần trình bày.
+const isAppendix = (t: string) => /^phụ lục/i.test(t.trim());
+
 export function layoutDeck(info: DeckInfo, specs: SlideSpec[]): SlideOut[] {
   const slides: SlideOut[] = [titleSlide(info)];
+  const thanks = info.loiCamOn.trim();
+  let thanked = false;
   for (const s of specs) {
+    if (thanks && !thanked && s.kind === 'section' && isAppendix(s.title)) {
+      slides.push(thanksSlide(info.loiCamOn));
+      thanked = true;
+    }
     const n = slides.length + 1;
     slides.push(s.kind === 'section' ? sectionSlide(s, n) : contentSlide(s, n));
   }
-  if (info.loiCamOn.trim()) slides.push(thanksSlide(info.loiCamOn));
+  if (thanks && !thanked) slides.push(thanksSlide(info.loiCamOn));
   return slides;
 }
 
@@ -628,15 +637,28 @@ export const SNIPPETS: { key: string; label: string; text: string }[] = [
 ];
 
 export const SAMPLE_OUTLINE = [
-  '## Khái niệm FDI',
+  `# Nội dung buổi học
+:: danh-sach-so
+BỐN PHẦN CHÍNH
+- Khái niệm: FDI là gì, phân loại ra sao
+- Số liệu: FDI vào Việt Nam qua các con số
+- Tác động: lợi ích, rủi ro và bằng chứng
+- Chính sách: ưu đãi, sàng lọc và bài học`,
   SNIPPETS.find((x) => x.key === 'muc-tieu')!.text,
+  '## Khái niệm FDI',
   `# FDI là gì?
 - Đầu tư trực tiếp nước ngoài: nhà đầu tư nắm quyền kiểm soát hoặc ảnh hưởng đáng kể tới doanh nghiệp ở nước khác
   - Chuẩn quốc tế (IMF BPM6, OECD BD4): sở hữu từ 10% quyền biểu quyết
   - Luật Đầu tư 2020: thành lập tổ chức kinh tế, góp vốn, mua cổ phần, hợp đồng BCC
 - Khác với đầu tư gián tiếp (FPI): chỉ hưởng cổ tức, không tham gia quản lý
 ! FDI là về ảnh hưởng, không chỉ là dòng tiền qua biên giới.`,
-  SNIPPETS.find((x) => x.key === 'cau-hoi')!.text,
+  `# Phân biệt FDI và đầu tư gián tiếp
+| Tiêu chí | FDI | Đầu tư gián tiếp (FPI) |
+| Tỷ lệ sở hữu | Từ 10% trở lên | Dưới 10% |
+| Quyền quản lý | Tham gia điều hành | Không tham gia |
+| Thời hạn | Dài hạn | Ngắn, trung hạn |
+| Khả năng rút vốn | Khó, chậm | Dễ, nhanh |
+| Ví dụ | Samsung xây nhà máy | Quỹ mua cổ phiếu niêm yết |`,
   `# Bốn cách phân loại dự án FDI
 ### Hình thức vào
 - Xây mới (greenfield)
@@ -647,20 +669,201 @@ export const SAMPLE_OUTLINE = [
 - Theo chiều ngang hoặc chiều dọc
 ### Ngành và đối tác
 - Chế tạo, năng lượng, bất động sản, dịch vụ`,
-  '## Số liệu và tác động',
-  SNIPPETS.find((x) => x.key === 'cot')!.text,
+  SNIPPETS.find((x) => x.key === 'cau-hoi')!.text,
+  '## Số liệu FDI vào Việt Nam',
   SNIPPETS.find((x) => x.key === 'so-lieu')!.text,
-  SNIPPETS.find((x) => x.key === 'tron')!.text,
+  SNIPPETS.find((x) => x.key === 'cot')!.text,
   SNIPPETS.find((x) => x.key === 'ngang')!.text,
+  SNIPPETS.find((x) => x.key === 'tron')!.text,
+  `# FDI theo vùng kinh tế
+| Vùng | Số dự án mới | Vốn đăng ký (tỷ USD) | Tỷ trọng |
+| Đồng bằng sông Hồng | 1.250 | 18,6 | 37% |
+| Đông Nam Bộ | 1.410 | 15,2 | 30% |
+| Bắc Trung Bộ, Duyên hải miền Trung | 380 | 7,9 | 16% |
+| Các vùng còn lại | 290 | 8,7 | 17% |
+! Hai vùng kinh tế trọng điểm thu hút gần 70% vốn đăng ký. (Số liệu minh họa)`,
+  '## Tác động của FDI',
+  `# Lợi ích và rủi ro
+### Lợi ích
+- Bổ sung vốn, tạo việc làm
+- Chuyển giao công nghệ, kỹ năng quản lý
+- Mở rộng xuất khẩu
+### Rủi ro
+- Chuyển giá, ưu đãi thuế quá mức
+- Ô nhiễm môi trường
+- Phụ thuộc vào doanh nghiệp nước ngoài`,
   `# Ba kênh dòng vốn
 | | FDI | Đầu tư gián tiếp | Vay thương mại |
 | Ai chịu rủi ro? | Nhà đầu tư | Nhà đầu tư | Bên vay |
 | Rút nhanh được không? | Khó | Dễ | Theo kỳ hạn |
 | Chi phí về sau | Lợi nhuận chuyển về | Cổ tức | Lãi vay |`,
-  '## Chính sách',
+  `# Lan tỏa công nghệ diễn ra thế nào?
+:: quy-trinh
+- Liên kết: doanh nghiệp trong nước làm nhà cung ứng
+- Học hỏi: tiếp nhận tiêu chuẩn, quy trình
+- Dịch chuyển lao động *: kỹ sư chuyển sang doanh nghiệp nội
+- Nâng cấp: tự sản xuất linh kiện giá trị cao`,
+  '## Chính sách thu hút FDI',
   SNIPPETS.find((x) => x.key === 'thoi-gian')!.text,
+  `# Ưu đãi đầu tư theo Luật Đầu tư 2020
+| Hình thức ưu đãi | Nội dung | Áp dụng |
+| Thuế thu nhập doanh nghiệp | Thuế suất thấp, miễn, giảm có thời hạn | Ngành, địa bàn ưu đãi |
+| Thuế nhập khẩu | Miễn thuế hàng hóa tạo tài sản cố định | Dự án ưu đãi đầu tư |
+| Tiền thuê đất | Miễn, giảm tiền thuê đất | Địa bàn khó khăn |
+| Khấu hao | Khấu hao nhanh, tăng chi phí được trừ | Dự án quy mô lớn |`,
   SNIPPETS.find((x) => x.key === 'quy-trinh')!.text,
   SNIPPETS.find((x) => x.key === 'trich-dan')!.text,
+  '## Tổng kết và bài tập',
+  `# Tóm tắt bài học
+:: danh-sach-so
+BA ĐIỀU CẦN NHỚ
+- FDI gắn với quyền kiểm soát: từ 10% quyền biểu quyết
+- Tác động phụ thuộc liên kết: lan tỏa chỉ xảy ra khi doanh nghiệp trong nước đủ năng lực
+- Chính sách cần sàng lọc: ưu đãi gắn với cam kết công nghệ, việc làm`,
+  `# Thảo luận nhóm
+### Nhóm 1, 2
+- Đánh giá một dự án FDI lớn tại địa phương em
+### Nhóm 3, 4
+- Đề xuất điều kiện kèm ưu đãi cho dự án công nghệ cao
+! Mỗi nhóm trình bày 5 phút vào buổi sau.`,
+  `# Bài tập và tài liệu đọc
+| Nội dung | Yêu cầu | Hạn nộp |
+| Bài tập cá nhân | Phân tích số liệu FDI một ngành (2 trang) | Tuần 7 |
+| Bài tập nhóm | Báo cáo đánh giá một dự án FDI | Tuần 9 |
+| Đọc trước | Giáo trình Chương 6; UNCTAD World Investment Report | Buổi sau |`,
+].join('\n\n') + '\n';
+
+// Template báo cáo bảo vệ, nghiệm thu đề tài khoa học, kèm phần phụ lục (trang cảm ơn tự đặt trước phụ lục).
+export const SAMPLE_DEFENSE = [
+  `# Nội dung trình bày
+:: danh-sach-so
+BÁO CÁO GỒM SÁU PHẦN
+- Giới thiệu: tính cấp thiết, mục tiêu, câu hỏi nghiên cứu
+- Tổng quan: các nghiên cứu liên quan và khoảng trống
+- Phương pháp: khung phân tích, dữ liệu, mô hình
+- Kết quả: phát hiện chính
+- Kết luận: đóng góp, kiến nghị, hạn chế
+- Sản phẩm: kết quả đã đạt so với đăng ký`,
+  '## Giới thiệu',
+  `# Tính cấp thiết của đề tài
+- Bối cảnh: chuyển đổi số là ưu tiên của Chính phủ giai đoạn 2021-2030
+- Thực tiễn: doanh nghiệp nhỏ và vừa chiếm 97% số doanh nghiệp nhưng mức độ số hóa thấp
+- Lý luận: chưa có bằng chứng định lượng về tác động tới năng suất tại Việt Nam
+! Đề tài cung cấp bằng chứng cho chính sách hỗ trợ chuyển đổi số.`,
+  `# Mục tiêu và câu hỏi nghiên cứu
+### Mục tiêu tổng quát
+- Đánh giá tác động của chuyển đổi số tới năng suất doanh nghiệp nhỏ và vừa
+### Mục tiêu cụ thể
+- Đo lường mức độ chuyển đổi số
+- Ước lượng tác động
+- Đề xuất giải pháp
+### Câu hỏi nghiên cứu
+- Mức độ ra sao? Tác động thế nào? Cần chính sách gì?`,
+  `# Đối tượng và phạm vi nghiên cứu
+| Nội dung | Phạm vi |
+| Đối tượng | Chuyển đổi số và năng suất của doanh nghiệp nhỏ và vừa |
+| Không gian | 63 tỉnh, thành phố; trọng tâm Hà Nội, TP. Hồ Chí Minh |
+| Thời gian | Dữ liệu 2019-2025; đề xuất đến năm 2030 |
+| Nội dung | Mức độ, tác động, rào cản và giải pháp |`,
+  '## Tổng quan nghiên cứu',
+  `# Tổng quan và khoảng trống
+### Nghiên cứu quốc tế
+- Bằng chứng tác động năng suất
+- Vai trò kỹ năng số
+### Nghiên cứu trong nước
+- Chủ yếu khảo sát mô tả
+- Thiếu dữ liệu bảng
+### Khoảng trống
+- Chưa ước lượng tác động nhân quả
+- Chưa so sánh theo quy mô`,
+  '## Phương pháp nghiên cứu',
+  `# Khung phân tích
+:: quy-trinh
+- Lý thuyết: năng suất, nguồn lực, đổi mới
+- Dữ liệu: điều tra doanh nghiệp, khảo sát bổ sung
+- Mô hình *: tác động cố định, biến công cụ
+- Kiểm định: độ vững, nhóm ngành`,
+  `# Dữ liệu sử dụng
+| Nguồn | Mô tả | Quy mô |
+| Điều tra doanh nghiệp | Dữ liệu bảng 2019-2025 | 3.214 doanh nghiệp |
+| Khảo sát của nhóm | Bảng hỏi 42 câu | 480 phiếu hợp lệ |
+| Phỏng vấn sâu | Lãnh đạo doanh nghiệp, cơ quan quản lý | 24 người |`,
+  `# Mẫu nghiên cứu
+:: so-lieu
+- 3.214 | doanh nghiệp trong mẫu
+- 480 * | phiếu khảo sát hợp lệ
+- 24 | cuộc phỏng vấn sâu`,
+  '## Kết quả nghiên cứu',
+  `# Mức độ chuyển đổi số theo quy mô
+:: bieu-do-cot Điểm chỉ số (0-100). Nguồn: tính toán của nhóm nghiên cứu
+- Siêu nhỏ: 28
+- Nhỏ: 41
+- Vừa: 57 *
+- Lớn: 72`,
+  `# Kết quả ước lượng chính
+| Biến | Hệ số | Sai số chuẩn | Ý nghĩa |
+| Chỉ số chuyển đổi số | 0,183 | 0,041 | *** |
+| Quy mô (log lao động) | 0,094 | 0,022 | *** |
+| Tuổi doanh nghiệp | -0,012 | 0,008 | |
+| Số quan sát | 18.420 | | |
+! Tăng 10 điểm chỉ số chuyển đổi số gắn với năng suất cao hơn khoảng 1,8%.`,
+  `# Rào cản lớn nhất
+:: bieu-do-ngang Tỷ lệ doanh nghiệp lựa chọn (%)
+- Thiếu nhân lực số: 62 *
+- Chi phí đầu tư: 55
+- Thiếu thông tin giải pháp: 38
+- An toàn dữ liệu: 27`,
+  '## Kết luận và kiến nghị',
+  `# Đóng góp của đề tài
+### Về khoa học
+- Bộ chỉ số đo lường chuyển đổi số cấp doanh nghiệp
+- Bằng chứng tác động nhân quả
+### Về thực tiễn
+- Cơ sở cho chương trình hỗ trợ doanh nghiệp
+- Bộ công cụ tự đánh giá cho doanh nghiệp`,
+  `# Kiến nghị
+:: danh-sach-so
+BA NHÓM GIẢI PHÁP
+- Nhân lực: đào tạo kỹ năng số theo nhu cầu doanh nghiệp
+- Tài chính: gói tín dụng ưu đãi cho đầu tư công nghệ
+- Thông tin: cổng kết nối doanh nghiệp với nhà cung cấp giải pháp`,
+  `# Hạn chế và hướng nghiên cứu tiếp
+### Hạn chế
+- Dữ liệu tự báo cáo
+- Chưa đo được chất lượng công nghệ
+### Hướng tiếp theo
+- Nghiên cứu theo ngành
+- Đánh giá tác động chính sách`,
+  '## Sản phẩm của đề tài',
+  `# Sản phẩm đã đạt so với đăng ký
+| Sản phẩm | Đăng ký | Đạt được | Ghi chú |
+| Báo cáo tổng hợp | 01 | 01 | |
+| Bài báo tạp chí trong nước | 02 | 03 | Vượt 01 bài |
+| Bài báo quốc tế (Scopus) | 01 | 01 | Đã chấp nhận đăng |
+| Hỗ trợ đào tạo thạc sĩ | 01 | 02 | |`,
+  `# Tiến độ thực hiện
+:: dong-thoi-gian
+- T1-T2: Tổng quan, hoàn thiện đề cương
+- T3-T6: Khảo sát, thu thập dữ liệu
+- T7-T10: Phân tích, viết chuyên đề
+- T11-T12 *: Hoàn thiện báo cáo, nghiệm thu`,
+  '## Phụ lục',
+  `# Phụ lục 1. Biến số và thang đo
+| Biến | Đo lường | Nguồn |
+| Năng suất lao động | Log doanh thu / lao động | Điều tra doanh nghiệp |
+| Chỉ số chuyển đổi số | Trung bình 5 trụ cột (0-100) | Khảo sát của nhóm |
+| Quy mô | Log số lao động | Điều tra doanh nghiệp |
+| Tuổi doanh nghiệp | Số năm từ khi thành lập | Điều tra doanh nghiệp |`,
+  `# Phụ lục 2. Kiểm định độ vững
+| Mô hình | Hệ số chuyển đổi số | Sai số chuẩn | Số quan sát |
+| Cơ sở (FE) | 0,183 | 0,041 | 18.420 |
+| Biến công cụ (IV) | 0,201 | 0,067 | 18.420 |
+| Loại bỏ doanh nghiệp lớn | 0,176 | 0,045 | 16.902 |
+| Chỉ ngành chế biến | 0,214 | 0,058 | 7.315 |`,
+  `# Phụ lục 3. Danh mục công bố
+- Bài báo 1: Tên tác giả (2026), Tên bài, Tạp chí Kinh tế và Phát triển, số …
+- Bài báo 2: Tên tác giả (2026), Tên bài, VNU Journal of Economics and Business, …
+- Bài báo 3: Tên tác giả (2026), Tên bài, Journal …, Scopus Q2 (đã chấp nhận đăng)`,
 ].join('\n\n') + '\n';
 
 // Template báo cáo hội thảo khoa học: đặt vấn đề, phương pháp, kết quả, kết luận.
