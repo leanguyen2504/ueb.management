@@ -336,17 +336,17 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
               <BookmarkletSetup appUrl={publicEnv.appUrl().replace(/\/+$/, '')} hasKey={Boolean(acc?.has_sync_key)} jiraUrl={jiraUrl} />
             </div>
             <div className="card space-y-3">
-              <h2 className="font-semibold">Đồng bộ bằng Token (không bắt buộc)</h2>
-              {features.jiraServerSync() ? (
-                <>
-                  <p className="text-sm muted">
-                    Chỉ dùng được nếu trang hồ sơ Jira của bạn (bấm ảnh đại diện góc phải → Profile) có mục <b>Personal Access Tokens</b> ở cột trái.
-                    Jira của trường hiện chưa có mục này, nên phần lớn mọi người <b>bỏ qua</b> ô này và dùng nút bên cạnh.
+              <h2 className="font-semibold">Dữ liệu Jira của bạn</h2>
+              <p className="text-sm muted">Chỉ bạn xem được dữ liệu này, trừ phần bạn tự bật chia sẻ ở tab Báo cáo Excel.</p>
+              {features.jiraServerSync() && (
+                <details className="rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/40" open={Boolean(acc?.has_token)}>
+                  <summary className="cursor-pointer font-medium">Nâng cao: đồng bộ bằng Token (hầu hết mọi người không cần)</summary>
+                  <p className="mt-2 muted">
+                    Jira của trường hiện không có mục <b>Personal Access Tokens</b> trong trang hồ sơ, nên cách này chưa dùng được. Hãy dùng nút Đồng bộ Jira → UEB.
+                    Chỉ khi trang hồ sơ Jira của bạn có mục đó, bạn mới tạo token và dán vào đây.
                   </p>
-                  <TokenForm hasToken={Boolean(acc?.has_token)} />
-                </>
-              ) : (
-                <p className="text-sm muted">Chưa bật. Hãy dùng nút bên cạnh.</p>
+                  <div className="mt-2"><TokenForm hasToken={Boolean(acc?.has_token)} /></div>
+                </details>
               )}
               {acc?.last_error && <p role="alert" className="rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-700 dark:bg-orange-950 dark:text-orange-300">Lần đồng bộ gần nhất lỗi: {acc.last_error}</p>}
               {acc && (
