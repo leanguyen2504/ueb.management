@@ -2,7 +2,7 @@
 
 // Tạo slide bài giảng phong cách UEB ngay trên trình duyệt: nhập dàn ý, xem trước, tải file .pptx.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { H, PPTX_MIME, SAMPLE_CONFERENCE, SAMPLE_OUTLINE, SNIPPETS, W, layoutDeck, parseOutline, type DeckInfo, type Para, type Shape, type SlideOut } from '@/lib/pptx/ueb-slides';
+import { H, PPTX_MIME, SAMPLE_CONFERENCE, SAMPLE_DEFENSE, SAMPLE_OUTLINE, SNIPPETS, W, layoutDeck, parseOutline, type DeckInfo, type Para, type Shape, type SlideOut } from '@/lib/pptx/ueb-slides';
 import { download } from '../ReviewBox';
 
 const STORE = 'soan-thao:slide';
@@ -81,7 +81,7 @@ function SlideView({ slide, n }: { slide: SlideOut; n: number }) {
 }
 
 const HELP: [string, string][] = [
-  ['## Tên phần', 'Trang chuyển phần (PHẦN 1, PHẦN 2…). Tên phần thành nhãn đỏ của các trang sau.'],
+  ['## Tên phần', 'Trang chuyển phần (PHẦN 1, PHẦN 2…). Tên phần thành nhãn đỏ của các trang sau. Đặt tên "## Phụ lục" thì ghi nhãn PHỤ LỤC và trang cảm ơn tự chuyển lên trước phụ lục.'],
   ['# Tiêu đề', 'Bắt đầu một trang nội dung mới.'],
   ['- Ý chính', 'Gạch đầu dòng; thụt vào 2 dấu cách (hoặc Tab) để thành ý phụ. Dòng không có gạch là đoạn văn thường.'],
   ['### Tên thẻ', 'Khối thẻ nền xanh nhạt, 2-4 thẻ một hàng; các ý ngay dưới thuộc thẻ đó.'],
@@ -168,7 +168,7 @@ export function SlideMaker() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-base font-semibold">Trang bìa</h2>
             <div role="radiogroup" aria-label="Loại slide" className="flex rounded-xl border border-slate-200 p-0.5 text-sm dark:border-slate-700">
-              {([['bai-giang', 'Bài giảng'], ['hoi-thao', 'Báo cáo hội thảo']] as const).map(([k, l]) => (
+              {([['bai-giang', 'Bài giảng'], ['hoi-thao', 'Báo cáo hội thảo'], ['bao-ve', 'Bảo vệ đề tài']] as const).map(([k, l]) => (
                 <button key={k} type="button" role="radio" aria-checked={(info.kieu ?? 'bai-giang') === k} onClick={() => set('kieu', k)} className={`rounded-lg px-3 py-1.5 ${(info.kieu ?? 'bai-giang') === k ? 'bg-brand-600 text-white' : ''}`}>{l}</button>
               ))}
             </div>
@@ -176,11 +176,11 @@ export function SlideMaker() {
           <p className="mt-1 text-sm muted">Khung đỏ - xanh, chữ Arial, logo UEB như bộ slide mẫu của Trường. Thông tin được lưu trên máy này cho lần sau.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {txt('tieuDe', 'Tên bài giảng', 'Đầu tư trực tiếp nước ngoài và phát triển', 'sm:col-span-2')}
-          {info.kieu === 'hoi-thao' ? txt('monHoc', 'Tên hội thảo · thời gian (nhãn đỏ)', 'Hội thảo khoa học quốc gia · Hà Nội, 12/2026', 'sm:col-span-2') : txt('monHoc', 'Học phần · mã · chương (nhãn đỏ)', 'Tài chính cho phát triển · INE2016 · Chương 5', 'sm:col-span-2')}
+          {txt('tieuDe', info.kieu === 'bao-ve' ? 'Tên đề tài' : info.kieu === 'hoi-thao' ? 'Tên báo cáo' : 'Tên bài giảng', 'Đầu tư trực tiếp nước ngoài và phát triển', 'sm:col-span-2')}
+          {info.kieu === 'hoi-thao' ? txt('monHoc', 'Tên hội thảo · thời gian (nhãn đỏ)', 'Hội thảo khoa học quốc gia · Hà Nội, 12/2026', 'sm:col-span-2') : info.kieu === 'bao-ve' ? txt('monHoc', 'Hội đồng · mã số đề tài (nhãn đỏ)', 'Hội đồng nghiệm thu đề tài cấp cơ sở · Mã số KT.26.05', 'sm:col-span-2') : txt('monHoc', 'Học phần · mã · chương (nhãn đỏ)', 'Tài chính cho phát triển · INE2016 · Chương 5', 'sm:col-span-2')}
           {txt('phuDe', 'Phụ đề', 'Khái niệm, tác động, chính sách', 'sm:col-span-2')}
           {txt('khoa', 'Khoa / Trường (dòng trên cùng)', 'Khoa Kinh tế phát triển - Trường Đại học Kinh tế - ĐHQGHN', 'sm:col-span-2')}
-          {txt('giangVien', info.kieu === 'hoi-thao' ? 'Báo cáo viên' : 'Giảng viên', 'ThS. Nguyễn Văn A')}
+          {txt('giangVien', info.kieu === 'hoi-thao' ? 'Báo cáo viên' : info.kieu === 'bao-ve' ? 'Chủ nhiệm đề tài' : 'Giảng viên', 'ThS. Nguyễn Văn A')}
           {txt('dienThoai', 'Điện thoại')}
           {txt('email', 'Email', 'ten@vnu.edu.vn')}
           {txt('loiCamOn', 'Trang cuối (để trống: không có)', 'XIN CẢM ƠN!')}
@@ -192,7 +192,7 @@ export function SlideMaker() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-base font-semibold">Dàn ý</h2>
             <div className="flex gap-2">
-              <button type="button" className="btn-secondary px-3 py-1 text-xs" onClick={() => { if (!outline.trim() || confirm('Thay dàn ý hiện tại bằng template mẫu?')) setOutline(info.kieu === 'hoi-thao' ? SAMPLE_CONFERENCE : SAMPLE_OUTLINE); }}>Dùng template mẫu</button>
+              <button type="button" className="btn-secondary px-3 py-1 text-xs" onClick={() => { if (!outline.trim() || confirm('Thay dàn ý hiện tại bằng template mẫu?')) setOutline(info.kieu === 'hoi-thao' ? SAMPLE_CONFERENCE : info.kieu === 'bao-ve' ? SAMPLE_DEFENSE : SAMPLE_OUTLINE); }}>Dùng template mẫu</button>
               {outline.trim() && <button type="button" className="btn-secondary px-3 py-1 text-xs" onClick={() => { if (confirm('Xóa toàn bộ dàn ý?')) setOutline(''); }}>Xóa dàn ý</button>}
             </div>
           </div>

@@ -21,7 +21,7 @@ export const TEMPLATES = [
   { key: 'de-nghi-thanh-toan', label: 'Giấy đề nghị thanh toán', group: 'Tài chính' },
   { key: 'de-nghi-tam-ung', label: 'Giấy đề nghị tạm ứng', group: 'Tài chính' },
   { key: 'danh-sach-chi-tra', label: 'Danh sách chi trả, ký nhận', group: 'Tài chính' },
-  { key: 'slide', label: 'Slide bài giảng, hội thảo', group: 'Giảng dạy, nghiên cứu' },
+  { key: 'slide', label: 'Slide bài giảng, hội thảo, bảo vệ đề tài', group: 'Giảng dạy, nghiên cứu' },
   { key: 'de-cuong-hoc-phan', label: 'Đề cương học phần', group: 'Giảng dạy, nghiên cứu' },
   { key: 'thuyet-minh-de-tai', label: 'Đề cương đề tài NCKH', group: 'Giảng dạy, nghiên cứu' },
   { key: 'ly-lich-khoa-hoc', label: 'Lý lịch khoa học (Mẫu 04)', group: 'Giảng dạy, nghiên cứu' },
