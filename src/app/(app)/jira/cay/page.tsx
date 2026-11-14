@@ -128,10 +128,10 @@ export default async function JiraTreePage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHead
-        eyebrow="Jira"
+        eyebrow={<Link href="/jira" className="hover:underline">← Jira của tôi</Link>}
         title="Cây công việc Jira"
         sub="Task của các đơn vị, Work và Sub-task bên dưới. Dữ liệu được góp mỗi khi ai đó bấm Đồng bộ Jira: gồm việc của người đó, việc cha và các việc con. Chỉ có mã, tên, trạng thái, người được giao và hạn."
-        actions={<Link href="/jira?muc=ket-noi" className="btn-secondary">Đồng bộ Jira</Link>}
+        actions={<><Link href="/jira" className="btn-secondary">Jira của tôi</Link><Link href="/jira?muc=ket-noi" className="btn-secondary">Đồng bộ Jira</Link></>}
       />
       {missingTable ? (
         <p role="alert" className="rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">
