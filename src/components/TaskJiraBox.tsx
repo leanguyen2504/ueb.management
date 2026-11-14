@@ -6,7 +6,7 @@ import type { JiraBrief } from '@/lib/jira/brief';
 
 const chip = 'rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-xs font-medium text-brand-700 dark:bg-brand-900 dark:text-brand-100';
 
-// Ô mã Jira trên đầu việc (không có ở việc Cá nhân): dán link Jira hoặc gõ mã rồi Enter là lưu.
+// Ô mã Jira trên đầu việc (cả việc Cá nhân, chỉ chủ thấy): dán link Jira hoặc gõ mã rồi Enter là lưu.
 // Đã gắn mã thì hiện mã dạng link, kèm thông tin đối chiếu từ "Jira của tôi" nếu có.
 export function TaskJiraBox({ taskId, jiraKey, href, brief, canEdit, base }: {
   taskId: string;

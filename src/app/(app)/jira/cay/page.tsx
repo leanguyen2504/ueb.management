@@ -51,8 +51,8 @@ export default async function JiraTreePage({ searchParams }: { searchParams: Pro
   const webOf = new Map<string, WebTask[]>();
   for (const t of webTasks ?? []) webOf.set(t.jira_key, [...(webOf.get(t.jira_key) ?? []), t]);
 
-  // Việc để chọn link: việc chưa gắn mã Jira (cả việc đã xong), không phải việc Cá nhân (RLS: chỉ việc tôi xem được;
-  // cơ sở dữ liệu kiểm tra quyền khi lưu).
+  // Việc để chọn link: việc chưa gắn mã Jira (cả việc đã xong), kể cả việc Cá nhân của tôi
+  // (RLS: chỉ việc tôi xem được, việc Cá nhân chỉ chủ thấy; cơ sở dữ liệu kiểm tra quyền khi lưu).
   type G = { id: string; name: string; parent_id: string | null; owner_id: string | null };
   type PickTask = { id: string; group_id: string; title: string; status: string };
   const [{ data: openTasks }, { data: groupRows }] = nodes.length
@@ -88,7 +88,7 @@ export default async function JiraTreePage({ searchParams }: { searchParams: Pro
   const pairs = (ws: string[]) => new Set(ws.slice(1).map((w, k) => `${ws[k]} ${w}`));
   const candidates = (openTasks ?? []).flatMap((t) => {
     const c = chain(t.group_id);
-    if (!c.length || c[0].owner_id) return [];
+    if (!c.length) return [];
     const ws = words(`${t.title} ${c.slice(1).map((g) => g.name).join(' ')}`);
     return [{ t, c, done: t.status === 'done', label: `${t.status === 'done' ? '✓ ' : ''}${t.title}`, ws: new Set(ws), ps: pairs(words(t.title)), gps: c.slice(1).map((g) => words(g.name).join(' ')) }];
   });

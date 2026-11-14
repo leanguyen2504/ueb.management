@@ -202,15 +202,16 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const editPeople = isPersonal ? undefined : memberOptions;
   // Ô mã Jira: không có ở không gian Cá nhân; người sửa được việc hoặc người được giao gắn mã.
   // Việc ở không gian con: người được giao (và quản trị, thư ký toàn trường) gắn mã Jira ngay ở đây.
-  const subJira = isPersonal ? undefined : {
+  const subJira = {
     briefs: await loadJiraBriefs(supabase, userId, subOpen.map((t) => t.jira_key)),
     base: serverEnv.jiraBaseUrl(),
     canSet: (t: Task) => seesAll || t.assignee_id === userId,
   };
-  const jira = isPersonal ? undefined : {
+  // Ô mã Jira có ở mọi việc, kể cả Cá nhân (việc Cá nhân chỉ chủ thấy nên mã đó cũng chỉ chủ thấy).
+  const jira = {
     briefs: await loadJiraBriefs(supabase, userId, (tasks ?? []).map((t) => t.jira_key)),
     base: serverEnv.jiraBaseUrl(),
-    canSet: (t: Task) => !group.archived_at && (canEdit || t.assignee_id === userId),
+    canSet: (t: Task) => !group.archived_at && (canEditTasks || t.assignee_id === userId),
   };
   const pendingDel = new Set((delReqs ?? []).map((r) => `${r.item_type}:${r.item_id}`));
   const othersDelReqs = canDeleteHere ? (delReqs ?? []).filter((r) => r.requester_id !== userId) : [];
