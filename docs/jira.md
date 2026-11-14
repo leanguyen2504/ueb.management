@@ -82,7 +82,7 @@ Hệ thống chấm công (`https://chamcong4lan.ueb.edu.vn/ChamCong/BaoCao`) n�
 
 ## Cây công việc Jira (dùng chung)
 
-- Trang `/jira/cay` (trang Jira của tôi → thẻ **Cây công việc**) hiện Task của các đơn vị > Work > Sub-task, chia theo dự án Jira (đơn vị); lọc theo đơn vị, tìm theo mã/tên/người làm, ẩn cây đã xong. Mỗi dòng có các đầu việc trên web đang gắn mã đó.
+- Trang `/jira/cay` (trang Jira của tôi → thẻ **Cây công việc**) hiện Task của các đơn vị > Work > Sub-task, chia theo dự án Jira (đơn vị); lọc theo đơn vị, tìm theo mã/tên/người làm, ẩn cây đã xong. Cột bên phải là Việc trên web đang gắn mã đó; mã chưa xong mà chưa link thì có cảnh báo và ô chọn Việc (việc đang mở tôi thực hiện hoặc đã tạo, không phải Cá nhân, chưa có mã) để link ngay.
 - Mỗi lần ai đó đồng bộ Jira, `collectMyJira` đọc thêm việc cha (cha của sub-task, hoặc liên kết Gantt *is child task of*) và các việc con (*is parent task of*, sub-task), tối đa 3 vòng và 800 mã, rồi ghi vào bảng dùng chung `jira_tree` qua `jira_save_tree` (migration `20261114000002_cay_cong_viec_jira.sql`). Lỗi ở bước này không làm hỏng lần đồng bộ.
 - `jira_tree` chỉ có mã, tên, loại, trạng thái, đơn vị, người được giao, hạn, việc cha; không có worklog, comment, mô tả; bỏ đơn nghỉ phép, làm ngoài giờ. Mọi tài khoản đang hoạt động xem được. Mã không ai đồng bộ lại trong 120 ngày tự bị xóa. Kiểm thử: `supabase/tests/99_zzzzzz_cay_cong_viec_jira.sql`.
 - Ô mã Jira trên đầu việc cũng dùng `jira_tree` khi mã không có trong Jira của tôi, và có link **Xem cây**.
