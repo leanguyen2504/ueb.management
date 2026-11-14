@@ -45,11 +45,13 @@ insert into public.task_links (task_id, url, label) values (:'task', 'https://dr
 select t.denied(format($$insert into public.task_links (task_id, url) values (%L, 'https://evil.example.com/x')$$, :'task'), 'link ngoài Google Drive');
 select t.denied(format($$insert into public.task_links (task_id, url, created_by) values (%L, 'https://docs.google.com/x', %L)$$, :'task', :thuky), 'gắn link mạo danh người khác');
 
--- 5. Thành viên nhóm cha nhưng không tham gia không thấy việc và sản phẩm.
+-- 5. Thành viên nhóm cha (không tham gia không gian con) xem được việc và sản phẩm bên trong (migration
+--    20261114000003), nhưng chỉ xem: không sửa, không đôn đốc.
 select set_config('request.jwt.claim.sub', :xem, false);
-select t.ok(t.count(format('select * from public.tasks where group_id = %L', :'sg')) = 0, 'người ngoài không thấy việc');
-select t.ok(t.count('select * from public.task_links') = 0, 'người ngoài không thấy sản phẩm');
-select t.denied(format($$select public.nudge_task(%L)$$, :'task'), 'người ngoài đôn đốc');
+select t.ok(t.count(format('select * from public.tasks where group_id = %L', :'sg')) = 1, 'thành viên nhóm cha thấy việc của không gian con');
+select t.ok(t.count('select * from public.task_links') = 1, 'thành viên nhóm cha thấy sản phẩm');
+select t.denied(format($$update public.tasks set title = 'đổi' where id = %L$$, :'task'), 'thành viên nhóm cha sửa việc không gian con');
+select t.denied(format($$select public.nudge_task(%L)$$, :'task'), 'thành viên nhóm cha đôn đốc');
 
 -- 6. Người tạo link xóa được link của mình.
 select set_config('request.jwt.claim.sub', :tv2, false);

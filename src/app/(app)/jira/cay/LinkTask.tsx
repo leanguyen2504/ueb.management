@@ -3,19 +3,23 @@
 import { useState, useTransition } from 'react';
 import { saveTaskJira } from '@/lib/work';
 
-export type PickTask = { id: string; label: string; group: string };
+export type PickGroup = { label: string; tasks: { id: string; label: string }[] };
 
-// Chọn một Việc (của tôi, chưa gắn mã) để gắn mã Jira của dòng này.
-export function LinkTask({ jiraKey, tasks }: { jiraKey: string; tasks: PickTask[] }) {
+// Chọn một Việc (chưa gắn mã) để gắn mã Jira của dòng này; Việc chia theo nhóm con của đơn vị.
+export function LinkTask({ jiraKey, groups }: { jiraKey: string; groups: PickGroup[] }) {
   const [id, setId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   return (
     <div className="flex flex-wrap items-center gap-1">
       <select value={id} onChange={(e) => setId(e.target.value)} disabled={pending} aria-label={`Chọn Việc để link với ${jiraKey}`}
-        className="input h-7 w-52 py-0 text-xs">
+        className="input h-7 w-64 py-0 text-xs">
         <option value="">Chọn Việc để link…</option>
-        {tasks.map((t) => <option key={t.id} value={t.id}>{t.group ? `${t.label} (${t.group})` : t.label}</option>)}
+        {groups.map((g) => (
+          <optgroup key={g.label} label={g.label}>
+            {g.tasks.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </optgroup>
+        ))}
       </select>
       <button type="button" disabled={!id || pending}
         onClick={() => { setError(null); start(async () => { const r = await saveTaskJira({ id, value: jiraKey }); if (r?.error) setError(r.error); else setId(''); }); }}

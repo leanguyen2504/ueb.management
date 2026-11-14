@@ -11,6 +11,7 @@ import { OpenFromHash } from '@/components/OpenFromHash';
 import { KIND_LABEL, PERMS, groupTypeLabel, ROLE_LABEL, type Group, type GroupMember, type Profile } from '@/lib/types';
 import { fmtDateTime, fmtTime } from '@/lib/format';
 import { TaskList } from '@/components/TaskList';
+import { loadPeople } from '@/lib/people';
 import { loadJiraBriefs } from '@/lib/jira/brief';
 import { serverEnv } from '@/lib/env';
 import { MemberAvatars, rankMember } from '@/components/MemberStrip';
@@ -105,9 +106,13 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const [{ data: linkRows }, { data: parent }, { data: childTasks }, { data: people }, { data: dirData }, { data: tagRows }] = await Promise.all([
     taskIds.length ? supabase.from('task_links').select('*').in('task_id', taskIds).order('created_at').returns<TaskLink[]>() : Promise.resolve({ data: [] as TaskLink[] }),
     group.parent_id ? supabase.from('groups').select('id, name').eq('id', group.parent_id).maybeSingle() : Promise.resolve({ data: null }),
-    childIds.length
-      ? supabase.from('tasks').select('group_id, status, due_date').in('group_id', childIds)
-      : Promise.resolve({ data: [] as { group_id: string; status: Task['status']; due_date: string | null }[] }),
+    // Việc của mọi không gian con, cháu… (RLS: chỉ những việc người xem được phép thấy).
+    dirPromise.then(async ({ data: d }): Promise<{ data: Task[] | null }> => {
+      const desc = descendantsOf(id, (d ?? []) as { id: string; parent_id: string | null }[]);
+      return desc.length
+        ? await supabase.from('tasks').select('*').in('group_id', desc).order('due_date', { ascending: true, nullsFirst: false }).limit(1000).returns<Task[]>()
+        : { data: [] };
+    }),
     supabase.from('profiles').select('id, email, full_name, system_role, is_active, position, phone, office, avatar_path').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).returns<Profile[]>(),
     dirPromise,
     tagPromise,
@@ -154,13 +159,33 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const isPersonal = Boolean(group.owner_id);
   const sortedMembers = [...(members ?? [])].sort((a, b) => rankMember({ ...a, profile: person.get(a.user_id) }) - rankMember({ ...b, profile: person.get(b.user_id) }));
   const openTasks = (tasks ?? []).filter((t) => t.status !== 'done');
+  // Việc trong các không gian con: hiện ở nhóm cha, theo từng không gian con.
+  const subTasks = childTasks ?? [];
+  const subOpen = subTasks.filter((t) => t.status !== 'done');
+  const allOpen = [...openTasks, ...subOpen].sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'));
+  const subPath = (gid: string) => {
+    const parts: string[] = [];
+    for (let g = dirById.get(gid), i = 0; g && g.id !== id && i < 6; g = g.parent_id ? dirById.get(g.parent_id) : undefined, i++) parts.unshift(g.name);
+    return parts.join(' › ') || 'Không gian con';
+  };
+  // Không gian con trực tiếp chứa nhóm gid (để cộng tiến độ cả cây vào thẻ không gian).
+  const topChild = (gid: string) => {
+    let g = dirById.get(gid);
+    for (let i = 0; g && g.parent_id !== id && i < 8; i++) g = g.parent_id ? dirById.get(g.parent_id) : undefined;
+    return g?.parent_id === id ? g.id : null;
+  };
+  const subPeople = await loadPeople(supabase, subTasks.map((t) => t.assignee_id).filter((a) => a && !person.has(a)));
+  const anyName = (uid: string | null) => (uid && !person.has(uid) ? subPeople.name(uid) || 'Người dùng' : name(uid));
+  const subGroups = [...new Set(subOpen.map((t) => t.group_id))]
+    .map((gid) => ({ gid, path: subPath(gid), list: subOpen.filter((t) => t.group_id === gid) }))
+    .sort((a, b) => a.path.localeCompare(b.path, 'vi'));
   const doneTasks = (tasks ?? []).filter((t) => t.status === 'done');
 
   const stripMembers = (members ?? []).map((m) => ({ user_id: m.user_id, is_manager: m.is_manager, is_clerk: m.is_clerk, profile: person.get(m.user_id), avatarUrl: avatars.get(person.get(m.user_id)?.avatar_path ?? '') }));
   // Thẻ của trang nhóm. Thông tin ít dùng (người tạo/sửa, nhật ký, sửa, lưu trữ) nằm ở thẻ Thông tin.
   const TABS = [
     { key: 'tong-quan', label: 'Tổng quan' },
-    { key: 'viec', label: 'Việc', count: openTasks.length },
+    { key: 'viec', label: 'Việc', count: openTasks.length + subOpen.length },
     { key: 'lich', label: 'Lịch', count: events?.length ?? 0 },
     { key: 'tai-lieu', label: 'Tài liệu', count: (docs?.length ?? 0) + (group.drive_url ? 1 : 0) },
     ...(childIds.length > 0 || canSub || sharedProjects.length > 0 ? [{ key: 'khong-gian', label: 'Không gian', count: childIds.length + sharedProjects.length }] : []),
@@ -176,6 +201,12 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const canEditTasks = !group.archived_at && (isPersonal ? group.owner_id === userId : canEdit);
   const editPeople = isPersonal ? undefined : memberOptions;
   // Ô mã Jira: không có ở không gian Cá nhân; người sửa được việc hoặc người được giao gắn mã.
+  // Việc ở không gian con: người được giao (và quản trị, thư ký toàn trường) gắn mã Jira ngay ở đây.
+  const subJira = isPersonal ? undefined : {
+    briefs: await loadJiraBriefs(supabase, userId, subOpen.map((t) => t.jira_key)),
+    base: serverEnv.jiraBaseUrl(),
+    canSet: (t: Task) => seesAll || t.assignee_id === userId,
+  };
   const jira = isPersonal ? undefined : {
     briefs: await loadJiraBriefs(supabase, userId, (tasks ?? []).map((t) => t.jira_key)),
     base: serverEnv.jiraBaseUrl(),
@@ -194,7 +225,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
       canDelete={canDeleteHere}
       up={canMoveSpaces && parentLink ? { id: parentLink.id, name: parentLink.name } : null}
       items={(children ?? []).map((c) => {
-        const p = progressOf((childTasks ?? []).filter((t) => t.group_id === c.id));
+        const p = progressOf(subTasks.filter((t) => topChild(t.group_id) === c.id));
         return {
           id: c.id,
           name: c.name,
@@ -341,7 +372,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
       {tab === 'tong-quan' && (
         <div className="grid items-start gap-5 lg:grid-cols-[1.5fr_1fr]">
           <div className="min-w-0">
-            {tasks?.length ? <TaskProgress tasks={tasks} name={name} groupId={group.id} canNudge={canNudge} /> : (
+            {tasks?.length || subTasks.length ? <TaskProgress tasks={[...(tasks ?? []), ...subTasks]} name={anyName} groupId={group.id} canNudge={canNudge} /> : (
               <section className="card mb-4"><p className="text-sm muted">Nhóm chưa có đầu việc.{canAddTask ? ' Bấm "+ Tạo việc" để bắt đầu.' : ''}</p></section>
             )}
             {childIds.length > 0 && (
@@ -354,8 +385,8 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
           </div>
           <div className="space-y-5">
             <section className="card">
-              <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-semibold">Việc sắp đến hạn</h2><Link href={tabHref('viec')} className="link text-sm">{openTasks.length} việc mở</Link></div>
-              <TaskList tasks={openTasks.slice(0, 5)} name={name} empty="Chưa có việc đang mở." links={links} canNudge={canNudge} canAttach={canAttach} me={userId} canEdit={canEditTasks} people={editPeople} jira={jira} />
+              <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-semibold">Việc sắp đến hạn</h2><Link href={tabHref('viec')} className="link text-sm">{allOpen.length} việc mở</Link></div>
+              <TaskList tasks={allOpen.slice(0, 5)} name={anyName} groupName={(gid) => (gid === group.id ? group.name : subPath(gid))} empty="Chưa có việc đang mở." me={userId} />
             </section>
             <section className="card">
               <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-semibold">Lịch sắp tới</h2><Link href={tabHref('lich')} className="link text-sm">Mở</Link></div>
@@ -375,6 +406,18 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                 <summary className="cursor-pointer text-sm muted">Đã hoàn thành ({doneTasks.length})</summary>
                 <TaskList tasks={doneTasks} name={name} canDelete={canDeleteHere} links={links} canAttach={canAttach} me={userId} canEdit={canEditTasks} people={editPeople} jira={jira} />
               </details>
+            )}
+            {subGroups.length > 0 && (
+              <div className="mt-6 border-t border-slate-200 pt-4 dark:border-slate-800">
+                <h2 className="mb-1 text-lg font-semibold">Việc trong các không gian con ({subOpen.length} đang mở)</h2>
+                <p className="mb-3 text-xs muted">Sửa, giao việc, gắn sản phẩm trong trang của từng không gian.</p>
+                {subGroups.map((sg) => (
+                  <div key={sg.gid} className="mb-4">
+                    <h3 className="mb-1 text-sm font-semibold"><Link href={`/nhom/${sg.gid}?tab=viec`} className="hover:underline">{sg.path}</Link> <span className="font-normal muted">({sg.list.length})</span></h3>
+                    <TaskList tasks={sg.list} name={anyName} me={userId} jira={subJira} empty="" />
+                  </div>
+                ))}
+              </div>
             )}
           </section>
           {(canAddTask || (!canDeleteHere && Boolean(tasks?.length))) && (
@@ -650,3 +693,20 @@ const DELETE_ITEM_LABEL: Record<DeleteRequest['item_type'], string> = { group: '
 const ACTION: Record<string, string> = { insert: 'thêm', update: 'sửa', delete: 'xóa' };
 const ENTITY: Record<string, string> = { groups: 'thông tin nhóm', group_members: 'thành viên', invitations: 'lời mời', tasks: 'đầu việc', events: 'lịch', group_files: 'tài liệu' };
 const fmtSize = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+
+// Mọi nhóm con, cháu… của một nhóm (theo danh bạ nhóm), không gồm chính nó.
+function descendantsOf(root: string, rows: { id: string; parent_id: string | null }[]) {
+  const kids = new Map<string, string[]>();
+  for (const r of rows) if (r.parent_id) kids.set(r.parent_id, [...(kids.get(r.parent_id) ?? []), r.id]);
+  const out: string[] = [];
+  const seen = new Set([root]);
+  const stack = [...(kids.get(root) ?? [])];
+  while (stack.length && out.length < 500) {
+    const x = stack.pop()!;
+    if (seen.has(x)) continue;
+    seen.add(x);
+    out.push(x);
+    stack.push(...(kids.get(x) ?? []));
+  }
+  return out;
+}
