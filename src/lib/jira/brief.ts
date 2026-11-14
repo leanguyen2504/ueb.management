@@ -54,5 +54,33 @@ export async function loadJiraBriefs(supabase: Supabase, userId: string, keys: (
       myHours: Math.round(((r.my_seconds ?? 0) / 3600) * 10) / 10,
     });
   }
+  // Cây công việc dùng chung (jira_tree): mã chưa có trong dữ liệu của mình, và việc con do người khác đồng bộ.
+  const [{ data: treeRows }, { data: childRows }] = await Promise.all([
+    supabase.from('jira_tree').select('issue_key, summary, issue_type, status, status_category, project_name, parent_key').in('issue_key', list.slice(0, 500)),
+    supabase.from('jira_tree').select('issue_key, summary, issue_type, status_category, parent_key').in('parent_key', list.slice(0, 500)).limit(3000),
+  ]);
+  const parents = new Set((treeRows ?? []).map((r) => r.parent_key).filter((k): k is string => !!k));
+  const { data: parentRows } = parents.size
+    ? await supabase.from('jira_tree').select('issue_key, summary, status_category').in('issue_key', [...parents])
+    : { data: [] as { issue_key: string; summary: string; status_category: string | null }[] };
+  const parentOf = new Map((parentRows ?? []).map((r) => [r.issue_key, r]));
+  for (const r of treeRows ?? []) {
+    if (out.has(r.issue_key)) continue;
+    const p = r.parent_key ? parentOf.get(r.parent_key) : undefined;
+    out.set(r.issue_key, {
+      key: r.issue_key, summary: r.summary ?? '', issueType: r.issue_type, status: r.status, done: r.status_category === 'done',
+      project: r.project_name,
+      parent: r.parent_key ? { key: r.parent_key, summary: p?.summary ?? null, done: p?.status_category === 'done' } : null,
+      children: [], subtaskTotal: 0, subtaskDone: 0, myHours: 0,
+    });
+  }
+  // Việc con: gộp liên kết trong dữ liệu của mình với cây dùng chung (không đếm trùng).
+  for (const c of childRows ?? []) {
+    const b = out.get(c.parent_key as string);
+    if (!b || b.children.some((x) => x.key === c.issue_key)) continue;
+    // Sub-task đã đếm riêng (subtaskTotal) khi mã có trong dữ liệu của mình.
+    if (/sub/i.test(c.issue_type ?? '') && b.subtaskTotal > 0) continue;
+    b.children.push({ key: c.issue_key, summary: c.summary, done: c.status_category === 'done' });
+  }
   return out;
 }

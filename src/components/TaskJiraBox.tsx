@@ -55,7 +55,10 @@ export function TaskJiraBox({ taskId, jiraKey, href, brief, canEdit, base }: {
             {brief.myHours > 0 && <span>Bạn đã log {brief.myHours} giờ</span>}
           </>
         ) : (
-          <span title="Mã này chưa có trong dữ liệu Jira của tôi (chưa đồng bộ, hoặc bạn không liên quan trên Jira).">chưa có trong Jira của tôi</span>
+          <span title="Mã này chưa có trong dữ liệu Jira trên web (chưa ai liên quan bấm Đồng bộ Jira).">chưa có dữ liệu Jira</span>
+        )}
+        {brief && (brief.parent || brief.children.length > 0 || brief.subtaskTotal > 0) && (
+          <a href={`/jira/cay?q=${encodeURIComponent(brief.parent?.key ?? jiraKey)}`} className="text-brand-600 hover:underline dark:text-brand-300">Xem cây</a>
         )}
         {canEdit && (
           <button type="button" className="rounded px-1 text-slate-400 hover:text-brand-600 dark:hover:text-brand-300" aria-label="Sửa mã Jira" title="Sửa mã Jira"

@@ -272,6 +272,82 @@ export async function collectMyJira(
       myAttachmentCount,
     });
   }
+  // Cây công việc (Task > Work > Sub-task) quanh việc của mình: đọc thêm việc cha và các việc con,
+  // để mọi người thấy việc to nhỏ của các đơn vị. Chỉ lấy thông tin khung, không lấy worklog hay comment.
+  // Không đưa đơn nghỉ phép, làm ngoài giờ vào cây.
+  const tree: NonNullable<JiraSnapshot['tree']> = [];
+  try {
+    const skipType = /nghỉ|phép|ngoài giờ|làm thêm/i;
+    const TREE_FIELDS = 'summary,status,issuetype,project,assignee,duedate,parent,subtasks,issuelinks,updated';
+    const MAX_TREE_FETCH = 800;
+    const nodes: Record<string, { origin: 'mine' | 'up' | 'down'; f: any }> = {};
+    const partial: Record<string, any> = {};
+    const linkKeys = (f: any, re: RegExp) =>
+      ((f.issuelinks as any[]) || [])
+        .filter((l: any) => re.test(String((l.type && (l.inwardIssue ? l.type.inward : l.type.outward)) || '')))
+        .map((l: any) => (l.inwardIssue || l.outwardIssue || {}).key)
+        .filter(Boolean) as string[];
+    const parentOf = (f: any): string | null => (f.parent && f.parent.key) || linkKeys(f, /child/i)[0] || null;
+    const childrenOf = (f: any): string[] => linkKeys(f, /parent/i);
+    const typeOk = (f: any) => !skipType.test(String((f.issuetype && f.issuetype.name) || ''));
+    for (const it of main.issues) if (it.fields && typeOk(it.fields)) nodes[it.key] = { origin: 'mine', f: it.fields };
+    let fetched = 0;
+    for (let round = 0; round < 3; round++) {
+      const want = new Set<string>();
+      for (const [, n] of Object.entries(nodes)) {
+        const p = parentOf(n.f);
+        if (p && !nodes[p]) want.add(p);
+        if (n.origin !== 'down') for (const c of childrenOf(n.f)) if (!nodes[c]) want.add(c);
+      }
+      const keys = Array.from(want).slice(0, Math.max(0, MAX_TREE_FETCH - fetched));
+      if (!keys.length) break;
+      say(`Đang đọc cây công việc: ${keys.length} việc cha, việc con…`);
+      const parentsNow = new Set<string>();
+      for (const [, n] of Object.entries(nodes)) { const p = parentOf(n.f); if (p) parentsNow.add(p); }
+      for (let i = 0; i < keys.length; i += 50) {
+        const batch = keys.slice(i, i + 50);
+        let got: any[] = [];
+        try {
+          got = (await search(`key in (${batch.join(',')})`, TREE_FIELDS)).issues;
+        } catch {
+          // Có mã không còn hoặc không có quyền xem: đọc từng mã.
+          for (const k of batch) {
+            const one = await get(`/rest/api/2/issue/${encodeURIComponent(k)}`, { fields: TREE_FIELDS }).catch(() => null);
+            if (one) got.push(one);
+          }
+        }
+        for (const it of got) {
+          if (!it || !it.key || nodes[it.key] || !it.fields || !typeOk(it.fields)) continue;
+          nodes[it.key] = { origin: parentsNow.has(it.key) ? 'up' : 'down', f: it.fields };
+        }
+        fetched += batch.length;
+      }
+    }
+    const cat = (st: any) => str(st && st.statusCategory && st.statusCategory.key);
+    for (const [key, n] of Object.entries(nodes)) {
+      const f = n.f;
+      tree.push({
+        key, summary: String(f.summary || ''), issueType: str(f.issuetype && f.issuetype.name), status: str(f.status && f.status.name),
+        statusCategory: cat(f.status), projectKey: str(f.project && f.project.key), projectName: str(f.project && f.project.name),
+        assignee: str(f.assignee && f.assignee.displayName), due: str(f.duedate), parentKey: parentOf(f), updated: str(f.updated),
+      });
+      // Sub-task: danh sách việc con có sẵn tên, loại, trạng thái.
+      for (const st of (f.subtasks as any[]) || []) {
+        if (!st || !st.key || nodes[st.key] || partial[st.key]) continue;
+        const sf = st.fields || {};
+        if (!typeOk(sf)) continue;
+        partial[st.key] = true;
+        tree.push({
+          key: st.key, summary: String(sf.summary || ''), issueType: str(sf.issuetype && sf.issuetype.name), status: str(sf.status && sf.status.name),
+          statusCategory: cat(sf.status), projectKey: str(f.project && f.project.key), projectName: str(f.project && f.project.name),
+          assignee: null, due: null, parentKey: key, updated: null, partial: true,
+        });
+      }
+    }
+  } catch {
+    // Không đọc được cây: vẫn lưu dữ liệu cá nhân như thường.
+  }
+
   say(`Xong: ${issues.length} mã việc, ${worklogs.length} worklog, ${mentions.length} comment nhắc tên bạn.`);
   return {
     me: { name: me.name, key: me.key, displayName },
@@ -279,6 +355,7 @@ export async function collectMyJira(
     worklogs,
     mentions,
     customFieldNames: Array.from(customNames).sort(),
+    tree,
     fetchedAt: new Date().toISOString(),
   };
 }

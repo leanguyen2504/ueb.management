@@ -48,7 +48,25 @@ export type JiraSnapshot = {
   worklogs: { id: string; issueKey: string; started: string; seconds: number; comment: string | null }[];
   mentions: { id: string; issueKey: string; author: string | null; body: string; created: string; answered: boolean }[];
   customFieldNames: string[];
+  /** Cây công việc quanh việc của mình (việc cha, việc con, sub-task), lưu vào bảng dùng chung jira_tree. */
+  tree?: JiraTreeNode[];
   fetchedAt: string;
+};
+
+export type JiraTreeNode = {
+  key: string;
+  summary: string;
+  issueType: string | null;
+  status: string | null;
+  statusCategory: string | null;
+  projectKey: string | null;
+  projectName: string | null;
+  assignee: string | null;
+  due: string | null;
+  parentKey: string | null;
+  updated: string | null;
+  /** Sub-task chỉ biết tên, loại, trạng thái. */
+  partial?: boolean;
 };
 
 export type JiraLink = { type: string | null; dir: 'inward' | 'outward'; rel: string | null; key: string | null; summary: string | null; statusCategory: string | null };
