@@ -5,7 +5,7 @@ import { saveTaskJira } from '@/lib/work';
 
 export type PickGroup = { label: string; tasks: { id: string; label: string }[] };
 
-// Gắn mã Jira của dòng này vào một Việc trên web, giống ô "+ Kết nối Jira" ở trang Việc:
+// Gắn mã Jira của dòng này vào một Việc trên web, giống ô "+ Gắn mã Jira" ở trang Việc:
 // bấm "+ Link Việc", gõ vài chữ tên Việc (hoặc chọn trong Gợi ý), bấm vào Việc là lưu.
 const fold = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase();
 
