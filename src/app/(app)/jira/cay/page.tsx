@@ -4,7 +4,7 @@ import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
 import { serverEnv } from '@/lib/env';
 import { fmtDate, vnDay } from '@/lib/format';
-import { LinkTask, UnlinkTask, type PickTask } from './LinkTask';
+import { LinkTask, UnlinkTask, type PickGroup } from './LinkTask';
 
 export const metadata: Metadata = { title: 'Cây công việc Jira' };
 
@@ -21,7 +21,7 @@ type Node = {
   parent_key: string | null;
   updated_at_jira: string | null;
 };
-type WebTask = { id: string; group_id: string; title: string; jira_key: string };
+type WebTask = { id: string; group_id: string; title: string; jira_key: string; assignee_id: string | null; created_by: string | null };
 type Search = { dv?: string; q?: string; xem?: string };
 
 // Cây công việc Jira dùng chung: Task của đơn vị > Work > Sub-task. Dữ liệu do mọi người góp khi bấm "Đồng bộ Jira"
@@ -46,28 +46,59 @@ export default async function JiraTreePage({ searchParams }: { searchParams: Pro
 
   // Đầu việc trên web gắn mã (RLS: chỉ những việc người xem được phép thấy).
   const { data: webTasks } = nodes.length
-    ? await supabase.from('tasks').select('id, group_id, title, jira_key').not('jira_key', 'is', null).limit(3000).returns<WebTask[]>()
+    ? await supabase.from('tasks').select('id, group_id, title, jira_key, assignee_id, created_by').not('jira_key', 'is', null).limit(3000).returns<WebTask[]>()
     : { data: [] as WebTask[] };
   const webOf = new Map<string, WebTask[]>();
   for (const t of webTasks ?? []) webOf.set(t.jira_key, [...(webOf.get(t.jira_key) ?? []), t]);
 
-  // Việc để chọn link: việc đang mở mà tôi thực hiện hoặc đã tạo, không phải việc Cá nhân, chưa gắn mã Jira.
-  const { data: myTasks } = nodes.length
-    ? await supabase.from('tasks').select('id, group_id, title, jira_key, assignee_id, created_by')
-      .or(`assignee_id.eq.${userId},created_by.eq.${userId}`).neq('status', 'done')
-      .order('due_date', { ascending: true, nullsFirst: false }).limit(1000)
-      .returns<(WebTask & { jira_key: string | null })[]>()
-    : { data: [] as (WebTask & { jira_key: string | null })[] };
-  const groupIds = [...new Set([...(webTasks ?? []), ...(myTasks ?? [])].map((t) => t.group_id))];
-  const { data: groupRows } = groupIds.length
-    ? await supabase.from('groups').select('id, name, owner_id').in('id', groupIds)
-    : { data: [] as { id: string; name: string; owner_id: string | null }[] };
-  const groupName = new Map((groupRows ?? []).map((g) => [g.id, g.name as string]));
-  const personal = new Set((groupRows ?? []).filter((g) => g.owner_id).map((g) => g.id));
-  const mine = new Set((myTasks ?? []).map((t) => t.id));
-  const pickable: PickTask[] = (myTasks ?? [])
-    .filter((t) => !t.jira_key && !personal.has(t.group_id))
-    .map((t) => ({ id: t.id, label: t.title, group: groupName.get(t.group_id) ?? '' }));
+  // Việc để chọn link: việc đang mở, chưa gắn mã Jira, không phải việc Cá nhân (RLS: chỉ việc tôi xem được;
+  // cơ sở dữ liệu kiểm tra quyền khi lưu). Chia theo đơn vị trên web khớp với dự án Jira, rồi theo nhóm con.
+  type G = { id: string; name: string; parent_id: string | null; owner_id: string | null };
+  const [{ data: openTasks }, { data: groupRows }] = nodes.length
+    ? await Promise.all([
+      supabase.from('tasks').select('id, group_id, title').is('jira_key', null).neq('status', 'done')
+        .order('due_date', { ascending: true, nullsFirst: false }).limit(3000).returns<{ id: string; group_id: string; title: string }[]>(),
+      supabase.from('groups').select('id, name, parent_id, owner_id').is('archived_at', null).limit(3000).returns<G[]>(),
+    ])
+    : [{ data: [] as { id: string; group_id: string; title: string }[] }, { data: [] as G[] }];
+  const webGroups = new Map((groupRows ?? []).map((g) => [g.id, g]));
+  const groupName = new Map((groupRows ?? []).map((g) => [g.id, g.name]));
+  const mine = new Set((webTasks ?? []).filter((t) => t.assignee_id === userId || t.created_by === userId).map((t) => t.id));
+  // Đường dẫn nhóm từ gốc: [gốc, con, cháu…].
+  const chain = (gid: string) => {
+    const out: G[] = [];
+    for (let g = webGroups.get(gid), i = 0; g && i < 8; g = g.parent_id ? webGroups.get(g.parent_id) : undefined, i++) out.unshift(g);
+    return out;
+  };
+  // So tên đơn vị Jira với tên nhóm gốc trên web: bỏ dấu, bỏ "UEB", so trùng hoặc chứa nhau.
+  const norm = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase()
+    .replace(/\bueb\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const unitRoots = [...webGroups.values()].filter((g) => !g.parent_id && !g.owner_id);
+  const unitGroup = (projectName: string | null) => {
+    if (!projectName) return null;
+    const p = norm(projectName);
+    return unitRoots.find((g) => norm(g.name) === p) ?? unitRoots.find((g) => { const n = norm(g.name); return n.length > 3 && (p.includes(n) || n.includes(p)); }) ?? null;
+  };
+  const optionsFor = new Map<string, PickGroup[]>();
+  const pickFor = (projectName: string | null): PickGroup[] => {
+    const key = projectName ?? '';
+    if (optionsFor.has(key)) return optionsFor.get(key)!;
+    const unit = unitGroup(projectName);
+    const byPath = new Map<string, PickGroup>();
+    for (const t of openTasks ?? []) {
+      const c = chain(t.group_id);
+      if (!c.length || c[0].owner_id) continue;
+      if (unit && c[0].id !== unit.id) continue;
+      // Trong đơn vị khớp: bỏ tên đơn vị, chỉ ghi nhóm con; không khớp: ghi đủ đường dẫn.
+      const label = (unit ? c.slice(1) : c).map((g) => g.name).join(' › ') || (unit ? 'Việc chung của đơn vị' : c[0].name);
+      const grp = byPath.get(label) ?? { label, tasks: [] };
+      grp.tasks.push({ id: t.id, label: t.title });
+      byPath.set(label, grp);
+    }
+    const list = [...byPath.values()].sort((x, y) => x.label.localeCompare(y.label, 'vi'));
+    optionsFor.set(key, list);
+    return list;
+  };
 
   const showAll = sp.xem === 'tat-ca';
   const q = (sp.q ?? '').trim().toLowerCase();
@@ -140,7 +171,7 @@ export default async function JiraTreePage({ searchParams }: { searchParams: Pro
           ) : (
             <div className="space-y-1">
               <span className="inline-block rounded-md bg-orange-50 px-1.5 py-0.5 font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">⚠ Chưa link Việc</span>
-              {pickable.length > 0 && <LinkTask jiraKey={n.issue_key} tasks={pickable} />}
+              {pickFor(n.project_name).length > 0 && <LinkTask jiraKey={n.issue_key} groups={pickFor(n.project_name)} />}
             </div>
           )}
         </div>
