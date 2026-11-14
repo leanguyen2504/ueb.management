@@ -70,7 +70,7 @@ export function TaskList({
   canEdit?: boolean | ((t: Task) => boolean);
   /** Thành viên để đổi người thực hiện, theo từng việc; không có thì không hiện ô đó. */
   people?: Option[] | ((t: Task) => Option[] | undefined);
-  /** Ô mã Jira: thông tin đối chiếu từ Jira của tôi, địa chỉ Jira, ai được gắn mã (không có ở việc Cá nhân). */
+  /** Ô mã Jira: thông tin đối chiếu từ Jira của tôi, địa chỉ Jira, ai được gắn mã. */
   jira?: { briefs: Map<string, JiraBrief>; base: string | null; canSet: (t: Task) => boolean };
 }) {
   if (!tasks.length) return <p className="text-sm muted">{empty}</p>;

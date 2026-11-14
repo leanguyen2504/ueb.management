@@ -93,11 +93,11 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
     supabase.from('delete_requests').select('item_id').eq('requester_id', userId).eq('item_type', 'task').eq('status', 'pending'),
     loadJiraBriefs(supabase, userId, list.map((t) => t.jira_key)),
   ]);
-  // Ô mã Jira: mọi việc trừ Cá nhân, cho người sửa được việc hoặc người được giao.
+  // Ô mã Jira: mọi việc (kể cả Cá nhân), cho người sửa được việc hoặc người được giao.
   const jira = {
     briefs,
     base: serverEnv.jiraBaseUrl(),
-    canSet: (t: Task) => !groupMap.get(t.group_id)?.owner_id && (canEditTask(t) || t.assignee_id === userId),
+    canSet: (t: Task) => canEditTask(t) || t.assignee_id === userId,
   };
   // Xóa: Trưởng nhóm, quản trị, thư ký toàn trường và chủ mục Cá nhân xóa ngay; người khác gửi đề nghị.
   const membersOf = new Map<string, { id: string; label: string }[]>();
