@@ -145,7 +145,7 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
         ] : []),
         { key: 'cay', href: '/jira/cay', label: 'Cây công việc' },
         { key: 'bao-cao', href: q({ muc: 'bao-cao' }), label: 'Báo cáo Excel' },
-        { key: 'ket-noi', href: q({ muc: 'ket-noi' }), label: 'Kết nối, cập nhật' },
+        { key: 'ket-noi', href: q({ muc: 'ket-noi' }), label: 'Kết nối Jira' },
       ]} />
 
       {tab === 'can-lam' && synced && (
