@@ -88,7 +88,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             button={<>{me}<span className="hidden text-left leading-tight sm:block"><span className="block max-w-40 truncate text-[13px] font-semibold">{name}</span><span className="block text-[11px] muted">{roleText}</span></span></>}>
             <Link role="menuitem" href="/tai-khoan" className="menu-item">Hồ sơ cá nhân</Link>
             <Link role="menuitem" href="/jira" className="menu-item">Jira của tôi</Link>
-            <Link role="menuitem" href="/soan-thao" className="menu-item">Soạn thảo văn bản</Link>
+            {/* Máy tính đã có Soạn thảo ở thanh bên; chỉ giữ trong menu trên điện thoại (thanh dưới không có chỗ). */}
+            <Link role="menuitem" href="/soan-thao" className="menu-item md:hidden">Soạn thảo văn bản</Link>
             <Link role="menuitem" href="/moi" className="menu-item">Mời đồng nghiệp</Link>
             {canAdmin && <Link role="menuitem" href="/quan-tri" className="menu-item">Quản trị danh mục</Link>}
             <hr className="my-1 border-slate-200 dark:border-slate-700" />
