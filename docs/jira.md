@@ -72,3 +72,10 @@ Hệ thống chấm công (`https://chamcong4lan.ueb.edu.vn/ChamCong/BaoCao`) n�
 - Bảng `attendance_punches` (mỗi ngày một dòng: giờ vào/ra sáng chiều, vi phạm, giải trình, phút quy đổi, số lỗi) và `attendance_punch_sync` (lần đồng bộ gần nhất, cờ `excuse_error` khi hệ thống chấm công báo không đọc được đơn nghỉ). RLS: chỉ chủ đọc và xóa.
 - Để tab chấm công mở thì nút tự đồng bộ lại tháng hiện tại mỗi 10 phút; trang Lịch → Chấm công tự làm mới mỗi phút. Muốn thật sự thời gian thực mà không cần mở tab thì cần trường mở API cho máy chủ web, hoặc một máy trong mạng trường chạy đồng bộ định kỳ.
 - Trang Chấm công cảnh báo: ngày có lỗi chưa giải trình (kèm đối chiếu đơn nghỉ trên Jira: đã duyệt nhưng máy chưa ghi nhận, đang chờ duyệt, hay chưa có đơn), hệ thống chấm công không đọc được đơn nghỉ, dữ liệu máy chấm công cũ hơn 1 ngày.
+
+## Mã Jira trên đầu việc
+
+- Mỗi đầu việc trong nhóm, dự án, đơn vị (không phải việc **Cá nhân**) có dòng **+ Gắn mã Jira**: dán link Jira hoặc gõ mã (ví dụ `KKTPT-7377`), Enter là lưu; để trống rồi Enter là bỏ mã. Người sửa được việc và người được giao đều gắn được.
+- Cột `tasks.jira_key`, `tasks.jira_url` (migration `20261114000001_jira_dau_viec.sql`); trigger `tasks_jira` chặn gắn mã cho việc Cá nhân. Kiểm thử: `supabase/tests/99_zzzzz_jira_dau_viec.sql`.
+- Sau khi gắn, trang Việc và trang nhóm đối chiếu mã với **Jira của tôi** của chính người xem (`src/lib/jira/brief.ts`) để hiện loại (Task/Work/Sub-task), trạng thái, việc cha ("thuộc …": việc cha của sub-task hoặc liên kết Gantt *is child task of*), số việc con xong, giờ mình đã log. Mã không có trong dữ liệu của người xem thì chỉ hiện mã và link.
+- Hệ thống không tạo hay sửa issue trên Jira.

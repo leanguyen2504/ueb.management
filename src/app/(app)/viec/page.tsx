@@ -6,6 +6,8 @@ import { TaskList } from '@/components/TaskList';
 import { EventForm, PersonalProjectForm, TaskForm } from '@/components/WorkForms';
 import { TaskGroupFilter, type FilterOption } from '@/components/TaskGroupFilter';
 import { loadPeople } from '@/lib/people';
+import { loadJiraBriefs, type JiraBrief } from '@/lib/jira/brief';
+import { serverEnv } from '@/lib/env';
 import { addDays, fmtDate, vnDay } from '@/lib/format';
 import { KIND_LABEL, TASK_STATUS_LABEL, type Group, type GroupKind, type Task, type TaskStatus } from '@/lib/types';
 
@@ -86,10 +88,17 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
     ? await supabase.from('group_members').select('group_id, user_id').in('group_id', editGroups)
     : { data: [] as { group_id: string; user_id: string }[] };
 
-  const [{ name }, { data: myDelReqs }] = await Promise.all([
+  const [{ name }, { data: myDelReqs }, briefs] = await Promise.all([
     loadPeople(supabase, [...list.map((t) => t.assignee_id), ...(editMembers ?? []).map((m) => m.user_id)]),
     supabase.from('delete_requests').select('item_id').eq('requester_id', userId).eq('item_type', 'task').eq('status', 'pending'),
+    loadJiraBriefs(supabase, userId, list.map((t) => t.jira_key)),
   ]);
+  // Ô mã Jira: mọi việc trừ Cá nhân, cho người sửa được việc hoặc người được giao.
+  const jira = {
+    briefs,
+    base: serverEnv.jiraBaseUrl(),
+    canSet: (t: Task) => !groupMap.get(t.group_id)?.owner_id && (canEditTask(t) || t.assignee_id === userId),
+  };
   // Xóa: Trưởng nhóm, quản trị, thư ký toàn trường và chủ mục Cá nhân xóa ngay; người khác gửi đề nghị.
   const membersOf = new Map<string, { id: string; label: string }[]>();
   for (const m of editMembers ?? []) membersOf.set(m.group_id, [...(membersOf.get(m.group_id) ?? []), { id: m.user_id, label: name(m.user_id) }]);
@@ -186,7 +195,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           {xem === 'tien-do' ? (
-            <Progress tasks={list} label={label} me={userId} deleteState={deleteState} back={back} canEdit={canEditTask} people={peopleFor} />
+            <Progress tasks={list} label={label} me={userId} deleteState={deleteState} back={back} canEdit={canEditTask} people={peopleFor} jira={jira} />
           ) : (
             <section className="card">
               <TaskList
@@ -199,6 +208,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
                 back={back}
                 canEdit={canEditTask}
                 people={peopleFor}
+                jira={jira}
                 empty={filterIds ? 'Không có việc nào trong nhóm, dự án đã chọn.' : xem === 'da-giao' ? 'Bạn chưa giao việc nào đang mở.' : xem === 'xong' ? 'Chưa có việc hoàn thành.' : 'Bạn không có việc nào đang mở. Tạo việc cá nhân ở khung bên cạnh.'}
               />
             </section>
@@ -234,7 +244,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
 }
 
 // Bảng tiến độ theo nhóm/dự án: tỷ lệ xong, quá hạn, gấp, hạn gần nhất; rồi danh sách việc cần xử lý.
-function Progress({ tasks, label, me, deleteState, back, canEdit, people }: { tasks: Task[]; label: (id: string) => string; me: string; deleteState: (t: Task) => 'delete' | 'request' | 'pending'; back: string; canEdit: (t: Task) => boolean; people: (t: Task) => { id: string; label: string }[] | undefined }) {
+function Progress({ tasks, label, me, deleteState, back, canEdit, people, jira }: { tasks: Task[]; label: (id: string) => string; me: string; deleteState: (t: Task) => 'delete' | 'request' | 'pending'; back: string; canEdit: (t: Task) => boolean; people: (t: Task) => { id: string; label: string }[] | undefined; jira: { briefs: Map<string, JiraBrief>; base: string | null; canSet: (t: Task) => boolean } }) {
   const today = vnDay();
   const soon = addDays(today, 3);
   const week = addDays(today, 7);
@@ -309,7 +319,7 @@ function Progress({ tasks, label, me, deleteState, back, canEdit, people }: { ta
       </section>
       <section className="card">
         <h2 className="mb-3 text-lg font-semibold">Cần xử lý: quá hạn và hạn trong 7 ngày</h2>
-        <TaskList tasks={attention} name={() => 'Bạn'} groupName={label} showProgress me={me} deleteState={deleteState} back={back} canEdit={canEdit} people={people} empty="Không có việc quá hạn hay sắp đến hạn." />
+        <TaskList tasks={attention} name={() => 'Bạn'} groupName={label} showProgress me={me} deleteState={deleteState} back={back} canEdit={canEdit} people={people} jira={jira} empty="Không có việc quá hạn hay sắp đến hạn." />
       </section>
     </>
   );

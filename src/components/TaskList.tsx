@@ -1,5 +1,8 @@
 import Link from 'next/link';
 import { TaskDropBox } from '@/components/TaskDropBox';
+import { TaskJiraBox } from '@/components/TaskJiraBox';
+import type { JiraBrief } from '@/lib/jira/brief';
+import { jiraUrl } from '@/lib/meeting-rules';
 import { deleteOrRequestTask, deleteTask, deleteTaskLink, nudgeTask, setTaskStatus } from '@/lib/work';
 import { ConfirmButton } from '@/components/ConfirmButton';
 import { TaskEditButton, type Option } from '@/components/WorkForms';
@@ -44,6 +47,7 @@ export function TaskList({
   back,
   canEdit,
   people,
+  jira,
 }: {
   tasks: Task[];
   name: (id: string | null) => string;
@@ -66,6 +70,8 @@ export function TaskList({
   canEdit?: boolean | ((t: Task) => boolean);
   /** Thành viên để đổi người thực hiện, theo từng việc; không có thì không hiện ô đó. */
   people?: Option[] | ((t: Task) => Option[] | undefined);
+  /** Ô mã Jira: thông tin đối chiếu từ Jira của tôi, địa chỉ Jira, ai được gắn mã (không có ở việc Cá nhân). */
+  jira?: { briefs: Map<string, JiraBrief>; base: string | null; canSet: (t: Task) => boolean };
 }) {
   if (!tasks.length) return <p className="text-sm muted">{empty}</p>;
   const today = vnDay();
@@ -91,6 +97,16 @@ export function TaskList({
                   <div className="h-1.5 w-32 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"><div className="h-full bg-brand-600" style={{ width: `${t.progress}%` }} /></div>
                   <span className="tabular-nums">{t.progress}%</span>
                 </div>
+              )}
+              {jira && (t.jira_key || jira.canSet(t)) && (
+                <TaskJiraBox
+                  taskId={t.id}
+                  jiraKey={t.jira_key ?? null}
+                  href={t.jira_key ? t.jira_url || jiraUrl(jira.base, t.jira_key) : null}
+                  brief={t.jira_key ? jira.briefs.get(t.jira_key) ?? null : null}
+                  canEdit={jira.canSet(t)}
+                  base={jira.base}
+                />
               )}
               {roles.rest && <p className="mt-1 text-sm">{roles.rest}</p>}
               {links && <TaskLinks task={t} links={links.get(t.id) ?? []} canAttach={canAttach || t.assignee_id === me} me={me} />}

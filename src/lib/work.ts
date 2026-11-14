@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { errText, fromLocalInput } from '@/lib/format';
+import { parseJiraInput } from '@/lib/meeting-rules';
 import type { FormState } from '@/components/FormMessage';
 import type { BookingStatus, EventKind, TaskPriority, TaskStatus } from '@/lib/types';
 
@@ -96,6 +97,22 @@ export async function setTaskStatus(form: FormData) {
   const supabase = await createClient();
   const { data } = await supabase.from('tasks').update(patch).eq('id', id).select('group_id').maybeSingle();
   refresh(data?.group_id);
+}
+
+// Ô mã Jira trên đầu việc: dán link Jira hoặc gõ mã; để trống là bỏ mã.
+// Việc Cá nhân không gắn Jira (trigger tasks_jira chặn). Người được giao cũng gắn được.
+export async function saveTaskJira(input: { id: string; value: string }): Promise<FormState> {
+  const id = uuidOrNull(String(input.id ?? ''));
+  if (!id) return { error: 'Thiếu việc.' };
+  const parsed = parseJiraInput(String(input.value ?? '').slice(0, 1200));
+  if ('error' in parsed) return { error: parsed.error };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('tasks').update({ jira_key: parsed.key, jira_url: parsed.url }).eq('id', id).select('group_id').maybeSingle();
+  if (error && /jira_(key|url)/.test(error.message ?? '')) return { error: 'Cần chạy SQL thêm cột mã Jira cho đầu việc (20261114000001_jira_dau_viec.sql).' };
+  if (error) return { error: errText(error) };
+  if (!data) return { error: 'Bạn không có quyền sửa việc này.' };
+  refresh(data.group_id);
+  return { ok: parsed.key ? `Đã gắn mã ${parsed.key}.` : 'Đã bỏ mã Jira.' };
 }
 
 export async function deleteTask(form: FormData) {

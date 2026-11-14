@@ -126,6 +126,9 @@ export type Task = {
   completed_at: string | null;
   created_by: string | null;
   updated_at: string;
+  /** Mã Jira gắn với việc (không có ở việc Cá nhân); có thể chưa có cột nếu chưa chạy SQL. */
+  jira_key?: string | null;
+  jira_url?: string | null;
 };
 
 export type CalEvent = {

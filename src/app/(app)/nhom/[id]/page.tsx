@@ -11,6 +11,8 @@ import { OpenFromHash } from '@/components/OpenFromHash';
 import { KIND_LABEL, PERMS, groupTypeLabel, ROLE_LABEL, type Group, type GroupMember, type Profile } from '@/lib/types';
 import { fmtDateTime, fmtTime } from '@/lib/format';
 import { TaskList } from '@/components/TaskList';
+import { loadJiraBriefs } from '@/lib/jira/brief';
+import { serverEnv } from '@/lib/env';
 import { MemberAvatars, rankMember } from '@/components/MemberStrip';
 import { Avatar } from '@/components/Avatar';
 import { avatarUrls } from '@/lib/avatars';
@@ -173,6 +175,12 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   // Sửa thông tin việc: người có quyền Sửa trong nhóm, chủ mục Cá nhân (trigger tasks_check kiểm tra lại).
   const canEditTasks = !group.archived_at && (isPersonal ? group.owner_id === userId : canEdit);
   const editPeople = isPersonal ? undefined : memberOptions;
+  // Ô mã Jira: không có ở không gian Cá nhân; người sửa được việc hoặc người được giao gắn mã.
+  const jira = isPersonal ? undefined : {
+    briefs: await loadJiraBriefs(supabase, userId, (tasks ?? []).map((t) => t.jira_key)),
+    base: serverEnv.jiraBaseUrl(),
+    canSet: (t: Task) => !group.archived_at && (canEdit || t.assignee_id === userId),
+  };
   const pendingDel = new Set((delReqs ?? []).map((r) => `${r.item_type}:${r.item_id}`));
   const othersDelReqs = canDeleteHere ? (delReqs ?? []).filter((r) => r.requester_id !== userId) : [];
   const myDelReqs = (delReqs ?? []).filter((r) => r.requester_id === userId);
@@ -347,7 +355,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
           <div className="space-y-5">
             <section className="card">
               <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-semibold">Việc sắp đến hạn</h2><Link href={tabHref('viec')} className="link text-sm">{openTasks.length} việc mở</Link></div>
-              <TaskList tasks={openTasks.slice(0, 5)} name={name} empty="Chưa có việc đang mở." links={links} canNudge={canNudge} canAttach={canAttach} me={userId} canEdit={canEditTasks} people={editPeople} />
+              <TaskList tasks={openTasks.slice(0, 5)} name={name} empty="Chưa có việc đang mở." links={links} canNudge={canNudge} canAttach={canAttach} me={userId} canEdit={canEditTasks} people={editPeople} jira={jira} />
             </section>
             <section className="card">
               <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-semibold">Lịch sắp tới</h2><Link href={tabHref('lich')} className="link text-sm">Mở</Link></div>
@@ -361,11 +369,11 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         <div className="grid items-start gap-5 lg:grid-cols-[1fr_360px]">
           <section className="card">
             <h2 className="mb-3 text-lg font-semibold">Đầu việc ({openTasks.length} đang mở)</h2>
-            <TaskList tasks={openTasks} name={name} canDelete={canDeleteHere} empty="Chưa có việc đang mở." links={links} canNudge={canNudge} canAttach={canAttach} me={userId} canEdit={canEditTasks} people={editPeople} />
+            <TaskList tasks={openTasks} name={name} canDelete={canDeleteHere} empty="Chưa có việc đang mở." links={links} canNudge={canNudge} canAttach={canAttach} me={userId} canEdit={canEditTasks} people={editPeople} jira={jira} />
             {doneTasks.length > 0 && (
               <details className="mt-3">
                 <summary className="cursor-pointer text-sm muted">Đã hoàn thành ({doneTasks.length})</summary>
-                <TaskList tasks={doneTasks} name={name} canDelete={canDeleteHere} links={links} canAttach={canAttach} me={userId} canEdit={canEditTasks} people={editPeople} />
+                <TaskList tasks={doneTasks} name={name} canDelete={canDeleteHere} links={links} canAttach={canAttach} me={userId} canEdit={canEditTasks} people={editPeople} jira={jira} />
               </details>
             )}
           </section>
