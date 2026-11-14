@@ -90,7 +90,6 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" /></svg>
               Xuất Excel
             </Link>
-            <Link href="/jira/cay" className="btn-secondary">Cây công việc</Link>
             <Link href={q({ muc: 'ket-noi' })} className="btn-secondary">Cập nhật dữ liệu</Link>
           </>
         ) : undefined}
@@ -144,6 +143,7 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
           { key: 'worklog', href: q({ muc: 'worklog' }), label: 'Worklog' },
           { key: 'tat-ca', href: q({ muc: 'tat-ca' }), label: 'Tất cả mã Jira', count: issues.length },
         ] : []),
+        { key: 'cay', href: '/jira/cay', label: 'Cây công việc' },
         { key: 'bao-cao', href: q({ muc: 'bao-cao' }), label: 'Báo cáo Excel' },
         { key: 'ket-noi', href: q({ muc: 'ket-noi' }), label: 'Kết nối, cập nhật' },
       ]} />

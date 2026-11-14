@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
 import { serverEnv } from '@/lib/env';
 import { fmtDate, vnDay } from '@/lib/format';
+import { LinkTask, UnlinkTask, type PickTask } from './LinkTask';
 
 export const metadata: Metadata = { title: 'Cây công việc Jira' };
 
@@ -27,7 +28,7 @@ type Search = { dv?: string; q?: string; xem?: string };
 // (bảng jira_tree: chỉ mã, tên, loại, trạng thái, người được giao, hạn). Kèm các đầu việc trên web đang gắn mã đó.
 export default async function JiraTreePage({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
-  const { supabase } = await requireSession();
+  const { supabase, userId } = await requireSession();
   const { data, error } = await supabase
     .from('jira_tree')
     .select('issue_key, summary, issue_type, status, status_category, project_key, project_name, assignee_name, due_date, parent_key, updated_at_jira')
@@ -49,6 +50,24 @@ export default async function JiraTreePage({ searchParams }: { searchParams: Pro
     : { data: [] as WebTask[] };
   const webOf = new Map<string, WebTask[]>();
   for (const t of webTasks ?? []) webOf.set(t.jira_key, [...(webOf.get(t.jira_key) ?? []), t]);
+
+  // Việc để chọn link: việc đang mở mà tôi thực hiện hoặc đã tạo, không phải việc Cá nhân, chưa gắn mã Jira.
+  const { data: myTasks } = nodes.length
+    ? await supabase.from('tasks').select('id, group_id, title, jira_key, assignee_id, created_by')
+      .or(`assignee_id.eq.${userId},created_by.eq.${userId}`).neq('status', 'done')
+      .order('due_date', { ascending: true, nullsFirst: false }).limit(1000)
+      .returns<(WebTask & { jira_key: string | null })[]>()
+    : { data: [] as (WebTask & { jira_key: string | null })[] };
+  const groupIds = [...new Set([...(webTasks ?? []), ...(myTasks ?? [])].map((t) => t.group_id))];
+  const { data: groupRows } = groupIds.length
+    ? await supabase.from('groups').select('id, name, owner_id').in('id', groupIds)
+    : { data: [] as { id: string; name: string; owner_id: string | null }[] };
+  const groupName = new Map((groupRows ?? []).map((g) => [g.id, g.name as string]));
+  const personal = new Set((groupRows ?? []).filter((g) => g.owner_id).map((g) => g.id));
+  const mine = new Set((myTasks ?? []).map((t) => t.id));
+  const pickable: PickTask[] = (myTasks ?? [])
+    .filter((t) => !t.jira_key && !personal.has(t.group_id))
+    .map((t) => ({ id: t.id, label: t.title, group: groupName.get(t.group_id) ?? '' }));
 
   const showAll = sp.xem === 'tat-ca';
   const q = (sp.q ?? '').trim().toLowerCase();
@@ -81,57 +100,64 @@ export default async function JiraTreePage({ searchParams }: { searchParams: Pro
     return s ? `/jira/cay?${s}` : '/jira/cay';
   };
 
-  const row = (n: Node, depth: number): React.ReactNode => {
-    const children = depth > 6 ? [] : kids.get(n.issue_key) ?? [];
+  // Mỗi mã một dòng, thụt lề theo cấp; cột phải là Việc trên web gắn mã đó (hoặc cảnh báo + ô chọn Việc để link).
+  const rows = (n: Node, depth: number): React.ReactNode[] => {
+    const children = depth > 6 ? [] : (kids.get(n.issue_key) ?? [])
+      .slice()
+      .sort((a, b) => Number(a.status_category === 'done') - Number(b.status_category === 'done') || (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'));
     const done = n.status_category === 'done';
     const overdue = !done && n.due_date && n.due_date < today;
     const web = webOf.get(n.issue_key) ?? [];
-    const sub = (
-      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        {browse(n.issue_key)
-          ? <a href={browse(n.issue_key)!} target="_blank" rel="noopener noreferrer" className="font-mono text-xs font-medium text-brand-600 hover:underline dark:text-brand-300">{n.issue_key}</a>
-          : <span className="font-mono text-xs font-medium">{n.issue_key}</span>}
-        {n.issue_type && <span className="chip px-1.5 py-0 text-[11px]">{n.issue_type}</span>}
-        <span className={`text-sm ${done ? 'line-through muted' : ''}`}>{n.summary}</span>
-        <span className="text-xs muted">
-          {[n.status, n.assignee_name].filter(Boolean).join(' · ')}
-          {n.due_date && <span className={overdue ? ' font-semibold text-orange-600 dark:text-orange-400' : ''}> · Hạn {fmtDate(n.due_date)}</span>}
-        </span>
-        {web.map((t) => (
-          <Link key={t.id} href={`/nhom/${t.group_id}`} className="chip px-1.5 py-0 text-[11px] text-emerald-700 hover:underline dark:text-emerald-300" title="Đầu việc trên web gắn mã này">✓ {t.title}</Link>
-        ))}
-      </div>
-    );
-    if (!children.length) return <li key={n.issue_key} className="py-1">{sub}</li>;
-    const all = walk(n, depth).slice(1);
+    const all = children.length ? walk(n, depth).slice(1) : [];
     const nDone = all.filter((x) => x.status_category === 'done').length;
-    return (
-      <li key={n.issue_key} className="py-1">
-        <details open={depth > 0 || Boolean(q)}>
-          <summary className="cursor-pointer list-inside">
-            <span className="inline-flex flex-wrap items-baseline gap-2">
-              {sub}
-              <span className="text-xs muted tabular-nums">{nDone}/{all.length} việc con xong</span>
-            </span>
-          </summary>
-          <ul className="ml-3 border-l border-slate-200 pl-4 dark:border-slate-700">
-            {children
-              .sort((a, b) => Number(a.status_category === 'done') - Number(b.status_category === 'done') || (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'))
-              .map((c) => row(c, depth + 1))}
-          </ul>
-        </details>
+    const line = (
+      <li key={n.issue_key} className="grid gap-x-4 gap-y-1 py-2 md:grid-cols-[minmax(0,1fr)_19rem]">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5" style={{ paddingLeft: `${depth * 1.5}rem` }}>
+          {depth > 0 && <span className="text-slate-300 dark:text-slate-600" aria-hidden="true">└</span>}
+          {browse(n.issue_key)
+            ? <a href={browse(n.issue_key)!} target="_blank" rel="noopener noreferrer" className="font-mono text-xs font-medium text-brand-600 hover:underline dark:text-brand-300">{n.issue_key}</a>
+            : <span className="font-mono text-xs font-medium">{n.issue_key}</span>}
+          {n.issue_type && <span className="chip px-1.5 py-0 text-[11px]">{n.issue_type}</span>}
+          <span className={`text-sm ${done ? 'line-through muted' : depth === 0 && children.length ? 'font-semibold' : ''}`}>{n.summary}</span>
+          <span className="text-xs muted">
+            {[n.status, n.assignee_name].filter(Boolean).join(' · ')}
+            {n.due_date && <span className={overdue ? ' font-semibold text-orange-600 dark:text-orange-400' : ''}> · Hạn {fmtDate(n.due_date)}</span>}
+            {children.length > 0 && <span className="tabular-nums"> · {nDone}/{all.length} việc con xong</span>}
+          </span>
+        </div>
+        <div className="min-w-0 text-xs">
+          {web.length > 0 ? (
+            <ul className="space-y-0.5">
+              {web.map((t) => (
+                <li key={t.id} className="flex items-start gap-1">
+                  <Link href={`/nhom/${t.group_id}`} className="min-w-0 flex-1 text-emerald-700 hover:underline dark:text-emerald-300" title={groupName.get(t.group_id) ?? ''}>✓ {t.title}</Link>
+                  {mine.has(t.id) && <UnlinkTask taskId={t.id} />}
+                </li>
+              ))}
+            </ul>
+          ) : done ? (
+            <span className="muted">Đã xong, chưa link Việc</span>
+          ) : (
+            <div className="space-y-1">
+              <span className="inline-block rounded-md bg-orange-50 px-1.5 py-0.5 font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">⚠ Chưa link Việc</span>
+              {pickable.length > 0 && <LinkTask jiraKey={n.issue_key} tasks={pickable} />}
+            </div>
+          )}
+        </div>
       </li>
     );
+    return [line, ...children.flatMap((c) => rows(c, depth + 1))];
   };
+  const unlinked = shownRoots.flatMap(({ all }) => all).filter((x) => x.status_category !== 'done' && !webOf.has(x.issue_key)).length;
 
   const missingTable = error && /jira_tree/.test(error.message ?? '');
   return (
     <>
       <PageHead
-        eyebrow="Jira"
+        eyebrow={<Link href="/jira" className="hover:underline">← Jira của tôi</Link>}
         title="Cây công việc Jira"
         sub="Task của các đơn vị, Work và Sub-task bên dưới. Dữ liệu được góp mỗi khi ai đó bấm Đồng bộ Jira: gồm việc của người đó, việc cha và các việc con. Chỉ có mã, tên, trạng thái, người được giao và hạn."
-        actions={<Link href="/jira?muc=ket-noi" className="btn-secondary">Đồng bộ Jira</Link>}
+        actions={<><Link href="/jira" className="btn-secondary">Jira của tôi</Link><Link href="/jira?muc=ket-noi" className="btn-secondary">Đồng bộ Jira</Link></>}
       />
       {missingTable ? (
         <p role="alert" className="rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">
@@ -151,6 +177,11 @@ export default async function JiraTreePage({ searchParams }: { searchParams: Pro
               {showAll ? 'Chỉ cây còn việc chưa xong' : 'Hiện cả cây đã xong'}
             </Link>
           </form>
+          {unlinked > 0 && (
+            <p role="alert" className="mb-4 rounded-xl bg-orange-50 px-4 py-2.5 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">
+              <b>{unlinked} mã Jira chưa xong chưa link với Việc nào trên web.</b> Chọn Việc ở cột bên phải để link; Việc đã có mã khác thì sửa ở trang Việc.
+            </p>
+          )}
           {!nodes.length ? (
             <section className="card"><p className="text-sm muted">Chưa có dữ liệu. Bấm nút Đồng bộ Jira trên trang Jira để góp cây công việc quanh việc của bạn.</p></section>
           ) : !groups.size ? (
@@ -160,7 +191,7 @@ export default async function JiraTreePage({ searchParams }: { searchParams: Pro
               {[...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], 'vi')).map(([unit, list]) => (
                 <section key={unit} className="card">
                   <h2 className="mb-2 text-lg font-semibold">{unit} <span className="text-sm font-normal muted">({list.length})</span></h2>
-                  <ul className="divide-y divide-slate-100 dark:divide-slate-800">{list.map(({ r }) => row(r, 0))}</ul>
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800">{list.flatMap(({ r }) => rows(r, 0))}</ul>
                 </section>
               ))}
             </div>
