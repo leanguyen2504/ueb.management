@@ -63,7 +63,10 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', :sua, false);
 select t.ok(t.count('select * from public.notifications where kind = ''delete_decided''') = 2, 'người gửi nhận kết quả');
 -- Rút yêu cầu.
+-- (Thành viên nhóm cha nay xem được không gian con, nên thử bằng người ngoài.)
+select set_config('request.jwt.claim.sub', :ngoai, false);
 select t.denied(format('select public.request_delete(%L, %L)', 'group', current_setting('t.c')), 'không thấy không gian thì không gửi được');
+select set_config('request.jwt.claim.sub', :sua, false);
 insert into public.tasks (group_id, title) values (current_setting('t.root')::uuid, 'Việc giữ lại');
 select set_config('t.task2', (select id from public.tasks where title = 'Việc giữ lại')::text, false);
 select public.request_delete('task', current_setting('t.task2')::uuid);
