@@ -90,6 +90,7 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" /></svg>
               Xuất Excel
             </Link>
+            <Link href="/jira/cay" className="btn-secondary">Cây công việc</Link>
             <Link href={q({ muc: 'ket-noi' })} className="btn-secondary">Cập nhật dữ liệu</Link>
           </>
         ) : undefined}

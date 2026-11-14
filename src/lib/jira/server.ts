@@ -53,6 +53,7 @@ export function parseSnapshot(body: unknown): JiraSnapshot | null {
     worklogs: s.worklogs,
     mentions: s.mentions,
     customFieldNames: Array.isArray(s.customFieldNames) ? s.customFieldNames.slice(0, 300) : [],
+    tree: Array.isArray(s.tree) ? s.tree.slice(0, 5000) : [],
     fetchedAt: String(s.fetchedAt ?? new Date().toISOString()),
   };
 }
@@ -61,6 +62,11 @@ export async function saveSnapshot(userId: string, source: 'bookmarklet' | 'serv
   const admin = createAdminClient();
   const { error } = await admin.rpc('jira_save_snapshot', { p_user: userId, p_source: source, p_snap: snap });
   if (error) throw new Error(`Không lưu được dữ liệu Jira: ${error.message}`);
+  // Cây công việc dùng chung: lỗi (ví dụ chưa chạy SQL tạo bảng jira_tree) không làm hỏng lần đồng bộ.
+  if (snap.tree?.length) {
+    const tree = await admin.rpc('jira_save_tree', { p_user: userId, p_tree: snap.tree });
+    if (tree.error) console.error('jira_save_tree', tree.error.message);
+  }
 }
 
 async function recordError(userId: string, message: string) {

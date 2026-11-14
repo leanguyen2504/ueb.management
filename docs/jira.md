@@ -79,3 +79,10 @@ Hệ thống chấm công (`https://chamcong4lan.ueb.edu.vn/ChamCong/BaoCao`) n�
 - Cột `tasks.jira_key`, `tasks.jira_url` (migration `20261114000001_jira_dau_viec.sql`); trigger `tasks_jira` chặn gắn mã cho việc Cá nhân. Kiểm thử: `supabase/tests/99_zzzzz_jira_dau_viec.sql`.
 - Sau khi gắn, trang Việc và trang nhóm đối chiếu mã với **Jira của tôi** của chính người xem (`src/lib/jira/brief.ts`) để hiện loại (Task/Work/Sub-task), trạng thái, việc cha ("thuộc …": việc cha của sub-task hoặc liên kết Gantt *is child task of*), số việc con xong, giờ mình đã log. Mã không có trong dữ liệu của người xem thì chỉ hiện mã và link.
 - Hệ thống không tạo hay sửa issue trên Jira.
+
+## Cây công việc Jira (dùng chung)
+
+- Trang `/jira/cay` (menu tài khoản → **Cây công việc Jira**) hiện Task của các đơn vị > Work > Sub-task, chia theo dự án Jira (đơn vị); lọc theo đơn vị, tìm theo mã/tên/người làm, ẩn cây đã xong. Mỗi dòng có các đầu việc trên web đang gắn mã đó.
+- Mỗi lần ai đó đồng bộ Jira, `collectMyJira` đọc thêm việc cha (cha của sub-task, hoặc liên kết Gantt *is child task of*) và các việc con (*is parent task of*, sub-task), tối đa 3 vòng và 800 mã, rồi ghi vào bảng dùng chung `jira_tree` qua `jira_save_tree` (migration `20261114000002_cay_cong_viec_jira.sql`). Lỗi ở bước này không làm hỏng lần đồng bộ.
+- `jira_tree` chỉ có mã, tên, loại, trạng thái, đơn vị, người được giao, hạn, việc cha; không có worklog, comment, mô tả; bỏ đơn nghỉ phép, làm ngoài giờ. Mọi tài khoản đang hoạt động xem được. Mã không ai đồng bộ lại trong 120 ngày tự bị xóa. Kiểm thử: `supabase/tests/99_zzzzzz_cay_cong_viec_jira.sql`.
+- Ô mã Jira trên đầu việc cũng dùng `jira_tree` khi mã không có trong Jira của tôi, và có link **Xem cây**.
