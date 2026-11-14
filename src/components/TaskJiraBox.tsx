@@ -71,7 +71,7 @@ export function TaskJiraBox({ taskId, jiraKey, href, brief, canEdit, base }: {
   if (!open && !editing) {
     return (
       <button type="button" className="mt-1 text-xs text-slate-400 hover:text-brand-600 hover:underline dark:hover:text-brand-300"
-        onClick={() => { setOpen(true); setTimeout(() => input.current?.focus(), 0); }}>+ Gắn mã Jira</button>
+        onClick={() => { setOpen(true); setTimeout(() => input.current?.focus(), 0); }}>+ Kết nối Jira</button>
     );
   }
 

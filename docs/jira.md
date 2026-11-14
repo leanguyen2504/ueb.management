@@ -75,7 +75,7 @@ Hệ thống chấm công (`https://chamcong4lan.ueb.edu.vn/ChamCong/BaoCao`) n�
 
 ## Mã Jira trên đầu việc
 
-- Mỗi đầu việc (cả việc **Cá nhân**: mã gắn ở đó chỉ chủ thấy) có dòng **+ Gắn mã Jira**: dán link Jira hoặc gõ mã (ví dụ `KKTPT-7377`), Enter là lưu; để trống rồi Enter là bỏ mã. Người sửa được việc và người được giao đều gắn được.
+- Mỗi đầu việc (cả việc **Cá nhân**: mã gắn ở đó chỉ chủ thấy) có dòng **+ Kết nối Jira**: dán link Jira hoặc gõ mã (ví dụ `KKTPT-7377`), Enter là lưu; để trống rồi Enter là bỏ mã. Người sửa được việc và người được giao đều gắn được.
 - Cột `tasks.jira_key`, `tasks.jira_url` (migration `20261114000001_jira_dau_viec.sql`); trigger `tasks_jira` bỏ link khi bỏ mã (từ `20261114000004_jira_viec_ca_nhan.sql` cho gắn cả việc Cá nhân). Kiểm thử: `supabase/tests/99_zzzzz_jira_dau_viec.sql`.
 - Sau khi gắn, trang Việc và trang nhóm đối chiếu mã với **Jira của tôi** của chính người xem (`src/lib/jira/brief.ts`) để hiện loại (Task/Work/Sub-task), trạng thái, việc cha ("thuộc …": việc cha của sub-task hoặc liên kết Gantt *is child task of*), số việc con xong, giờ mình đã log. Mã không có trong dữ liệu của người xem thì chỉ hiện mã và link.
 - Hệ thống không tạo hay sửa issue trên Jira.
