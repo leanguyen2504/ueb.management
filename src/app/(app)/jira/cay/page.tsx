@@ -51,16 +51,17 @@ export default async function JiraTreePage({ searchParams }: { searchParams: Pro
   const webOf = new Map<string, WebTask[]>();
   for (const t of webTasks ?? []) webOf.set(t.jira_key, [...(webOf.get(t.jira_key) ?? []), t]);
 
-  // Việc để chọn link: việc đang mở, chưa gắn mã Jira, không phải việc Cá nhân (RLS: chỉ việc tôi xem được;
-  // cơ sở dữ liệu kiểm tra quyền khi lưu). Chia theo đơn vị trên web khớp với dự án Jira, rồi theo nhóm con.
+  // Việc để chọn link: việc chưa gắn mã Jira (cả việc đã xong), không phải việc Cá nhân (RLS: chỉ việc tôi xem được;
+  // cơ sở dữ liệu kiểm tra quyền khi lưu).
   type G = { id: string; name: string; parent_id: string | null; owner_id: string | null };
+  type PickTask = { id: string; group_id: string; title: string; status: string };
   const [{ data: openTasks }, { data: groupRows }] = nodes.length
     ? await Promise.all([
-      supabase.from('tasks').select('id, group_id, title').is('jira_key', null).neq('status', 'done')
-        .order('due_date', { ascending: true, nullsFirst: false }).limit(3000).returns<{ id: string; group_id: string; title: string }[]>(),
+      supabase.from('tasks').select('id, group_id, title, status').is('jira_key', null)
+        .order('due_date', { ascending: true, nullsFirst: false }).limit(3000).returns<PickTask[]>(),
       supabase.from('groups').select('id, name, parent_id, owner_id').is('archived_at', null).limit(3000).returns<G[]>(),
     ])
-    : [{ data: [] as { id: string; group_id: string; title: string }[] }, { data: [] as G[] }];
+    : [{ data: [] as PickTask[] }, { data: [] as G[] }];
   const webGroups = new Map((groupRows ?? []).map((g) => [g.id, g]));
   const groupName = new Map((groupRows ?? []).map((g) => [g.id, g.name]));
   const mine = new Set((webTasks ?? []).filter((t) => t.assignee_id === userId || t.created_by === userId).map((t) => t.id));
@@ -79,25 +80,59 @@ export default async function JiraTreePage({ searchParams }: { searchParams: Pro
     const p = norm(projectName);
     return unitRoots.find((g) => norm(g.name) === p) ?? unitRoots.find((g) => { const n = norm(g.name); return n.length > 3 && (p.includes(n) || n.includes(p)); }) ?? null;
   };
-  const optionsFor = new Map<string, PickGroup[]>();
-  const pickFor = (projectName: string | null): PickGroup[] => {
+  // Danh sách chọn Việc: mọi Việc chưa gắn mã (cả Việc đã xong), ở mọi đơn vị, vì một mã Jira của đơn vị này
+  // có thể ứng với Việc của đơn vị khác (ví dụ mã TCTTD cho Việc ở SITE › Khóa AI).
+  // Thứ tự: "Gợi ý" (tên gần với mã Jira), rồi nhóm con của đơn vị khớp tên, rồi các đơn vị khác.
+  const STOP = new Set(['va', 've', 'cua', 'cho', 'cac', 'nhung', 'mot', 'the', 'lam', 'tao', 'theo', 'tai', 'trong', 'voi', 'den', 'tu', 'la', 'de', 'khi', 'nay', 'do', 'o', 'viec', 'cong', 'gui', 'hoan', 'thien', 'ngan', 'han', 'dao']);
+  const words = (v: string) => norm(v).split(' ').filter((w) => w.length >= 2 && !STOP.has(w));
+  const pairs = (ws: string[]) => new Set(ws.slice(1).map((w, k) => `${ws[k]} ${w}`));
+  const candidates = (openTasks ?? []).flatMap((t) => {
+    const c = chain(t.group_id);
+    if (!c.length || c[0].owner_id) return [];
+    const ws = words(`${t.title} ${c.slice(1).map((g) => g.name).join(' ')}`);
+    return [{ t, c, done: t.status === 'done', label: `${t.status === 'done' ? '✓ ' : ''}${t.title}`, ws: new Set(ws), ps: pairs(words(t.title)), gps: c.slice(1).map((g) => words(g.name).join(' ')) }];
+  });
+  const byOpen = (a: { done: boolean }, b: { done: boolean }) => Number(a.done) - Number(b.done);
+  const baseFor = new Map<string, PickGroup[]>();
+  const unitLists = (projectName: string | null): PickGroup[] => {
     const key = projectName ?? '';
-    if (optionsFor.has(key)) return optionsFor.get(key)!;
+    if (baseFor.has(key)) return baseFor.get(key)!;
     const unit = unitGroup(projectName);
-    const byPath = new Map<string, PickGroup>();
-    for (const t of openTasks ?? []) {
-      const c = chain(t.group_id);
-      if (!c.length || c[0].owner_id) continue;
-      if (unit && c[0].id !== unit.id) continue;
-      // Trong đơn vị khớp: bỏ tên đơn vị, chỉ ghi nhóm con; không khớp: ghi đủ đường dẫn.
-      const label = (unit ? c.slice(1) : c).map((g) => g.name).join(' › ') || (unit ? 'Việc chung của đơn vị' : c[0].name);
-      const grp = byPath.get(label) ?? { label, tasks: [] };
-      grp.tasks.push({ id: t.id, label: t.title });
+    const byPath = new Map<string, PickGroup & { own: boolean }>();
+    for (const x of candidates.slice().sort(byOpen)) {
+      const own = !!unit && x.c[0].id === unit.id;
+      // Đơn vị khớp: chỉ ghi nhóm con; đơn vị khác: ghi đủ đường dẫn.
+      const label = own ? (x.c.slice(1).map((g) => g.name).join(' › ') || 'Việc chung của đơn vị') : x.c.map((g) => g.name).join(' › ');
+      const grp = byPath.get(label) ?? { label, tasks: [], own };
+      grp.tasks.push({ id: x.t.id, label: x.label });
       byPath.set(label, grp);
     }
-    const list = [...byPath.values()].sort((x, y) => x.label.localeCompare(y.label, 'vi'));
-    optionsFor.set(key, list);
+    const list = [...byPath.values()]
+      .sort((a, b) => Number(b.own) - Number(a.own) || a.label.localeCompare(b.label, 'vi'))
+      .map(({ label, tasks }) => ({ label, tasks }));
+    baseFor.set(key, list);
     return list;
+  };
+  const pickFor = (n: Node): PickGroup[] => {
+    const parent = n.parent_key ? byKey.get(n.parent_key) : undefined;
+    const ws = words(n.summary);
+    const ps = pairs(ws);
+    const own = new Set(ws);
+    const up = new Set(parent ? words(parent.summary) : []);
+    const scored = candidates.map((x) => {
+      let score = 0;
+      for (const w of x.ws) score += own.has(w) ? 1 : up.has(w) ? 0.5 : 0;
+      for (const pr of x.ps) if (ps.has(pr)) score += 2;
+      // Tên nhóm con (ví dụ "Khóa AI", "Đề tài Thái Nguyên") nằm trong tên mã Jira: rất có thể đúng chỗ.
+      for (const g of x.gps) if (g && ` ${ws.join(' ')} `.includes(` ${g} `)) score += 3;
+      return { x, score };
+    }).filter((s) => s.score >= 2)
+      .sort((a, b) => b.score - a.score || byOpen(a.x, b.x))
+      .slice(0, 8);
+    const hint: PickGroup[] = scored.length
+      ? [{ label: 'Gợi ý', tasks: scored.map(({ x }) => ({ id: x.t.id, label: `${x.label} (${x.c.slice(1).map((g) => g.name).join(' › ') || x.c[0].name})` })) }]
+      : [];
+    return [...hint, ...unitLists(n.project_name)];
   };
 
   const showAll = sp.xem === 'tat-ca';
@@ -166,12 +201,12 @@ export default async function JiraTreePage({ searchParams }: { searchParams: Pro
                 </li>
               ))}
             </ul>
-          ) : done ? (
-            <span className="muted">Đã xong, chưa link Việc</span>
           ) : (
             <div className="space-y-1">
-              <span className="inline-block rounded-md bg-orange-50 px-1.5 py-0.5 font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">⚠ Chưa link Việc</span>
-              {pickFor(n.project_name).length > 0 && <LinkTask jiraKey={n.issue_key} groups={pickFor(n.project_name)} />}
+              {done
+                ? <span className="muted">Đã xong, chưa link Việc</span>
+                : <span className="inline-block rounded-md bg-orange-50 px-1.5 py-0.5 font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">⚠ Chưa link Việc</span>}
+              {candidates.length > 0 && <LinkTask jiraKey={n.issue_key} groups={pickFor(n)} />}
             </div>
           )}
         </div>
