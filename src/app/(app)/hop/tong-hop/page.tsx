@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { meetingJiraHref } from '@/lib/meetings';
 import Link from 'next/link';
+import { FileLink } from '@/components/FileLink';
 import { requireSession } from '@/lib/session';
 import { HopTabs, PageHead } from '@/components/PageHead';
 import { addDays, fmtDate, fmtTime, vnDay } from '@/lib/format';
@@ -22,7 +23,7 @@ function Links({ items }: { items: SummaryLink[] }) {
   if (!items.length) return <span className="muted">Chưa có</span>;
   return (
     <ul className="space-y-0.5">
-      {items.map((l) => <li key={l.url}><a href={l.url} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline dark:text-brand-300">{l.label} ↗</a></li>)}
+      {items.map((l) => <li key={l.url}><FileLink href={l.url} label={l.label} className="text-brand-600 hover:underline dark:text-brand-300">{l.label} ↗</FileLink></li>)}
     </ul>
   );
 }

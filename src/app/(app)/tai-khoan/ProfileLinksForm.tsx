@@ -6,6 +6,7 @@ import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { FormMessage, type FormState } from '@/components/FormMessage';
+import { FileLink } from '@/components/FileLink';
 import { PROFILE_FILE_ACCEPT, PROFILE_FILE_MAX, fileHref, fileSize, hostOf, linkTitle, type ProfileLink } from '@/lib/profile-links';
 import { addProfileLink, attachProfileFiles, moveProfileLink, prepareProfileUpload, removeProfileLink } from './actions';
 
@@ -23,7 +24,7 @@ function ItemRow({ item, first, last }: { item: ProfileLink; first: boolean; las
   return (
     <li className={`flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm dark:border-slate-700 ${pending ? 'opacity-50' : ''}`}>
       <div className="min-w-0 flex-1">
-        <a href={href} target="_blank" rel={item.file_path ? 'noopener' : 'noopener noreferrer'} className="block truncate font-medium hover:underline">{linkTitle(item)}</a>
+        <FileLink href={href} label={item.file_name || linkTitle(item)} className="block truncate font-medium hover:underline">{linkTitle(item)}</FileLink>
         {sub && <span className="block truncate text-xs muted">{sub}</span>}
       </div>
       <button type="button" className="rounded px-1.5 py-0.5 text-xs muted hover:bg-slate-100 disabled:opacity-30 dark:hover:bg-slate-800" disabled={first || pending} aria-label="Đưa lên" title="Đưa lên" onClick={() => start(() => moveProfileLink(item.id, -1))}>↑</button>
