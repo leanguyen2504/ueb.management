@@ -4,14 +4,14 @@ import { requireSession } from '@/lib/session';
 import { HopTabs, PageHead } from '@/components/PageHead';
 import { addDays, dayStartIso, fmtDate, fmtDateTime, fmtTime, vnDay, weekdayShort } from '@/lib/format';
 import { isGoogleCalendarEnabled } from '@/lib/google-calendar';
-import { areaOfItem, areasOf, isMyMeeting, loadAreas, loadMeetings, meetingJiraHref, meetingProgress, type Meeting, type MeetingItem, type WorkArea } from '@/lib/meetings';
-import { DOC_TYPES, STATUS_LABEL, autoStatus, deadlines, isSourceNote, type Deadline } from '@/lib/meeting-rules';
+import { areaOfItem, isMyFiledMeeting, loadAreas, loadMeetings, meetingJiraHref, meetingProgress, type Meeting, type MeetingItem, type WorkArea } from '@/lib/meetings';
+import { DOC_TYPES, STATUS_LABEL, deadlines, isSourceNote, type Deadline } from '@/lib/meeting-rules';
 import { meetingAnchor } from '@/lib/meeting-anchor';
 import { loadPeople } from '@/lib/people';
 import { serverEnv } from '@/lib/env';
 import { DropBox } from './DropBox';
 import { JiraBox } from './JiraBox';
-import { AddItemForm, EditItemForm, RecordForm, type PersonOption } from './MeetingForms';
+import { EditItemForm } from './MeetingForms';
 import { deleteMeetingItem } from './actions';
 import { OpenFromHash } from '@/components/OpenFromHash';
 
@@ -46,10 +46,7 @@ type View = {
   canFile: boolean;
   userId: string;
   name: (id: string | null) => string;
-  people: PersonOption[];
   areas: WorkArea[];
-  // Tên hiển thị của một email đầu mối (người đã đăng nhập thì hiện tên).
-  emailName: (email: string) => string;
   jiraBase: string | null;
 };
 
@@ -88,20 +85,15 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Pro
   const myGroups = (groups ?? []).filter((g) => mine.has(g.id));
 
   let shown = meetings;
-  const myAreas = areasOf(areas, profile.email);
-  if (mineOnly) shown = shown.filter((m) => isMyMeeting(m, userId, myGroups, myAreas));
+  if (mineOnly) shown = shown.filter((m) => isMyFiledMeeting(m, { userId, fullName: profile.full_name, isPrincipal: ctx.role === 'principal', groups: myGroups }));
   if (missingOnly) shown = shown.filter((m) => meetingProgress(m).missing > 0);
 
   const known = new Map((people ?? []).map((p) => [p.id as string, (p.full_name || p.email) as string]));
-  const missing = meetings.flatMap((m) => m.items.map((i) => i.assignee_id)).filter((id): id is string => Boolean(id) && !known.has(id!));
+  const missing = meetings.flatMap((m) => m.items.map((i) => i.updated_by)).filter((id): id is string => Boolean(id) && !known.has(id!));
   const extra = missing.length ? (await loadPeople(supabase, missing)).name : () => 'Người dùng';
   const name = (id: string | null | undefined) => (id ? known.get(id) || extra(id) : '');
-  const personOptions: PersonOption[] = (people ?? []).filter((p) => p.id !== userId).map((p) => ({ id: p.id, label: p.full_name || p.email }));
-  const partyNames = [...new Set([...areas.map((a) => a.name), ...(groups ?? []).map((g) => g.name as string), ...meetings.flatMap((m) => m.items.map((i) => i.party ?? ''))].filter(Boolean))];
-  const byEmail = new Map((people ?? []).map((p) => [String(p.email).toLowerCase(), p.full_name || p.email]));
   const view: View = {
-    canFile, userId, name, people: personOptions, areas,
-    emailName: (e) => byEmail.get(e) ?? e,
+    canFile, userId, name, areas,
     jiraBase: serverEnv.jiraBaseUrl(),
   };
 
@@ -122,7 +114,6 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Pro
         sub={<>Tài liệu trước họp (muộn nhất 24 giờ trước họp) và biên bản sau họp (muộn nhất 24 giờ sau họp). Kéo thả tệp vào ô của từng buổi họp, hoặc gắn link Google Drive. {missingTotal > 0 && <span className="font-medium text-amber-700 dark:text-amber-300">{missingTotal} mục đang chờ gửi.</span>}</>}
       />
       <OpenFromHash />
-      <datalist id="ds-ben">{partyNames.map((p) => <option key={p} value={p} />)}</datalist>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Link href={href(sp, { ngay: addDays(day, -step) })} className="btn-secondary" aria-label="Trước">‹</Link>
@@ -137,7 +128,7 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Pro
         <Toggle on={mineOnly} to={href(sp, { loc: 'cua-toi' })}>Của tôi</Toggle>
         <Toggle on={missingOnly} to={href(sp, { thieu: missingOnly ? undefined : '1' })}>Còn thiếu</Toggle>
       </div>
-      {mineOnly && <p className="mb-3 text-xs muted">"Của tôi": buổi họp có bên thuộc mảng tôi là đầu mối{myAreas.length ? ` (${myAreas.map((a) => a.name).join(', ')})` : ''}, tôi được giao đôn đốc, hoặc có nhóm tôi tham gia.</p>}
+      {mineOnly && <p className="mb-3 text-xs muted">"Của tôi": buổi họp có tên tôi{ctx.role === 'principal' ? ' (hoặc "Hiệu trưởng", "HT")' : ''} hoặc tên nhóm tôi tham gia trong tên, thành phần buổi họp, và buổi họp tôi đã tự gắn tài liệu, biên bản.</p>}
 
       {shown.length === 0 ? (
         <p className="card text-sm muted">{meetings.length ? 'Không có buổi họp nào khớp bộ lọc.' : 'Không có buổi họp nào trong khoảng này.'}</p>
@@ -182,22 +173,11 @@ function StatusChips({ m }: { m: Meeting }) {
   );
 }
 
-function Focals({ area, v }: { area: WorkArea | null; v: View }) {
-  if (!area || (!area.primary_email && !area.coordinator_emails.length)) return null;
-  return (
-    <>
-      {area.primary_email && <>Đầu mối: {v.emailName(area.primary_email)}</>}
-      {area.coordinator_emails.length > 0 && <> · Phối hợp: {area.coordinator_emails.map(v.emailName).join(', ')}</>}
-    </>
-  );
-}
-
 function ItemRow({ it, v }: { it: MeetingItem; v: View }) {
   const area = areaOfItem(v.areas, it);
   const meta = [
     it.doc_type ? DOC_TYPES[it.doc_type] : null,
-    it.assignee_id ? `Đôn đốc: ${it.assignee_id === v.userId ? 'tôi' : v.name(it.assignee_id)}` : null,
-    it.url && it.updated_by ? `Cập nhật: ${it.updated_by === v.userId ? 'tôi' : v.name(it.updated_by)}, ${fmtDateTime(it.updated_at)}` : null,
+    it.url && it.updated_by ? `Người gắn: ${it.updated_by === v.userId ? 'tôi' : v.name(it.updated_by)}, ${fmtDateTime(it.updated_at)}` : null,
     isSourceNote(it.note) ? null : it.note,
   ].filter(Boolean);
   return (
@@ -205,7 +185,7 @@ function ItemRow({ it, v }: { it: MeetingItem; v: View }) {
       <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            {(it.party || area) && <span className="font-medium">{it.party || area?.name}</span>}
+            {!it.url && (it.party || area) && <span className="font-medium">{it.party || area?.name}</span>}
             {it.url ? (
               <>
                 <a href={it.url} target="_blank" rel="noopener noreferrer" className="link">
@@ -224,7 +204,6 @@ function ItemRow({ it, v }: { it: MeetingItem; v: View }) {
           </div>
           <div className="text-xs muted">
             {meta.join(' · ')}
-            {area && (area.primary_email || area.coordinator_emails.length > 0) && <div><Focals area={area} v={v} /></div>}
           </div>
         </div>
         {v.canFile && (
@@ -232,7 +211,7 @@ function ItemRow({ it, v }: { it: MeetingItem; v: View }) {
             <details className="relative">
               <summary className="cursor-pointer text-sm text-brand-600 dark:text-brand-300">{it.url ? 'Sửa' : 'Dán link'}</summary>
               <div className="mt-2 w-[min(36rem,85vw)] rounded-lg border border-slate-200 p-3 dark:border-slate-700">
-                <EditItemForm item={it} people={v.people} partiesListId="ds-ben" />
+                <EditItemForm item={it} />
               </div>
             </details>
             <form action={deleteMeetingItem}>
@@ -300,7 +279,6 @@ function MeetingCard({ m, v }: { m: Meeting; v: View }) {
             {m.html_link && <a href={m.html_link} target="_blank" rel="noopener noreferrer" className="btn-secondary px-3 py-1.5">Google Calendar ↗</a>}
           </div>
         </div>
-        {m.record?.follow_up && <p className="rounded-xl bg-gold-50 px-3 py-2 text-sm dark:bg-gold-600/15"><span className="font-semibold">Cần theo dõi:</span> {m.record.follow_up}</p>}
 
         {m.description && (
           <details className="text-sm">
@@ -324,30 +302,16 @@ function MeetingCard({ m, v }: { m: Meeting; v: View }) {
             )}
             {pre.length ? <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">{pre.map(row)}</ul>
               : !m.attachments.length && <p className="mt-1 text-sm muted">Chưa có tài liệu.</p>}
-            {v.canFile && <DropBox meeting={ref} kind="pre" pending={pre.filter((i) => !i.url).map((i) => ({ id: i.id, label: i.party || i.title || 'Chờ gửi' }))} partiesListId="ds-ben" uid={`${anchor}-dp`} />}
+            {v.canFile && <DropBox meeting={ref} kind="pre" pending={pre.filter((i) => !i.url).map((i) => ({ id: i.id, label: i.party || i.title || 'Chờ gửi' }))} uid={`${anchor}-dp`} />}
           </section>
           <section>
             <h4 className="font-display text-sm font-semibold">B. Biên bản và tài liệu sau họp</h4>
             {minutes.length ? <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">{minutes.map(row)}</ul>
               : <p className="mt-1 text-sm muted">Chưa có biên bản.</p>}
-            {v.canFile && <DropBox meeting={ref} kind="minutes" pending={minutes.filter((i) => !i.url).map((i) => ({ id: i.id, label: i.party || i.title || 'Chờ gửi' }))} partiesListId="ds-ben" uid={`${anchor}-dm`} />}
+            {v.canFile && <DropBox meeting={ref} kind="minutes" pending={minutes.filter((i) => !i.url).map((i) => ({ id: i.id, label: i.party || i.title || 'Chờ gửi' }))} uid={`${anchor}-dm`} />}
           </section>
         </div>
 
-        {v.canFile && (
-          <div className="space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800">
-            <details>
-              <summary className="cursor-pointer text-sm font-semibold text-brand-600 dark:text-brand-300">+ Thêm bên cần gửi, tài liệu hoặc biên bản</summary>
-              <div className="mt-3"><AddItemForm meeting={ref} people={v.people} partiesListId="ds-ben" uid={anchor} /></div>
-            </details>
-            <details>
-              <summary className="cursor-pointer text-sm font-medium text-brand-600 dark:text-brand-300">Thư mục Drive, tình trạng xử lý</summary>
-              <div className="mt-3">
-                <RecordForm meeting={ref} values={m.record} autoStatusLabel={STATUS_LABEL[autoStatus(m.items, m.ends_at)]} uid={`${anchor}-r`} />
-              </div>
-            </details>
-          </div>
-        )}
       </div>
     </details>
   );
