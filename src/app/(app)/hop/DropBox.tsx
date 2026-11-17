@@ -18,13 +18,12 @@ function linksFrom(dt: DataTransfer): { url: string; title: string }[] {
   return [...new Set(raw.split(/\s+/).filter((u) => /^https:\/\/\S+$/i.test(u)))].slice(0, 20).map((url) => ({ url, title: '' }));
 }
 
-export function DropBox({ meeting, kind, pending, partiesListId, uid }: { meeting: MeetingRef; kind: 'pre' | 'minutes'; pending: Pending[]; partiesListId: string; uid: string }) {
+export function DropBox({ meeting, kind, pending, uid }: { meeting: MeetingRef; kind: 'pre' | 'minutes'; pending: Pending[]; uid: string }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState<{ ok?: string; error?: string } | null>(null);
-  const [party, setParty] = useState('');
   const [docType, setDocType] = useState('');
   const [target, setTarget] = useState('');
   const [link, setLink] = useState('');
@@ -54,7 +53,7 @@ export function DropBox({ meeting, kind, pending, partiesListId, uid }: { meetin
         }
       }
       setBusy('Đang gắn vào buổi họp…');
-      const res = await attachMeetingDrop({ meeting, kind, party, doc_type: docType, target_id: target, files: uploaded, links });
+      const res = await attachMeetingDrop({ meeting, kind, party: '', doc_type: docType, target_id: target, files: uploaded, links });
       setMsg(res);
       if (res?.ok) { setTarget(''); setLink(''); router.refresh(); }
     } catch (e) {
@@ -74,7 +73,6 @@ export function DropBox({ meeting, kind, pending, partiesListId, uid }: { meetin
             {pending.map((p) => <option key={p.id} value={p.id}>Gắn cho: {p.label}</option>)}
           </select>
         )}
-        {!target && <input aria-label="Bên gửi" className="input py-1.5 text-sm" list={partiesListId} value={party} onChange={(e) => setParty(e.target.value)} placeholder="Bên gửi (không bắt buộc)" />}
         <select aria-label="Loại tài liệu" className="input py-1.5 text-sm" value={docType} onChange={(e) => setDocType(e.target.value)}>
           <option value="">Loại tài liệu…</option>
           {types.map((d) => <option key={d} value={d}>{DOC_TYPES[d]}</option>)}

@@ -226,3 +226,13 @@ export function mentionsMe(m: Pick<Meeting, 'title' | 'description'>, fullName: 
 export function isMyCalendarMeeting(m: Meeting, me: { userId: string; fullName: string | null; isPrincipal: boolean; groups: { id: string; name: string }[]; areas: WorkArea[] }): boolean {
   return isMyMeeting(m, me.userId, me.groups, me.areas) || mentionsMe(m, me.fullName, me.isPrincipal);
 }
+
+// Trang Hồ sơ cuộc họp, lọc "Của tôi": không dựa vào bên gửi, đầu mối hay người đôn đốc
+// (mọi người hay gửi hộ nhau). Lấy buổi họp có tên tôi (Hiệu trưởng: thêm "HT"/"Hiệu trưởng")
+// hoặc tên nhóm tôi trong tên/thành phần, và buổi họp tôi đã tự gắn tài liệu, biên bản.
+export function isMyFiledMeeting(m: Meeting, me: { userId: string; fullName: string | null; isPrincipal: boolean; groups: { id: string; name: string }[] }): boolean {
+  if (m.items.some((i) => i.created_by === me.userId || i.updated_by === me.userId)) return true;
+  if (mentionsMe(m, me.fullName, me.isPrincipal)) return true;
+  const text = `${m.title}\n${m.description ?? ''}`.toLowerCase();
+  return me.groups.some((g) => g.name.trim().length >= 4 && text.includes(g.name.trim().toLowerCase()));
+}
