@@ -4,7 +4,7 @@ import { requireSession } from '@/lib/session';
 import { HopTabs, PageHead } from '@/components/PageHead';
 import { addDays, dayStartIso, fmtDate, fmtDateTime, fmtTime, vnDay, weekdayShort } from '@/lib/format';
 import { isGoogleCalendarEnabled } from '@/lib/google-calendar';
-import { areaOfItem, isMyFiledMeeting, loadAreas, loadMeetings, meetingJiraHref, meetingProgress, type Meeting, type MeetingItem, type WorkArea } from '@/lib/meetings';
+import { areaOfItem, areasOf, isMyFiledMeeting, isMyMeeting, loadAreas, loadMeetings, meetingJiraHref, meetingProgress, type Meeting, type MeetingItem, type WorkArea } from '@/lib/meetings';
 import { DOC_TYPES, STATUS_LABEL, deadlines, isSourceNote, type Deadline } from '@/lib/meeting-rules';
 import { meetingAnchor } from '@/lib/meeting-anchor';
 import { loadPeople } from '@/lib/people';
@@ -86,7 +86,10 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Pro
   const myGroups = (groups ?? []).filter((g) => mine.has(g.id));
 
   let shown = meetings;
-  if (mineOnly) shown = shown.filter((m) => isMyFiledMeeting(m, { userId, fullName: profile.full_name, isPrincipal: ctx.role === 'principal', groups: myGroups }));
+  // "Của tôi": giữ các tiêu chí cũ (mảng tôi là đầu mối, việc tôi đôn đốc, nhóm tôi) và thêm
+  // tên tôi trong thành phần, buổi họp tôi đã tự gắn tài liệu.
+  const myAreas = areasOf(areas, profile.email);
+  if (mineOnly) shown = shown.filter((m) => isMyMeeting(m, userId, myGroups, myAreas) || isMyFiledMeeting(m, { userId, fullName: profile.full_name, isPrincipal: ctx.role === 'principal', groups: myGroups }));
   if (missingOnly) shown = shown.filter((m) => meetingProgress(m).missing > 0);
 
   const known = new Map((people ?? []).map((p) => [p.id as string, (p.full_name || p.email) as string]));
@@ -129,7 +132,7 @@ export default async function MeetingsPage({ searchParams }: { searchParams: Pro
         <Toggle on={mineOnly} to={href(sp, { loc: 'cua-toi' })}>Của tôi</Toggle>
         <Toggle on={missingOnly} to={href(sp, { thieu: missingOnly ? undefined : '1' })}>Còn thiếu</Toggle>
       </div>
-      {mineOnly && <p className="mb-3 text-xs muted">"Của tôi": buổi họp có tên tôi{ctx.role === 'principal' ? ' (hoặc "Hiệu trưởng", "HT")' : ''} hoặc tên nhóm tôi tham gia trong tên, thành phần buổi họp, và buổi họp tôi đã tự gắn tài liệu, biên bản.</p>}
+      {mineOnly && <p className="mb-3 text-xs muted">"Của tôi": buổi họp của mảng tôi là đầu mối{myAreas.length ? ` (${myAreas.map((a) => a.name).join(', ')})` : ''}, của nhóm tôi tham gia, có tên tôi{ctx.role === 'principal' ? ' (hoặc "Hiệu trưởng", "HT")' : ''} trong thành phần, hoặc tôi đã gắn tài liệu, biên bản.</p>}
 
       {shown.length === 0 ? (
         <p className="card text-sm muted">{meetings.length ? 'Không có buổi họp nào khớp bộ lọc.' : 'Không có buổi họp nào trong khoảng này.'}</p>
