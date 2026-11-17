@@ -27,6 +27,7 @@ import { deleteEvent } from '@/lib/work';
 import { EVENT_KIND_LABEL, type CalEvent, type GroupFile, type Task } from '@/lib/types';
 import { DriveLinkForm, GroupDropBox } from './GroupDocs';
 import { deleteGroupDoc } from '@/lib/group-docs';
+import { FileLink } from '@/components/FileLink';
 
 export const metadata: Metadata = { title: 'Nhóm' };
 
@@ -494,7 +495,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                       <li key={d.id} className="flex items-center gap-3 py-2.5">
                         <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs font-semibold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{d.file_path ? (d.file_name?.match(/\.([A-Za-z0-9]{1,5})$/)?.[1] ?? 'tệp') : '🔗'}</span>
                         <div className="min-w-0 flex-1">
-                          <a href={href} target="_blank" rel="noopener noreferrer" className="block truncate font-medium hover:underline">{title}</a>
+                          <FileLink href={href} label={d.file_name || d.label} className="block truncate font-medium hover:underline">{title}</FileLink>
                           <div className="text-xs muted">{d.file_size != null ? `${fmtSize(d.file_size)} · ` : d.url ? 'Link · ' : ''}{name(d.created_by)} · {fmtDateTime(d.created_at)}</div>
                         </div>
                         {d.file_path && <a href={`${href}&tai=1`} className="text-xs link">Tải về</a>}
@@ -516,11 +517,11 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
             <h2 id="drive-h" className="mb-1 text-lg font-semibold">Drive chung</h2>
             <p className="mb-3 text-sm muted">Thư mục Google Drive dùng chung của {isPersonal ? 'dự án' : 'không gian'}. Quyền mở thư mục do Google Drive quản lý.</p>
             {group.drive_url ? (
-              <a href={group.drive_url} target="_blank" rel="noopener noreferrer" className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 hover:border-brand-600 dark:border-slate-800 dark:hover:border-brand-300">
+              <FileLink href={group.drive_url} label="Drive chung" className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 hover:border-brand-600 dark:border-slate-800 dark:hover:border-brand-300">
                 <span aria-hidden>📁</span>
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">{group.drive_url.replace(/^https:\/\//, '')}</span>
                 <span className="text-xs link">Mở ↗</span>
-              </a>
+              </FileLink>
             ) : !(canAttach && !group.archived_at) && <p className="text-sm muted">Chưa có link Drive chung.</p>}
             {canAttach && !group.archived_at && <DriveLinkForm key={group.drive_url ?? ''} groupId={group.id} current={group.drive_url ?? null} />}
           </section>

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ROLE_LABEL, type Profile } from '@/lib/types';
 import { Avatar } from '@/components/Avatar';
+import { FileLink } from '@/components/FileLink';
 import { fileHref, fileSize, hostOf, linkTitle, type ProfileLink } from '@/lib/profile-links';
 
 export type ProfileGroup = { id: string; name: string; role: string };
@@ -69,13 +70,13 @@ export function ProfileCard({ profile, isAdmin, groups, bookingSlug, isMe, avata
                 <svg className="h-4 w-4 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" /><path d="M14 3v5h5" /></svg>
                 {l.file_path ? (
                   <>
-                    <a href={fileHref(l.file_path)} target="_blank" rel="noopener" className="min-w-0 break-words text-brand-700 hover:underline dark:text-brand-300">{linkTitle(l)}</a>
+                    <FileLink href={fileHref(l.file_path)} label={l.file_name} className="min-w-0 break-words text-brand-700 hover:underline dark:text-brand-300">{linkTitle(l)}</FileLink>
                     <span className="text-xs muted">{fileSize(l.file_size)}</span>
                     <a href={fileHref(l.file_path, true)} className="text-xs muted hover:underline">Tải về</a>
                   </>
                 ) : (
                   <>
-                    <a href={l.url!} target="_blank" rel="noopener noreferrer" className="min-w-0 break-words text-brand-700 hover:underline dark:text-brand-300">{linkTitle(l)}</a>
+                    <FileLink href={l.url!} label={linkTitle(l)} className="min-w-0 break-words text-brand-700 hover:underline dark:text-brand-300">{linkTitle(l)}</FileLink>
                     <span className="text-xs muted">{hostOf(l.url!)}</span>
                   </>
                 )}

@@ -14,6 +14,7 @@ import { JiraBox } from './JiraBox';
 import { EditItemForm } from './MeetingForms';
 import { deleteMeetingItem } from './actions';
 import { OpenFromHash } from '@/components/OpenFromHash';
+import { FileLink } from '@/components/FileLink';
 
 export const metadata: Metadata = { title: 'Hồ sơ cuộc họp' };
 
@@ -188,9 +189,9 @@ function ItemRow({ it, v }: { it: MeetingItem; v: View }) {
             {!it.url && (it.party || area) && <span className="font-medium">{it.party || area?.name}</span>}
             {it.url ? (
               <>
-                <a href={it.url} target="_blank" rel="noopener noreferrer" className="link">
+                <FileLink href={it.url} label={it.file_name || it.title} className="link">
                   {it.file_path && <span aria-hidden="true">📎 </span>}{it.title || it.file_name || (it.doc_type ? DOC_TYPES[it.doc_type] : 'Mở tài liệu')} ↗
-                </a>
+                </FileLink>
                 {it.file_path && (
                   <span className="text-xs muted">
                     {it.file_size != null && `${(it.file_size / 1024 / 1024).toFixed(it.file_size < 1048576 ? 2 : 1)} MB · `}
@@ -274,7 +275,7 @@ function MeetingCard({ m, v }: { m: Meeting; v: View }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <StatusChips m={m} />
           <div className="flex flex-wrap gap-2 text-sm">
-            {m.record?.drive_folder_url && <a href={m.record.drive_folder_url} target="_blank" rel="noopener noreferrer" className="btn-secondary px-3 py-1.5">Thư mục Drive ↗</a>}
+            {m.record?.drive_folder_url && <FileLink href={m.record.drive_folder_url} label="Thư mục Drive" className="btn-secondary px-3 py-1.5">Thư mục Drive ↗</FileLink>}
             {m.meet_url && <a href={m.meet_url} target="_blank" rel="noopener noreferrer" className="btn-secondary px-3 py-1.5">Họp trực tuyến ↗</a>}
             {m.html_link && <a href={m.html_link} target="_blank" rel="noopener noreferrer" className="btn-secondary px-3 py-1.5">Google Calendar ↗</a>}
           </div>
@@ -294,7 +295,7 @@ function MeetingCard({ m, v }: { m: Meeting; v: View }) {
               <ul className="mt-1 space-y-1 text-sm">
                 {m.attachments.map((a) => (
                   <li key={a.url}>
-                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="link">{a.title} ↗</a>
+                    <FileLink href={a.url} label={a.title} className="link">{a.title} ↗</FileLink>
                     <span className="text-xs muted"> · đính kèm trên lịch</span>
                   </li>
                 ))}

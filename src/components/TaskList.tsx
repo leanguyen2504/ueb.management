@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { TaskDropBox } from '@/components/TaskDropBox';
+import { FileLink } from '@/components/FileLink';
 import { TaskJiraBox } from '@/components/TaskJiraBox';
 import type { JiraBrief } from '@/lib/jira/brief';
 import { jiraUrl } from '@/lib/meeting-rules';
@@ -173,7 +174,7 @@ function TaskLinks({ task, links, canAttach, me }: { task: Task; links: TaskLink
         <ul className="flex flex-wrap gap-1.5">
           {files.map((l) => (
             <li key={l.id} className="chip flex items-center gap-1">
-              <a href={l.url ?? `/viec/tep?p=${encodeURIComponent(l.file_path ?? '')}`} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline dark:text-brand-100">📎 {l.label || l.file_name || 'Sản phẩm'}</a>
+              <FileLink href={l.url ?? `/viec/tep?p=${encodeURIComponent(l.file_path ?? '')}`} label={l.file_name || l.label} className="text-brand-600 hover:underline dark:text-brand-100">📎 {l.label || l.file_name || 'Sản phẩm'}</FileLink>
               {l.file_path && <a href={`/viec/tep?p=${encodeURIComponent(l.file_path)}&tai=1`} className="text-xs muted hover:underline" title="Tải về">{l.file_size != null ? mb(l.file_size) : ''} ⤓</a>}
               {(l.created_by === me || canAttach) && <RemoveLink id={l.id} groupId={task.group_id} />}
             </li>
