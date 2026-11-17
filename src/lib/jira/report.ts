@@ -175,10 +175,32 @@ export function inProgressNoLog(issues: JiraIssueRow[], worklogs: Worklog[], now
   return issues.filter((i) => isMine(i) && i.status_category === 'indeterminate' && !logged.has(i.issue_key));
 }
 
-// Đang chờ tôi: comment nhắc tên chưa trả lời; việc của tôi đang chặn việc khác.
+// ---- Comment của bot Jira (Jira Assistant) ----
+// Bot của Trang ghi kết quả rà soát/đánh giá lên mã việc, quy ước: (/) đạt · (x) không đạt · (-) đạt một phần · (?) nghi vấn.
+// Nhận ra bot theo tên tài khoản tác giả comment trên Jira, không theo nội dung.
+const JIRA_BOTS = ['jira assistant'];
+export function isJiraBot(author: string | null | undefined) {
+  const a = (author ?? '').trim().toLowerCase();
+  return Boolean(a) && JIRA_BOTS.includes(a);
+}
+
+// Comment của bot kết luận "đạt": không cần trả lời.
+// - Có tiêu đề (h1.–h6.): tiêu đề đầu tiên mở bằng (/) là đạt; (x), (-), (?) là chưa đạt.
+// - Không có tiêu đề: có chữ "đã đạt" hoặc "- ĐẠT" và không có "không đạt", "chưa đạt", "đạt một phần".
+// Bỏ dòng chú thích quy ước "(/) đạt · (x) không đạt…" trước khi xét, vì comment nào của bot cũng có.
+export function isBotPassedComment(author: string | null | undefined, body: string | null | undefined) {
+  if (!isJiraBot(author)) return false;
+  const text = String(body ?? '').replace(/\(\s*quy ước:[^\n]*/giu, ' ');
+  const heading = text.match(/^\s*h[1-6]\.\s*(.*)$/mu);
+  if (heading) return /^\(\/\)/u.test(heading[1].trim());
+  if (/(không|chưa)\s+đạt|đạt\s+một\s+phần/iu.test(text)) return false;
+  return /đã\s+đạt(?!\p{L})(?!\s+được)/iu.test(text) || /[-–:]\s*ĐẠT(?!\p{L})/u.test(text);
+}
+
+// Đang chờ tôi: comment nhắc tên chưa trả lời (trừ comment bot Jira kết luận đạt); việc của tôi đang chặn việc khác.
 export function waitingOnMe(issues: JiraIssueRow[], mentions: JiraMentionRow[]) {
   return {
-    mentions: mentions.filter((m) => !m.answered),
+    mentions: mentions.filter((m) => !m.answered && !isBotPassedComment(m.author_name, m.body)),
     blockingOthers: issues.filter((i) => isMine(i) && notDone(i) && blocking(i).length > 0),
   };
 }
