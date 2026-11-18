@@ -5,7 +5,7 @@ import { createEvent, createPersonalProject, createTask, updateEvent, updateTask
 import { useCalDraft, vnLocalInput } from '@/components/calendar/draft';
 import { FormMessage } from '@/components/FormMessage';
 import { SubmitButton } from '@/components/SubmitButton';
-import { EVENT_KIND_LABEL, TASK_PRIORITY_LABEL, type Task } from '@/lib/types';
+import { EVENT_KIND_LABEL, TASK_PRIORITY_LABEL, type CalEvent, type Task } from '@/lib/types';
 
 export type Option = { id: string; label: string };
 
@@ -160,6 +160,50 @@ export function TaskEditButton({ task, people }: { task: Task; people?: Option[]
             <SubmitButton pendingText="Đang lưu…">Lưu thay đổi</SubmitButton>
             <button type="button" onClick={() => setOpen(false)} className="btn-secondary">Hủy</button>
           </div>
+        </form>
+      )}
+    </>
+  );
+}
+
+/**
+ * Nút "Sửa" trên từng lịch ở trang nhóm: mở khung sửa tiêu đề, loại, giờ, địa điểm, ghi chú ngay dưới lịch.
+ * Trả về hai phần tử flex như TaskEditButton: nút và khung sửa chiếm trọn một dòng bên dưới.
+ */
+export function EventEditButton({ event }: { event: CalEvent }) {
+  const [open, setOpen] = useState(false);
+  const [state, action] = useActionState(updateEvent, null);
+  useEffect(() => { if (state?.ok) setOpen(false); }, [state]);
+  const p = `ee-${event.id}`;
+  return (
+    <>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="text-xs link">
+        {open ? 'Đóng' : 'Sửa'}
+      </button>
+      {open && (
+        <form action={action} className="basis-full space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+          <input type="hidden" name="id" value={event.id} />
+          <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
+            <div><label className="label" htmlFor={`${p}-title`}>Tiêu đề</label><input id={`${p}-title`} name="title" required maxLength={300} defaultValue={event.title} className="input" autoFocus /></div>
+            <div>
+              <label className="label" htmlFor={`${p}-kind`}>Loại</label>
+              <select id={`${p}-kind`} name="kind" defaultValue={event.kind} className="input">
+                {Object.entries(EVENT_KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div><label className="label" htmlFor={`${p}-start`}>Bắt đầu</label><input id={`${p}-start`} name="starts_at" type="datetime-local" required defaultValue={vnLocalInput(event.starts_at)} className="input" /></div>
+            <div><label className="label" htmlFor={`${p}-end`}>Kết thúc</label><input id={`${p}-end`} name="ends_at" type="datetime-local" defaultValue={vnLocalInput(event.ends_at)} className="input" /></div>
+          </div>
+          <div><label className="label" htmlFor={`${p}-loc`}>Địa điểm</label><input id={`${p}-loc`} name="location" maxLength={300} defaultValue={event.location ?? ''} className="input" /></div>
+          <div><label className="label" htmlFor={`${p}-desc`}>Ghi chú</label><textarea id={`${p}-desc`} name="description" rows={3} defaultValue={event.description ?? ''} className="input" /></div>
+          <FormMessage state={state} />
+          <div className="flex gap-2">
+            <SubmitButton pendingText="Đang lưu…">Lưu thay đổi</SubmitButton>
+            <button type="button" onClick={() => setOpen(false)} className="btn-secondary">Hủy</button>
+          </div>
+          <p className="text-xs muted">Giờ theo giờ Việt Nam.</p>
         </form>
       )}
     </>

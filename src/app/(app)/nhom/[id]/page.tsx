@@ -22,10 +22,11 @@ import { SubgroupForm } from '../SubgroupForm';
 import { BackForward } from '@/components/BackForward';
 import { SpaceGrid } from './SpaceGrid';
 import type { TaskLink } from '@/lib/types';
-import { EventForm, TaskForm } from '@/components/WorkForms';
+import { EventEditButton, EventForm, TaskForm } from '@/components/WorkForms';
+import { ConfirmButton } from '@/components/ConfirmButton';
 import { deleteEvent } from '@/lib/work';
 import { EVENT_KIND_LABEL, type CalEvent, type GroupFile, type Task } from '@/lib/types';
-import { DriveLinkForm, GroupDropBox } from './GroupDocs';
+import { DocEditButton, DriveLinkForm, GroupDropBox } from './GroupDocs';
 import { deleteGroupDoc } from '@/lib/group-docs';
 import { FileLink } from '@/components/FileLink';
 
@@ -102,6 +103,11 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const [{ data: members }, { data: invites }, { data: log }, { data: tasks }, { data: events }, { data: joinReqs }, { data: delReqs }, { data: docs, error: docsErr }, { data: children }] = await detailPromise!;
   const taskIds = (tasks ?? []).map((t) => t.id);
   const childIds = (children ?? []).map((c) => c.id);
+  // Không gian con mình được sửa tên, mô tả (quyền Quản lý thành viên ở chính không gian đó, như RLS groups_update).
+  const { data: myChildRoles } = childIds.length && !ctx.is_admin && !ctx.all_groups_secretary
+    ? await supabase.from('group_members').select('group_id').eq('user_id', userId).eq('can_manage_members', true).in('group_id', childIds)
+    : { data: [] as { group_id: string }[] };
+  const manageChild = new Set((myChildRoles ?? []).map((r) => r.group_id));
   const ids = [...new Set([...(members ?? []).map((m) => m.user_id), ...(log ?? []).map((l) => l.actor_id).filter(Boolean) as string[], ...(tasks ?? []).map((t) => t.assignee_id).filter(Boolean) as string[], ...(joinReqs ?? []).map((r) => r.requester_id), ...(delReqs ?? []).map((r) => r.requester_id), ...(docs ?? []).map((d) => d.created_by), group.created_by, group.updated_by].filter(Boolean) as string[])];
   // Danh bạ để hiện tên đơn vị quản lý, đơn vị cùng làm và dự án liên đơn vị, kể cả nhóm mình chưa tham gia.
   const [{ data: linkRows }, { data: parent }, { data: childTasks }, { data: people }, { data: dirData }, { data: tagRows }] = await Promise.all([
@@ -231,6 +237,8 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         return {
           id: c.id,
           name: c.name,
+          description: c.description,
+          canEdit: !group.archived_at && (seesAll || isPersonal || manageChild.has(c.id)),
           pendingDelete: !canDeleteHere && pendingDel.has(`group:${c.id}`),
           card: (
             <Link href={`/nhom/${c.id}`} draggable={false} className="block h-full rounded-xl border border-slate-200 bg-white p-3.5 hover:border-brand-600 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-brand-300">
@@ -271,16 +279,18 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const eventList = events?.length ? (
     <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">
       {events.map((e) => (
-        <li key={e.id} className="flex items-start gap-3 py-2.5">
+        <li key={e.id} className="flex flex-wrap items-start gap-3 py-2.5">
           <div className="w-24 shrink-0 font-display text-xs font-semibold tabular-nums">{fmtDateTime(e.starts_at)}</div>
           <div className="min-w-0 flex-1">
             <div className="font-medium">{e.title}</div>
             <div className="text-xs muted">{EVENT_KIND_LABEL[e.kind]} · đến {fmtTime(e.ends_at)}{e.location ? ` · ${e.location}` : ''}</div>
+            {tab === 'lich' && e.description && <p className="mt-1 whitespace-pre-line text-xs muted">{e.description}</p>}
           </div>
+          {tab === 'lich' && canEditTasks && <EventEditButton event={e} />}
           {tab === 'lich' && (canDeleteHere ? (
             <form action={deleteEvent}>
               <input type="hidden" name="id" value={e.id} />
-              <button className="text-xs text-orange-700 hover:underline dark:text-orange-400">Xóa</button>
+              <ConfirmButton message={`Xóa lịch “${e.title}”? Không hoàn tác được.`} className="text-xs text-orange-700 hover:underline dark:text-orange-400">Xóa</ConfirmButton>
             </form>
           ) : pendingDel.has(`event:${e.id}`) ? (
             <span className="chip shrink-0 text-xs">Chờ duyệt xóa</span>
@@ -489,21 +499,24 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                 <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">
                   {docs.map((d) => {
                     const href = d.file_path ? `/nhom/tep?p=${encodeURIComponent(d.file_path)}` : d.url!;
-                    const title = d.file_name || d.label || d.url!.replace(/^https:\/\//, '');
+                    // Tên đã sửa (label khác tên tệp gốc) thì hiện tên đã sửa; còn lại hiện tên tệp như cũ.
+                    const renamed = Boolean(d.label && d.file_name && d.label !== d.file_name.replace(/\.[^.]+$/, ''));
+                    const title = (renamed ? d.label : d.file_name || d.label) || d.url!.replace(/^https:\/\//, '');
                     const canRemove = canEdit || d.created_by === userId;
                     return (
-                      <li key={d.id} className="flex items-center gap-3 py-2.5">
+                      <li key={d.id} className="flex flex-wrap items-center gap-3 py-2.5">
                         <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs font-semibold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{d.file_path ? (d.file_name?.match(/\.([A-Za-z0-9]{1,5})$/)?.[1] ?? 'tệp') : '🔗'}</span>
                         <div className="min-w-0 flex-1">
                           <FileLink href={href} label={d.file_name || d.label} className="block truncate font-medium hover:underline">{title}</FileLink>
                           <div className="text-xs muted">{d.file_size != null ? `${fmtSize(d.file_size)} · ` : d.url ? 'Link · ' : ''}{name(d.created_by)} · {fmtDateTime(d.created_at)}</div>
                         </div>
                         {d.file_path && <a href={`${href}&tai=1`} className="text-xs link">Tải về</a>}
+                        {canRemove && !group.archived_at && <DocEditButton id={d.id} groupId={group.id} current={d.label || d.file_name || ''} />}
                         {canRemove && (
                           <form action={deleteGroupDoc}>
                             <input type="hidden" name="id" value={d.id} />
                             <input type="hidden" name="group_id" value={group.id} />
-                            <button className="text-xs text-orange-700 hover:underline dark:text-orange-400">Gỡ</button>
+                            <ConfirmButton message={`Gỡ “${title}” khỏi mục Tài liệu?${d.file_path ? ' Tệp sẽ bị xóa hẳn.' : ''}`} className="text-xs text-orange-700 hover:underline dark:text-orange-400">Gỡ</ConfirmButton>
                           </form>
                         )}
                       </li>

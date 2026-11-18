@@ -91,3 +91,19 @@ export async function deleteGroupDoc(form: FormData) {
   if (count && old?.file_path) await supabase.storage.from(BUCKET).remove([old.file_path]);
   refresh(group_id);
 }
+
+// Đổi tên hiển thị của một tài liệu (link hoặc tệp). RLS group_files_update (SQL 20261118000001) kiểm tra quyền.
+export async function renameGroupDoc(_prev: FormState, form: FormData): Promise<FormState> {
+  const id = uuidOrNull(form.get('id'));
+  const group_id = uuidOrNull(form.get('group_id'));
+  const label = String(form.get('label') || '').trim().slice(0, 300) || null;
+  if (!id || !group_id) return { error: 'Thiếu tài liệu cần sửa.' };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('group_files').update({ label }).eq('id', id).select('id');
+  if (error) {
+    return { error: /permission denied/i.test(error.message) ? 'Chưa bật sửa tên tài liệu: quản trị cần chạy SQL 20261118000001_sua_tai_lieu.sql.' : errText(error) };
+  }
+  if (!data?.length) return { error: 'Bạn không có quyền sửa tài liệu này.' };
+  refresh(group_id);
+  return { ok: 'Đã lưu tên tài liệu.' };
+}
