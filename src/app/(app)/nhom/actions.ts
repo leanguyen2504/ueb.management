@@ -213,6 +213,25 @@ export async function moveGroup(groupId: string, newParentId: string, fromId: st
   return {};
 }
 
+// Sửa nhanh tên, mô tả của một không gian con ngay trên thẻ (mục Không gian).
+// Chỉ đổi hai cột này, giữ nguyên loại và quyền mặc định. RLS groups_update kiểm tra quyền.
+export async function updateSpace(_prev: FormState, form: FormData): Promise<FormState> {
+  const id = String(form.get('id') || '');
+  const fromId = String(form.get('from_id') || '');
+  const name = String(form.get('name') || '').trim().slice(0, 200);
+  const description = String(form.get('description') || '').trim().slice(0, 2000) || null;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: 'Thiếu không gian cần sửa.' };
+  if (!name) return { error: 'Hãy nhập tên không gian.' };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('groups').update({ name, description }).eq('id', id).select('id');
+  if (error) return { error: errText(error) };
+  if (!data?.length) return { error: 'Bạn không có quyền sửa không gian này. Hãy nhờ Trưởng nhóm hoặc Văn thư của không gian đó.' };
+  revalidatePath(`/nhom/${id}`);
+  if (fromId) revalidatePath(`/nhom/${fromId}`);
+  revalidatePath('/nhom');
+  return { ok: 'Đã lưu không gian.' };
+}
+
 // ---- Xóa không gian, lịch, việc thừa ----
 // Trưởng nhóm xóa ngay; người khác gửi yêu cầu để Trưởng nhóm duyệt. Cơ sở dữ liệu quyết định.
 const DELETE_TYPES = ['group', 'task', 'event'] as const;

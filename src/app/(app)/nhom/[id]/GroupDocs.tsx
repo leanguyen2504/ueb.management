@@ -2,10 +2,10 @@
 
 // Mục Tài liệu của không gian: ô đặt link Drive chung và ô kéo thả tệp (tải thẳng lên
 // Supabase Storage, bucket group-files), cùng cách làm với ô sản phẩm của đầu việc.
-import { useActionState, useRef, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import { attachGroupDocs, prepareGroupUpload, setGroupDrive } from '@/lib/group-docs';
+import { attachGroupDocs, prepareGroupUpload, renameGroupDoc, setGroupDrive } from '@/lib/group-docs';
 import { FormMessage } from '@/components/FormMessage';
 import { SubmitButton } from '@/components/SubmitButton';
 
@@ -119,5 +119,29 @@ export function GroupDropBox({ groupId }: { groupId: string }) {
       {msg?.error && <p role="alert" className="mt-2 text-sm text-orange-700 dark:text-orange-300">{msg.error}</p>}
       {msg?.ok && <p role="status" className="mt-2 text-sm text-green-700 dark:text-green-300">{msg.ok}</p>}
     </div>
+  );
+}
+
+// Nút "Sửa" trên từng tài liệu: đổi tên hiển thị. Trả về nút và khung sửa chiếm trọn một dòng bên dưới.
+export function DocEditButton({ id, groupId, current }: { id: string; groupId: string; current: string }) {
+  const [open, setOpen] = useState(false);
+  const [state, action] = useActionState(renameGroupDoc, null);
+  useEffect(() => { if (state?.ok) setOpen(false); }, [state]);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="text-xs link">{open ? 'Đóng' : 'Sửa'}</button>
+      {open && (
+        <form action={action} className="basis-full space-y-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+          <input type="hidden" name="id" value={id} />
+          <input type="hidden" name="group_id" value={groupId} />
+          <div><label className="label" htmlFor={`doc-${id}`}>Tên hiển thị</label><input id={`doc-${id}`} name="label" maxLength={300} defaultValue={current} className="input" autoFocus /></div>
+          <FormMessage state={state} />
+          <div className="flex gap-2">
+            <SubmitButton pendingText="Đang lưu…">Lưu</SubmitButton>
+            <button type="button" onClick={() => setOpen(false)} className="btn-secondary">Hủy</button>
+          </div>
+        </form>
+      )}
+    </>
   );
 }
