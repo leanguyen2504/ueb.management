@@ -104,7 +104,17 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const childIds = (children ?? []).map((c) => c.id);
   const ids = [...new Set([...(members ?? []).map((m) => m.user_id), ...(log ?? []).map((l) => l.actor_id).filter(Boolean) as string[], ...(tasks ?? []).map((t) => t.assignee_id).filter(Boolean) as string[], ...(joinReqs ?? []).map((r) => r.requester_id), ...(delReqs ?? []).map((r) => r.requester_id), ...(docs ?? []).map((d) => d.created_by), group.created_by, group.updated_by].filter(Boolean) as string[])];
   // Danh bạ để hiện tên đơn vị quản lý, đơn vị cùng làm và dự án liên đơn vị, kể cả nhóm mình chưa tham gia.
-  const [{ data: linkRows }, { data: parent }, { data: childTasks }, { data: people }, { data: dirData }, { data: tagRows }] = await Promise.all([
+  // Lịch và tài liệu của mọi không gian con, cháu… (RLS: quyền Xem ở nhóm cha tự xuống nhóm con).
+  const descPromise = dirPromise.then(({ data: d }) => descendantsOf(id, (d ?? []) as { id: string; parent_id: string | null }[]));
+  const subExtraPromise = descPromise.then(async (desc) => {
+    if (!desc.length) return { events: [] as CalEvent[], docs: [] as GroupFile[] };
+    const [ev, dc] = await Promise.all([
+      supabase.from('events').select('*').in('group_id', desc).gte('ends_at', new Date(Date.now() - 86400000).toISOString()).order('starts_at').limit(100).returns<CalEvent[]>(),
+      supabase.from('group_files').select('*').in('group_id', desc).order('created_at', { ascending: false }).limit(300).returns<GroupFile[]>(),
+    ]);
+    return { events: ev.data ?? [], docs: dc.data ?? [] };
+  });
+  const [{ data: linkRows }, { data: parent }, { data: childTasks }, { data: people }, { data: dirData }, { data: tagRows }, subExtra] = await Promise.all([
     taskIds.length ? supabase.from('task_links').select('*').in('task_id', taskIds).order('created_at').returns<TaskLink[]>() : Promise.resolve({ data: [] as TaskLink[] }),
     group.parent_id ? supabase.from('groups').select('id, name').eq('id', group.parent_id).maybeSingle() : Promise.resolve({ data: null }),
     // Việc của mọi không gian con, cháu… (RLS: chỉ những việc người xem được phép thấy).
@@ -117,7 +127,10 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     supabase.from('profiles').select('id, email, full_name, system_role, is_active, position, phone, office, avatar_path').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).returns<Profile[]>(),
     dirPromise,
     tagPromise,
+    subExtraPromise,
   ]);
+  const subEvents = subExtra.events;
+  const subDocs = subExtra.docs;
   const dirAll = (dirData ?? []) as (DirGroup & { can_view: boolean })[];
   const dirById = new Map(dirAll.map((g) => [g.id, g]));
   const parentLink = parent ?? (group.parent_id ? dirById.get(group.parent_id) ?? null : null);
@@ -175,7 +188,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     for (let i = 0; g && g.parent_id !== id && i < 8; i++) g = g.parent_id ? dirById.get(g.parent_id) : undefined;
     return g?.parent_id === id ? g.id : null;
   };
-  const subPeople = await loadPeople(supabase, subTasks.map((t) => t.assignee_id).filter((a) => a && !person.has(a)));
+  const subPeople = await loadPeople(supabase, [...subTasks.map((t) => t.assignee_id), ...subDocs.map((d) => d.created_by)].filter((a) => a && !person.has(a)));
   const anyName = (uid: string | null) => (uid && !person.has(uid) ? subPeople.name(uid) || 'Người dùng' : name(uid));
   const subGroups = [...new Set(subOpen.map((t) => t.group_id))]
     .map((gid) => ({ gid, path: subPath(gid), list: subOpen.filter((t) => t.group_id === gid) }))
@@ -187,8 +200,8 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const TABS = [
     { key: 'tong-quan', label: 'Tổng quan' },
     { key: 'viec', label: 'Việc', count: openTasks.length + subOpen.length },
-    { key: 'lich', label: 'Lịch', count: events?.length ?? 0 },
-    { key: 'tai-lieu', label: 'Tài liệu', count: (docs?.length ?? 0) + (group.drive_url ? 1 : 0) },
+    { key: 'lich', label: 'Lịch', count: (events?.length ?? 0) + subEvents.length },
+    { key: 'tai-lieu', label: 'Tài liệu', count: (docs?.length ?? 0) + subDocs.length + (group.drive_url ? 1 : 0) },
     ...(childIds.length > 0 || canSub || sharedProjects.length > 0 ? [{ key: 'khong-gian', label: 'Không gian', count: childIds.length + sharedProjects.length }] : []),
     ...(isPersonal ? [] : [{ key: 'thanh-vien', label: (joinReqs?.length ? `Thành viên · ${joinReqs.length} yêu cầu` : 'Thành viên'), count: members?.length ?? 0 }]),
     { key: 'thong-tin', label: 'Thông tin' },
@@ -298,6 +311,24 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     </ul>
   ) : <p className="text-sm muted">Chưa có lịch sắp tới.</p>;
 
+  // Lịch của các không gian con: chỉ xem ở đây; sửa, xóa trong trang của không gian con.
+  const subEventList = subEvents.length > 0 && (
+    <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">
+      {subEvents.map((e) => (
+        <li key={e.id} className="flex items-start gap-3 py-2.5">
+          <div className="w-24 shrink-0 font-display text-xs font-semibold tabular-nums">{fmtDateTime(e.starts_at)}</div>
+          <div className="min-w-0 flex-1">
+            <div className="font-medium">{e.title}</div>
+            <div className="text-xs muted">
+              <Link href={`/nhom/${e.group_id}?tab=lich`} className="link">{subPath(e.group_id)}</Link>
+              {' · '}{EVENT_KIND_LABEL[e.kind]} · đến {fmtTime(e.ends_at)}{e.location ? ` · ${e.location}` : ''}
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+
   return (
     <>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
@@ -393,6 +424,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
             <section className="card">
               <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-semibold">Lịch sắp tới</h2><Link href={tabHref('lich')} className="link text-sm">Mở</Link></div>
               {eventList}
+              {subEventList && <><h3 className="mb-1 mt-3 text-sm font-semibold">Trong các không gian con</h3>{subEventList}</>}
             </section>
           </div>
         </div>
@@ -466,7 +498,10 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
 
       {tab === 'lich' && (
         <div className="grid items-start gap-5 lg:grid-cols-[1fr_360px]">
-          <section className="card"><h2 className="mb-2 text-lg font-semibold">Lịch của nhóm</h2>{eventList}</section>
+          <div className="min-w-0 space-y-5">
+            <section className="card"><h2 className="mb-2 text-lg font-semibold">Lịch của nhóm</h2>{eventList}</section>
+            {subEventList && <section className="card"><h2 className="mb-1 text-lg font-semibold">Lịch trong các không gian con ({subEvents.length})</h2><p className="mb-2 text-sm muted">Sửa, xóa trong trang của từng không gian.</p>{subEventList}</section>}
+          </div>
           {canAddTask && <section className="card"><h2 className="mb-3 text-lg font-semibold">Thêm lịch</h2><EventForm groupId={group.id} /></section>}
         </div>
       )}
@@ -512,6 +547,28 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                 </ul>
               ) : <p className="text-sm muted">Chưa có tài liệu.{canAttach && !group.archived_at ? ' Kéo thả tệp vào ô phía trên để tải lên.' : ''}</p>}
             </section>
+            {subDocs.length > 0 && (
+              <section className="card" aria-labelledby="tai-lieu-con-h">
+                <h2 id="tai-lieu-con-h" className="mb-1 text-lg font-semibold">Tài liệu trong các không gian con ({subDocs.length})</h2>
+                <p className="mb-3 text-sm muted">Tải lên, gỡ trong trang của từng không gian.</p>
+                <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-800">
+                  {subDocs.map((d) => {
+                    const href = d.file_path ? `/nhom/tep?p=${encodeURIComponent(d.file_path)}` : d.url!;
+                    const title = d.file_name || d.label || d.url!.replace(/^https:\/\//, '');
+                    return (
+                      <li key={d.id} className="flex items-center gap-3 py-2.5">
+                        <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs font-semibold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{d.file_path ? (d.file_name?.match(/\.([A-Za-z0-9]{1,5})$/)?.[1] ?? 'tệp') : '🔗'}</span>
+                        <div className="min-w-0 flex-1">
+                          <FileLink href={href} label={d.file_name || d.label} className="block truncate font-medium hover:underline">{title}</FileLink>
+                          <div className="text-xs muted"><Link href={`/nhom/${d.group_id}?tab=tai-lieu`} className="link">{subPath(d.group_id)}</Link> · {d.file_size != null ? `${fmtSize(d.file_size)} · ` : d.url ? 'Link · ' : ''}{anyName(d.created_by)} · {fmtDateTime(d.created_at)}</div>
+                        </div>
+                        {d.file_path && <a href={`${href}&tai=1`} className="text-xs link">Tải về</a>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
           </div>
           <section className="card" aria-labelledby="drive-h">
             <h2 id="drive-h" className="mb-1 text-lg font-semibold">Drive chung</h2>
