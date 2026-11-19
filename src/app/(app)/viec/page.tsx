@@ -181,6 +181,9 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
       }
     : null;
 
+  // Việc cá nhân chuyển được giữa các dự án cá nhân (ô "Dự án cá nhân" trong Sửa).
+  const projectsFor = (t: Task) => (personalIds.includes(t.group_id) ? personalOptions : undefined);
+
   const byStatus = (s: TaskStatus) => list.filter((t) => t.status === s);
   const counts = (['todo', 'doing', 'review'] as TaskStatus[]).map((s) => [s, byStatus(s).length] as const);
 
@@ -228,7 +231,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           {xem === 'tien-do' ? (
-            <Progress tasks={list} label={label} me={userId} deleteState={deleteState} back={back} canEdit={canEditTask} people={peopleFor} jira={jira}
+            <Progress tasks={list} label={label} me={userId} deleteState={deleteState} back={back} canEdit={canEditTask} people={peopleFor} projects={projectsFor} jira={jira}
               gantt={gantt && <TaskGantt mini tasks={gantt.tasks} groups={gantt.groups} today={gantt.today} me={userId} fullHref={href('gantt', nhomValue)} />} />
           ) : (
             <section className="card">
@@ -242,6 +245,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
                 back={back}
                 canEdit={canEditTask}
                 people={peopleFor}
+                projects={projectsFor}
                 jira={jira}
                 empty={filterIds ? 'Không có việc nào trong nhóm, dự án đã chọn.' : xem === 'da-giao' ? 'Bạn chưa giao việc nào đang mở.' : xem === 'xong' ? 'Chưa có việc hoàn thành.' : 'Bạn không có việc nào đang mở. Tạo việc cá nhân ở khung bên cạnh.'}
               />
@@ -279,7 +283,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
 }
 
 // Bảng tiến độ theo nhóm/dự án: tỷ lệ xong, quá hạn, gấp, hạn gần nhất; rồi danh sách việc cần xử lý.
-function Progress({ tasks, label, me, deleteState, back, canEdit, people, jira, gantt }: { gantt?: ReactNode; tasks: Task[]; label: (id: string) => string; me: string; deleteState: (t: Task) => 'delete' | 'request' | 'pending'; back: string; canEdit: (t: Task) => boolean; people: (t: Task) => { id: string; label: string }[] | undefined; jira: { briefs: Map<string, JiraBrief>; base: string | null; canSet: (t: Task) => boolean } }) {
+function Progress({ tasks, label, me, deleteState, back, canEdit, people, projects, jira, gantt }: { gantt?: ReactNode; projects?: (t: Task) => { id: string; label: string }[] | undefined; tasks: Task[]; label: (id: string) => string; me: string; deleteState: (t: Task) => 'delete' | 'request' | 'pending'; back: string; canEdit: (t: Task) => boolean; people: (t: Task) => { id: string; label: string }[] | undefined; jira: { briefs: Map<string, JiraBrief>; base: string | null; canSet: (t: Task) => boolean } }) {
   const today = vnDay();
   const soon = addDays(today, 3);
   const week = addDays(today, 7);
@@ -360,7 +364,7 @@ function Progress({ tasks, label, me, deleteState, back, canEdit, people, jira, 
       </section>
       <section className="card">
         <h2 className="mb-3 text-lg font-semibold">Cần xử lý: quá hạn và hạn trong 7 ngày</h2>
-        <TaskList tasks={attention} name={() => 'Bạn'} groupName={label} showProgress me={me} deleteState={deleteState} back={back} canEdit={canEdit} people={people} jira={jira} empty="Không có việc quá hạn hay sắp đến hạn." />
+        <TaskList tasks={attention} name={() => 'Bạn'} groupName={label} showProgress me={me} deleteState={deleteState} back={back} canEdit={canEdit} people={people} projects={projects} jira={jira} empty="Không có việc quá hạn hay sắp đến hạn." />
       </section>
     </>
   );

@@ -72,6 +72,9 @@ export async function updateTask(_prev: FormState, form: FormData): Promise<Form
     due_date: due || null,
     start_date: start || null,
   };
+  // Chuyển sang dự án cá nhân khác (chỉ có ô này với việc Cá nhân; trigger tasks_check kiểm tra).
+  const group = uuidOrNull(text(form, 'group_id'));
+  if (group) patch.group_id = group;
   // Ô Người thực hiện chỉ có khi biết danh sách thành viên; không có thì giữ nguyên.
   if (form.has('assignee_id')) patch.assignee_id = uuidOrNull(text(form, 'assignee_id'));
   const supabase = await createClient();
