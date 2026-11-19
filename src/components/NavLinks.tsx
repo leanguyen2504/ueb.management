@@ -16,6 +16,8 @@ export const ICONS: Record<string, React.ReactNode> = {
   bell: <><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
   search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>,
+  // Quy trình: các bước nối nhau (thẻ Hành chính).
+  steps: <><rect x="4" y="3.5" width="16" height="17" rx="2.5" /><path d="M9 3.5v2h6v-2" /><path d="m8 11 1.5 1.5L12 10M8 16l1.5 1.5L12 15M14 11.5h2.5M14 16.5h2.5" /></>,
   pen: <><path d="M14.5 5.5 18.5 9.5" /><path d="M4 20l1-4.5L15.5 5a2.1 2.1 0 0 1 3 0l.5.5a2.1 2.1 0 0 1 0 3L8.5 19z" /></>,
 };
 
