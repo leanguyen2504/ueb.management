@@ -17,7 +17,6 @@ export const metadata: Metadata = { title: 'Việc của tôi' };
 
 const TABS = [
   ['tien-do', 'Tiến độ'],
-  ['gantt', 'Gantt'],
   ['', 'Tôi thực hiện'],
   ['da-giao', 'Tôi đã giao'],
   ['xong', 'Đã hoàn thành'],
@@ -190,7 +189,8 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
       <PageHead title="Việc" sub="Việc của bạn trong các nhóm và trong mục Cá nhân (chỉ bạn thấy). Tự đặt hạn, lịch và theo dõi tiến độ." />
       {tb && <p role="status" className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{tb}</p>}
       {loi && <p role="alert" className="mb-4 rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:bg-orange-950 dark:text-orange-300">{loi}</p>}
-      <div className="mb-5 flex flex-wrap items-center gap-3">
+      <div className="mb-5 flex items-start gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
         <nav className="seg" aria-label="Lọc việc">
           {TABS.map(([k, l]) => (
             <a key={k} href={href(k, nhomValue)} aria-current={xem === k ? 'page' : undefined}>{l}</a>
@@ -199,6 +199,19 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
         {(filterSections.length > 0 || filterIds) && (
           <TaskGroupFilter value={nhomValue} all={{ value: '', label: `Tất cả nhóm, dự án (${allTasks.length})`, href: href(xem, '') }} sections={filterSections} />
         )}
+        </div>
+        {/* Nút Gantt riêng bên phải: bấm để mở biểu đồ, bấm lần nữa để về Tiến độ. */}
+        <a
+          href={href(xem === 'gantt' ? 'tien-do' : 'gantt', nhomValue)}
+          aria-current={xem === 'gantt' ? 'page' : undefined}
+          title={xem === 'gantt' ? 'Đóng Gantt, về Tiến độ' : 'Xem việc dạng Gantt theo thời gian'}
+          className={`${xem === 'gantt' ? 'btn' : 'btn-secondary border-brand-600 text-brand-600 dark:border-brand-300 dark:text-brand-300'} shrink-0`}
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor">
+            <rect x="2" y="3" width="9" height="3" rx="1" /><rect x="6" y="8.5" width="10" height="3" rx="1" /><rect x="10" y="14" width="8" height="3" rx="1" />
+          </svg>
+          {xem === 'gantt' ? 'Đóng Gantt' : 'Gantt'}
+        </a>
       </div>
       {(xem === '' || xem === 'da-giao') && (
         <div className="mb-4 flex flex-wrap gap-2">
