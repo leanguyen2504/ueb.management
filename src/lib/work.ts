@@ -82,6 +82,24 @@ export async function updateTask(_prev: FormState, form: FormData): Promise<Form
   return { ok: 'Đã lưu thay đổi.' };
 }
 
+// Kéo thanh trên Gantt: dời ngày bắt đầu và hạn của một việc. Giống "Sửa", chỉ người có quyền
+// Sửa trong nhóm (hoặc chủ mục Cá nhân) đổi được; trigger tasks_check kiểm tra lại.
+export async function moveTaskDates(input: { id: string; start_date: string | null; due_date: string | null }): Promise<FormState> {
+  const id = uuidOrNull(String(input?.id ?? ''));
+  const day = (v: unknown) => (v == null || v === '' ? null : /^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? String(v) : undefined);
+  const start = day(input?.start_date);
+  const due = day(input?.due_date);
+  if (!id) return { error: 'Thiếu việc.' };
+  if (start === undefined || due === undefined) return { error: 'Ngày không hợp lệ.' };
+  if (start && due && start > due) return { error: 'Ngày bắt đầu phải trước hạn.' };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('tasks').update({ start_date: start, due_date: due }).eq('id', id).select('group_id').maybeSingle();
+  if (error) return { error: errText(error) };
+  if (!data) return { error: 'Bạn không có quyền đổi ngày của việc này.' };
+  refresh(data.group_id);
+  return { ok: 'Đã đổi ngày.' };
+}
+
 export async function setTaskStatus(form: FormData) {
   const id = uuidOrNull(text(form, 'id'));
   const status = text(form, 'status') as TaskStatus;

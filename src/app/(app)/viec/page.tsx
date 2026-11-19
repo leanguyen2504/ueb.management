@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
 import { TaskList } from '@/components/TaskList';
 import { EventForm, PersonalProjectForm, TaskForm } from '@/components/WorkForms';
 import { TaskGroupFilter, type FilterOption } from '@/components/TaskGroupFilter';
+import { TaskGantt, type GanttGroup, type GanttTask } from '@/components/TaskGantt';
 import { loadPeople } from '@/lib/people';
 import { loadJiraBriefs, type JiraBrief } from '@/lib/jira/brief';
 import { serverEnv } from '@/lib/env';
@@ -15,6 +17,7 @@ export const metadata: Metadata = { title: 'Việc của tôi' };
 
 const TABS = [
   ['tien-do', 'Tiến độ'],
+  ['gantt', 'Gantt'],
   ['', 'Tôi thực hiện'],
   ['da-giao', 'Tôi đã giao'],
   ['xong', 'Đã hoàn thành'],
@@ -29,7 +32,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
   // Việc cần hiện (trừ "Tiến độ", cần biết mục cá nhân) được đọc song song với các bước dưới.
   const base = () => supabase.from('tasks').select('*').order('due_date', { ascending: true, nullsFirst: false }).order('updated_at', { ascending: false });
   const early =
-    xem === 'tien-do' ? null
+    xem === 'tien-do' || xem === 'gantt' ? null
     : xem === 'da-giao' ? base().eq('created_by', userId).or(`assignee_id.is.null,assignee_id.neq.${userId}`).neq('status', 'done').limit(300).returns<Task[]>()
     : xem === 'xong' ? base().or(`assignee_id.eq.${userId},created_by.eq.${userId}`).eq('status', 'done').limit(300).returns<Task[]>()
     : base().eq('assignee_id', userId).neq('status', 'done').limit(300).returns<Task[]>();
@@ -167,6 +170,18 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
     ...allGroups.filter((g) => !g.owner_id && creatable.has(g.id)).map((g) => ({ id: g.id, label: g.name })),
   ];
 
+  // Dữ liệu cho Gantt (chế độ Gantt và bản thu nhỏ trên Tiến độ): việc kèm quyền kéo đổi ngày, cây nhóm.
+  const gantt = xem === 'tien-do' || xem === 'gantt'
+    ? {
+        today: vnDay(),
+        tasks: list.map((t): GanttTask => ({
+          id: t.id, title: t.title, group_id: t.group_id, status: t.status, start_date: t.start_date, due_date: t.due_date,
+          progress: t.progress, assignee_id: t.assignee_id, assignee: t.assignee_id ? name(t.assignee_id) : '', canEdit: canEditTask(t),
+        })),
+        groups: allGroups.map((g): GanttGroup => ({ id: g.id, name: g.owner_id && !g.parent_id ? 'Cá nhân' : g.name, parent_id: g.parent_id })),
+      }
+    : null;
+
   const byStatus = (s: TaskStatus) => list.filter((t) => t.status === s);
   const counts = (['todo', 'doing', 'review'] as TaskStatus[]).map((s) => [s, byStatus(s).length] as const);
 
@@ -192,10 +207,16 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
           ))}
         </div>
       )}
+      {xem === 'gantt' && gantt ? (
+        <section className="card">
+          <TaskGantt tasks={gantt.tasks} groups={gantt.groups} today={gantt.today} me={userId} />
+        </section>
+      ) : (
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           {xem === 'tien-do' ? (
-            <Progress tasks={list} label={label} me={userId} deleteState={deleteState} back={back} canEdit={canEditTask} people={peopleFor} jira={jira} />
+            <Progress tasks={list} label={label} me={userId} deleteState={deleteState} back={back} canEdit={canEditTask} people={peopleFor} jira={jira}
+              gantt={gantt && <TaskGantt mini tasks={gantt.tasks} groups={gantt.groups} today={gantt.today} me={userId} fullHref={href('gantt', nhomValue)} />} />
           ) : (
             <section className="card">
               <TaskList
@@ -239,12 +260,13 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
           </section>
         </aside>
       </div>
+      )}
     </>
   );
 }
 
 // Bảng tiến độ theo nhóm/dự án: tỷ lệ xong, quá hạn, gấp, hạn gần nhất; rồi danh sách việc cần xử lý.
-function Progress({ tasks, label, me, deleteState, back, canEdit, people, jira }: { tasks: Task[]; label: (id: string) => string; me: string; deleteState: (t: Task) => 'delete' | 'request' | 'pending'; back: string; canEdit: (t: Task) => boolean; people: (t: Task) => { id: string; label: string }[] | undefined; jira: { briefs: Map<string, JiraBrief>; base: string | null; canSet: (t: Task) => boolean } }) {
+function Progress({ tasks, label, me, deleteState, back, canEdit, people, jira, gantt }: { gantt?: ReactNode; tasks: Task[]; label: (id: string) => string; me: string; deleteState: (t: Task) => 'delete' | 'request' | 'pending'; back: string; canEdit: (t: Task) => boolean; people: (t: Task) => { id: string; label: string }[] | undefined; jira: { briefs: Map<string, JiraBrief>; base: string | null; canSet: (t: Task) => boolean } }) {
   const today = vnDay();
   const soon = addDays(today, 3);
   const week = addDays(today, 7);
@@ -285,6 +307,12 @@ function Progress({ tasks, label, me, deleteState, back, canEdit, people, jira }
           </div>
         ))}
       </section>
+      {gantt && (
+        <section className="card">
+          <h2 className="mb-3 text-lg font-semibold">Gantt 4 tuần tới</h2>
+          {gantt}
+        </section>
+      )}
       <section className="card overflow-x-auto">
         <h2 className="mb-3 text-lg font-semibold">Tiến độ theo nhóm, dự án</h2>
         <table className="w-full text-sm">
