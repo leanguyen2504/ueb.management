@@ -48,6 +48,7 @@ export function TaskList({
   back,
   canEdit,
   people,
+  projects,
   jira,
 }: {
   tasks: Task[];
@@ -71,6 +72,8 @@ export function TaskList({
   canEdit?: boolean | ((t: Task) => boolean);
   /** Thành viên để đổi người thực hiện, theo từng việc; không có thì không hiện ô đó. */
   people?: Option[] | ((t: Task) => Option[] | undefined);
+  /** Dự án cá nhân để chuyển việc (chỉ việc trong mục Cá nhân). */
+  projects?: (t: Task) => Option[] | undefined;
   /** Ô mã Jira: thông tin đối chiếu từ Jira của tôi, địa chỉ Jira, ai được gắn mã. */
   jira?: { briefs: Map<string, JiraBrief>; base: string | null; canSet: (t: Task) => boolean };
 }) {
@@ -130,7 +133,7 @@ export function TaskList({
               <button className="btn-secondary px-2 py-1 text-xs">Lưu</button>
             </form>
             {(typeof canEdit === 'function' ? canEdit(t) : canEdit) && (
-              <TaskEditButton task={t} people={typeof people === 'function' ? people(t) : people} />
+              <TaskEditButton task={t} people={typeof people === 'function' ? people(t) : people} projects={projects?.(t)} />
             )}
             {deleteState && (() => {
               const st = deleteState(t);

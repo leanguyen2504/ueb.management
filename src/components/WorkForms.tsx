@@ -114,7 +114,7 @@ export function PersonalProjectForm() {
  * Trả về hai phần tử flex: nút (cạnh nút Lưu/Xóa) và khung sửa chiếm trọn một dòng bên dưới.
  * people: danh sách thành viên để đổi người thực hiện; không truyền thì giữ nguyên người được giao.
  */
-export function TaskEditButton({ task, people }: { task: Task; people?: Option[] }) {
+export function TaskEditButton({ task, people, projects }: { task: Task; people?: Option[]; projects?: Option[] }) {
   const [open, setOpen] = useState(false);
   const [state, action] = useActionState(updateTask, null);
   useEffect(() => { if (state?.ok) setOpen(false); }, [state]);
@@ -131,6 +131,15 @@ export function TaskEditButton({ task, people }: { task: Task; people?: Option[]
         <form action={action} className="basis-full space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
           <input type="hidden" name="id" value={task.id} />
           <div><label className="label" htmlFor={`${p}-title`}>Tên việc</label><input id={`${p}-title`} name="title" required maxLength={300} defaultValue={task.title} className="input" autoFocus /></div>
+          {/* Việc cá nhân: chuyển sang dự án cá nhân khác (ví dụ tách Luận án khỏi NCKH). */}
+          {projects && projects.length > 1 && (
+            <div>
+              <label className="label" htmlFor={`${p}-group`}>Dự án cá nhân</label>
+              <select id={`${p}-group`} name="group_id" className="input" defaultValue={task.group_id}>
+                {projects.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-4">
             {options && (
               <div>
