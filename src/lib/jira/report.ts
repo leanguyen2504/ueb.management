@@ -192,15 +192,47 @@ export function isBotPassedComment(author: string | null | undefined, body: stri
   if (!isJiraBot(author)) return false;
   const text = String(body ?? '').replace(/\(\s*quy ước:[^\n]*/giu, ' ');
   const heading = text.match(/^\s*h[1-6]\.\s*(.*)$/mu);
-  if (heading) return /^\(\/\)/u.test(heading[1].trim());
+  if (heading) {
+    const h = heading[1].trim();
+    if (/^(\(\/\)|✅)/u.test(h)) return true;
+    // Tiêu đề dạng "Đã đánh giá sản phẩm: ĐẠT" (không có biểu tượng đầu dòng).
+    return !/(không|chưa)\s+đạt|đạt\s+một\s+phần|^(\(x\)|\(-\)|\(\?\)|❌)/iu.test(h) && /[:\-–]\s*ĐẠT\s*$/u.test(h);
+  }
   if (/(không|chưa)\s+đạt|đạt\s+một\s+phần/iu.test(text)) return false;
   return /đã\s+đạt(?!\p{L})(?!\s+được)/iu.test(text) || /[-–:]\s*ĐẠT(?!\p{L})/u.test(text);
 }
 
-// Đang chờ tôi: comment nhắc tên chưa trả lời (trừ comment bot Jira kết luận đạt); việc của tôi đang chặn việc khác.
+// Mã việc đã đóng: nhóm trạng thái "Xong", đã có ngày resolve, hoặc tên trạng thái là đóng/hoàn thành/đạt.
+const CLOSED_STATUS = /^(done|closed|resolved|complete[d]?|finished|đã\s*đóng|đóng|hoàn\s*thành|đã\s*hoàn\s*thành|đã\s*xong|xong|đạt|đã\s*đạt|đã\s*duyệt)$/iu;
+export function isClosedIssue(i: Pick<JiraIssueRow, 'status' | 'status_category' | 'resolved_at'>) {
+  return i.status_category === 'done' || Boolean(i.resolved_at) || CLOSED_STATUS.test((i.status ?? '').normalize('NFC').trim());
+}
+
+// Jira trả "+0700", Postgres trả "+00": so theo thời điểm, không so chuỗi.
+const time = (v: string) => {
+  const t = Date.parse(String(v).replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
+  return Number.isNaN(t) ? 0 : t;
+};
+
+// Lời nhắc không cần trả lời nữa: chính nó là comment bot kết luận đạt; mã việc đã đóng;
+// hoặc sau lời nhắc, bot Jira Assistant đã kết luận đạt trên mã đó.
+export function mentionSettled(m: JiraMentionRow, issue: JiraIssueRow | undefined, mentions: JiraMentionRow[] = []) {
+  if (isBotPassedComment(m.author_name, m.body)) return true;
+  if (!issue) return false;
+  if (isClosedIssue(issue)) return true;
+  const at = time(m.created_at);
+  const lc = issue.last_comment;
+  if (lc && time(lc.created) >= at && isBotPassedComment(lc.author, lc.body)) return true;
+  return mentions.some((o) => o.issue_key === m.issue_key && time(o.created_at) >= at && o.comment_id !== m.comment_id
+    && isBotPassedComment(o.author_name, o.body));
+}
+
+// Đang chờ tôi: comment nhắc tên chưa trả lời (trừ lời nhắc đã xong: mã đã đóng hoặc bot Jira kết luận đạt);
+// việc của tôi đang chặn việc khác.
 export function waitingOnMe(issues: JiraIssueRow[], mentions: JiraMentionRow[]) {
+  const byKey = new Map(issues.map((i) => [i.issue_key, i]));
   return {
-    mentions: mentions.filter((m) => !m.answered && !isBotPassedComment(m.author_name, m.body)),
+    mentions: mentions.filter((m) => !m.answered && !mentionSettled(m, byKey.get(m.issue_key), mentions)),
     blockingOthers: issues.filter((i) => isMine(i) && notDone(i) && blocking(i).length > 0),
   };
 }

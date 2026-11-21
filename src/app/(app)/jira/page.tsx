@@ -188,7 +188,7 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
 
       {tab === 'cho-toi' && synced && (
         <div className="grid gap-4 xl:grid-cols-2">
-          <Panel title="Comment nhắc tên tôi, chưa trả lời" count={onMe.mentions.length} note="Bạn chưa comment lại trên mã việc đó kể từ lời nhắc. Không tính comment của bot Jira Assistant đã kết luận đạt.">
+          <Panel title="Comment nhắc tên tôi, chưa trả lời" count={onMe.mentions.length} note="Bạn chưa comment lại trên mã việc đó kể từ lời nhắc. Không tính mã việc đã đóng/hoàn thành, hoặc đã được bot Jira Assistant kết luận đạt.">
             <MentionList items={onMe.mentions} ctx={ctx} empty="Không có lời nhắc nào đang chờ bạn." />
           </Panel>
           <Panel title="Việc của tôi đang chặn người khác" count={onMe.blockingOthers.length} note="Người khác đang chờ các việc này xong mới làm tiếp được.">
