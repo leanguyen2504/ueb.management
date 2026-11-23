@@ -194,12 +194,28 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
     for (let i = 0; g && g.parent_id !== id && i < 8; i++) g = g.parent_id ? dirById.get(g.parent_id) : undefined;
     return g?.parent_id === id ? g.id : null;
   };
-  const subPeople = await loadPeople(supabase, [...subTasks.map((t) => t.assignee_id), ...subDocs.map((d) => d.created_by)].filter((a) => a && !person.has(a)));
+  // Sửa việc ở không gian con: quyền Sửa ở chính không gian con đó (has_group_perm không kế thừa quyền Sửa từ nhóm cha).
+  // Quản trị, thư ký toàn trường sửa mọi nhóm; không gian cá nhân thì chủ sở hữu sửa.
+  const subGroupIds = [...new Set(subTasks.map((t) => t.group_id))];
+  const { data: subEditRows } = subGroupIds.length && !seesAll && !isPersonal
+    ? await supabase.from('group_members').select('group_id').eq('user_id', userId).eq('can_edit', true).in('group_id', subGroupIds)
+    : { data: [] as { group_id: string }[] };
+  const subEditable = new Set(isPersonal ? (group.owner_id === userId ? subGroupIds : []) : seesAll ? subGroupIds : (subEditRows ?? []).map((r) => r.group_id));
+  const { data: subMemberRows } = subEditable.size && !isPersonal
+    ? await supabase.from('group_members').select('group_id, user_id').in('group_id', [...subEditable])
+    : { data: [] as { group_id: string; user_id: string }[] };
+  const subPeople = await loadPeople(supabase, [...subTasks.map((t) => t.assignee_id), ...subDocs.map((d) => d.created_by), ...(subMemberRows ?? []).map((m) => m.user_id)].filter((a) => a && !person.has(a)));
   const anyName = (uid: string | null) => (uid && !person.has(uid) ? subPeople.name(uid) || 'Người dùng' : name(uid));
   const subGroups = [...new Set(subOpen.map((t) => t.group_id))]
     .map((gid) => ({ gid, path: subPath(gid), list: subOpen.filter((t) => t.group_id === gid) }))
     .sort((a, b) => a.path.localeCompare(b.path, 'vi'));
   const doneTasks = (tasks ?? []).filter((t) => t.status === 'done');
+  // Người thực hiện để chọn khi sửa việc ở không gian con: thành viên của chính không gian đó.
+  const subMembersOf = new Map<string, { id: string; label: string }[]>();
+  for (const m of subMemberRows ?? []) subMembersOf.set(m.group_id, [...(subMembersOf.get(m.group_id) ?? []), { id: m.user_id, label: anyName(m.user_id) }]);
+  for (const v of subMembersOf.values()) v.sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+  const canEditAny = (t: Task) => (t.group_id === group.id ? canEditTasks : subEditable.has(t.group_id));
+  const peopleAny = (t: Task) => (t.group_id === group.id ? editPeople : isPersonal ? undefined : subMembersOf.get(t.group_id) ?? []);
 
   const stripMembers = (members ?? []).map((m) => ({ user_id: m.user_id, is_manager: m.is_manager, is_clerk: m.is_clerk, profile: person.get(m.user_id), avatarUrl: avatars.get(person.get(m.user_id)?.avatar_path ?? '') }));
   // Thẻ của trang nhóm. Thông tin ít dùng (người tạo/sửa, nhật ký, sửa, lưu trữ) nằm ở thẻ Thông tin.
@@ -225,7 +241,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const subJira = {
     briefs: await loadJiraBriefs(supabase, userId, subOpen.map((t) => t.jira_key)),
     base: serverEnv.jiraBaseUrl(),
-    canSet: (t: Task) => seesAll || t.assignee_id === userId,
+    canSet: (t: Task) => seesAll || subEditable.has(t.group_id) || t.assignee_id === userId,
   };
   // Ô mã Jira có ở mọi việc, kể cả Cá nhân (việc Cá nhân chỉ chủ thấy nên mã đó cũng chỉ chủ thấy).
   const jira = {
@@ -429,7 +445,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
           <div className="space-y-5">
             <section className="card">
               <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-semibold">Việc sắp đến hạn</h2><Link href={tabHref('viec')} className="link text-sm">{allOpen.length} việc mở</Link></div>
-              <TaskList tasks={allOpen.slice(0, 5)} name={anyName} groupName={(gid) => (gid === group.id ? group.name : subPath(gid))} empty="Chưa có việc đang mở." me={userId} />
+              <TaskList tasks={allOpen.slice(0, 5)} name={anyName} groupName={(gid) => (gid === group.id ? group.name : subPath(gid))} empty="Chưa có việc đang mở." me={userId} canEdit={canEditAny} people={peopleAny} />
             </section>
             <section className="card">
               <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-semibold">Lịch sắp tới</h2><Link href={tabHref('lich')} className="link text-sm">Mở</Link></div>
@@ -458,7 +474,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                 {subGroups.map((sg) => (
                   <div key={sg.gid} className="mb-4">
                     <h3 className="mb-1 text-sm font-semibold"><Link href={`/nhom/${sg.gid}?tab=viec`} className="hover:underline">{sg.path}</Link> <span className="font-normal muted">({sg.list.length})</span></h3>
-                    <TaskList tasks={sg.list} name={anyName} me={userId} jira={subJira} empty="" />
+                    <TaskList tasks={sg.list} name={anyName} me={userId} jira={subJira} canEdit={canEditAny} people={peopleAny} empty="" />
                   </div>
                 ))}
               </div>
