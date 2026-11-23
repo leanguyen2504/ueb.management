@@ -43,7 +43,7 @@ function meetingRange(sp: SP, today: string) {
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const { lich } = sp;
-  const { supabase, userId, profile } = await requireSession();
+  const { supabase, userId, profile, ctx } = await requireSession();
   const today = vnDay();
   const range = meetingRange(sp, today);
   const rangeFromIso = dayStartIso(range.from);
@@ -52,7 +52,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const nowIso = new Date().toISOString();
   const [{ data: groups }, { data: mine }, { data: tasks }, { data: groupTasks }, { data: pendingBookings }, { count: unreadCount }, meetings, { data: rangeEvents }] = await Promise.all([
     supabase.from('groups').select('*').is('archived_at', null).order('name').returns<Group[]>(),
-    supabase.from('group_members').select('group_id, is_manager').eq('user_id', userId),
+    supabase.from('group_members').select('group_id, is_manager, can_edit').eq('user_id', userId),
     supabase.from('tasks').select('*').eq('assignee_id', userId).neq('status', 'done').order('due_date', { ascending: true, nullsFirst: false }).limit(50).returns<Task[]>(),
     supabase.from('group_members').select('group_id').eq('user_id', userId).then(async ({ data }) => {
       const ids = (data ?? []).map((d) => d.group_id);
@@ -68,6 +68,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const myGroups = (groups ?? []).filter((g) => mineIds.has(g.id));
   const groupName = new Map((groups ?? []).map((g) => [g.id, g.name]));
   const openTasks = tasks ?? [];
+  // Sửa thông tin việc: như trang Việc (quyền Sửa hoặc Trưởng nhóm, chủ mục Cá nhân, quản trị, thư ký toàn trường).
+  // Không hiện ô Người thực hiện ở đây; đổi người làm trong trang nhóm hoặc trang Việc.
+  const groupById = new Map((groups ?? []).map((g) => [g.id, g]));
+  const editIn = new Set((mine ?? []).filter((m) => m.can_edit || m.is_manager).map((m) => m.group_id));
+  const canEditTask = (t: Task) => {
+    const g = groupById.get(t.group_id);
+    if (!g) return false;
+    if (g.owner_id) return g.owner_id === userId;
+    return editIn.has(t.group_id) || ctx.is_admin || ctx.all_groups_secretary;
+  };
   const overdue = openTasks.filter((t) => t.due_date && t.due_date < today).length;
   // Việc ở đây đều giao cho tôi: tên lấy từ hồ sơ trong phiên, không cần đọc lại.
   const myName = profile.full_name || profile.email;
@@ -197,7 +207,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <h2 className="text-lg font-semibold">Việc cần làm</h2>
             <Link href="/viec" className="link text-sm">Tất cả {openTasks.length}</Link>
           </div>
-          <TaskList tasks={openTasks.slice(0, 5)} name={name} groupName={(id) => groupName.get(id) ?? 'Nhóm'} empty="Bạn không có việc nào đang mở." />
+          <TaskList tasks={openTasks.slice(0, 5)} name={name} groupName={(id) => groupName.get(id) ?? 'Nhóm'} empty="Bạn không có việc nào đang mở." me={userId} canEdit={canEditTask} />
         </section>
         <section className="card">
           <div className="mb-2 flex items-center justify-between">
