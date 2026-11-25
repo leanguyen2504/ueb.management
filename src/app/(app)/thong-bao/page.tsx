@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { requireSession } from '@/lib/session';
 import { PageHead } from '@/components/PageHead';
 import Link from 'next/link';
-import { clearReadNotifications, dismissAlert, dismissAllAlerts, markAllRead, openNotification } from '@/lib/work';
+import { clearReadNotifications, deleteNotification, dismissAlert, dismissAllAlerts, markAllRead, openNotification } from '@/lib/work';
 import { fmtDateTime } from '@/lib/format';
 import { ALERT_LEVEL_LABEL, type AlertLevel, type AppAlert, type AppNotification } from '@/lib/types';
 
@@ -78,10 +78,10 @@ export default async function NotificationsPage() {
         {list.length ? (
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {list.map((n) => (
-              <li key={n.id}>
-                <form action={openNotification}>
+              <li key={n.id} className={`flex items-start ${n.read_at ? '' : 'bg-brand-50/60 dark:bg-slate-800/60'}`}>
+                <form action={openNotification} className="min-w-0 flex-1">
                   <input type="hidden" name="id" value={n.id} />
-                  <button className={`flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 ${n.read_at ? '' : 'bg-brand-50/60 dark:bg-slate-800/60'}`}>
+                  <button className={`flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800`}>
                     <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read_at ? 'bg-transparent' : 'bg-brand-600'}`} aria-hidden="true" />
                     <span className="min-w-0 flex-1">
                       <span className={`block ${n.read_at ? '' : 'font-semibold'}`}>{n.title}</span>
@@ -90,6 +90,10 @@ export default async function NotificationsPage() {
                     </span>
                     {!n.read_at && <span className="sr-only">Chưa đọc</span>}
                   </button>
+                </form>
+                <form action={deleteNotification} className="px-2 py-3">
+                  <input type="hidden" name="id" value={n.id} />
+                  <button className="rounded-lg px-2 py-1 text-xs muted hover:bg-slate-100 dark:hover:bg-slate-800" aria-label={`Gỡ thông báo: ${n.title}`}>Gỡ</button>
                 </form>
               </li>
             ))}

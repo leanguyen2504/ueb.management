@@ -379,6 +379,15 @@ export async function clearReadNotifications() {
   refresh();
 }
 
+// Gỡ (xóa) một thông báo thường.
+export async function deleteNotification(form: FormData) {
+  const id = Number(text(form, 'id'));
+  if (!Number.isFinite(id) || id <= 0) return;
+  const supabase = await createClient();
+  await supabase.from('notifications').delete().eq('id', id);
+  refresh();
+}
+
 // Gỡ tay một nhắc việc ở quả chuông. Mục sẽ hiện lại nếu hạn hoặc độ ưu tiên đổi.
 export async function dismissAlert(form: FormData) {
   const key = text(form, 'key').slice(0, 300);
