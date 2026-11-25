@@ -74,7 +74,8 @@ export function TaskGantt({
   const [scale, setScale] = useState<Scale>('tuan');
   const [who, setWho] = useState('');
   const [hideDone, setHideDone] = useState(false);
-  // Bản đầy đủ mở hết; bản thu nhỏ chỉ hiện thanh nhóm, bấm vào nhóm mới mở việc.
+  // Mở ra chỉ hiện thanh nhóm gốc (thu gọn hết cho đỡ tràn màn hình); bấm vào nhóm mới mở.
+  // `toggled` là các nhóm đang mở.
   const [toggled, setToggled] = useState<Set<string>>(new Set());
   const [moved, setMoved] = useState<Map<string, { start_date: string | null; due_date: string | null }>>(new Map());
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -166,7 +167,7 @@ export function TaskGantt({
     const walk = (g: GanttGroup, depth: number): GanttTask[] => {
       const head: Row = { kind: 'group', g, depth, s: null, e: null, total: 0, done: 0, overdue: 0, undated: 0, hasKids: false };
       out.push(head);
-      const open = mini ? toggled.has(g.id) : !toggled.has(g.id);
+      const open = toggled.has(g.id);
       const all: GanttTask[] = [];
       const mark = out.length;
       for (const c of kids.get(g.id) ?? []) all.push(...walk(c, depth + 1));
@@ -325,6 +326,8 @@ export function TaskGantt({
             <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} />
             <span>Ẩn việc đã xong</span>
           </label>
+          <button type="button" className="btn-secondary py-1.5" onClick={() => setToggled(new Set(groups.map((g) => g.id)))}>Mở hết</button>
+          <button type="button" className="btn-secondary py-1.5" onClick={() => setToggled(new Set())}>Thu gọn hết</button>
           <button type="button" className="btn-secondary py-1.5" onClick={() => { if (scroller.current) scroller.current.scrollLeft = Math.max(0, (t0 - from - 7) * dayW); }}>Hôm nay</button>
           <span className="ml-auto flex flex-wrap items-center gap-3 text-xs muted">
             {(['todo', 'doing', 'review', 'done'] as TaskStatus[]).map((s) => (

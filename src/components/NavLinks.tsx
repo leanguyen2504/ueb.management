@@ -29,7 +29,11 @@ export function Icon({ name, className = 'h-5 w-5' }: { name: string; className?
   );
 }
 
-const under = (path: string, href: string) => (href === '/' ? path === '/' : path === href || path.startsWith(href + '/'));
+// Bỏ phần ?... của href khi so đường dẫn (vd. Việc mở thẳng /viec?xem=gantt).
+const under = (path: string, link: string) => {
+  const href = link.split('?')[0];
+  return href === '/' ? path === '/' : path === href || path.startsWith(href + '/');
+};
 const isActive = (path: string, it: NavItem) => under(path, it.href) || (it.match ?? []).some((m) => under(path, m));
 
 export function NavLinks({ items, variant }: { items: NavItem[]; variant: 'side' | 'bottom' }) {
