@@ -1,6 +1,60 @@
 -- Nhắc việc gấp, cần làm, đến hạn trong 24 giờ (hiện ở quả chuông).
 -- Danh sách được tính trực tiếp từ dữ liệu: việc xử lý xong thì tự biến mất.
+-- Việc có thêm giờ hạn (không bắt buộc): có giờ thì nhắc đúng 24 giờ trước giờ đó.
 -- Người dùng có thể gỡ tay từng mục; mục đã gỡ hiện lại nếu hạn hoặc độ ưu tiên thay đổi.
+
+-- 0. Giờ hạn cho việc (không bắt buộc). Để trống: hạn tính đến hết ngày.
+alter table public.tasks add column if not exists due_time time;
+
+-- Người chỉ được đổi trạng thái thì cũng không được đổi giờ hạn; bỏ ngày hạn thì bỏ luôn giờ.
+create or replace function private.check_task()
+returns trigger
+language plpgsql security definer
+set search_path = ''
+as $function$
+begin
+  if new.due_date is null then
+    new.due_time := null;
+  end if;
+
+  if new.assignee_id is not null and (tg_op = 'INSERT' or new.assignee_id is distinct from old.assignee_id) then
+    if not exists (
+      select 1 from public.profiles p
+      where p.id = new.assignee_id and p.is_active
+        and (
+          p.system_role = 'principal'
+          or exists (select 1 from public.group_members m where m.group_id = new.group_id and m.user_id = p.id and m.can_view)
+          or exists (select 1 from public.system_settings s where s.current_admin_id = p.id)
+          or (p.system_role = 'secretary' and exists (select 1 from public.secretary_scopes c where c.user_id = p.id and c.all_groups))
+        )
+    ) then
+      raise exception 'Người được giao việc phải là thành viên của nhóm' using errcode = '42501';
+    end if;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    if new.group_id <> old.group_id and not exists (
+      select 1 from public.groups a, public.groups b
+      where a.id = old.group_id and b.id = new.group_id
+        and a.owner_id is not null and a.owner_id = b.owner_id and a.owner_id = auth.uid()
+    ) then
+      raise exception 'Không chuyển đầu việc sang nhóm khác' using errcode = '42501';
+    end if;
+    if not private.has_group_perm(old.group_id, 'edit')
+       and (new.title, new.description, new.priority, new.due_date, new.due_time, new.assignee_id)
+           is distinct from (old.title, old.description, old.priority, old.due_date, old.due_time, old.assignee_id) then
+      raise exception 'Bạn chỉ được đổi trạng thái của việc được giao' using errcode = '42501';
+    end if;
+  end if;
+
+  if new.status = 'done' and (tg_op = 'INSERT' or old.status <> 'done') then
+    new.completed_at := now();
+  elsif new.status <> 'done' then
+    new.completed_at := null;
+  end if;
+  return new;
+end;
+$function$;
 
 create table if not exists public.alert_dismissals (
   user_id uuid not null default auth.uid() references public.profiles (id) on delete cascade,
@@ -27,20 +81,30 @@ as $$
            (now() at time zone 'Asia/Ho_Chi_Minh')::date as today
   ),
   items as (
-    -- 1. Việc được giao cho mình, chưa xong: quá hạn, gấp, hoặc hạn hôm nay/ngày mai.
-    select 'task:' || t.id || ':' || coalesce(t.due_date::text, '') || ':' || t.priority as ref_key,
+    -- 1. Việc được giao cho mình, chưa xong: quá hạn, gấp, hoặc đến hạn trong 24 giờ.
+    --    Có giờ hạn thì tính theo giờ; không có giờ thì hạn là hết ngày (hôm nay hoặc ngày mai đều nhắc).
+    select 'task:' || t.id || ':' || coalesce(t.due_date::text, '') || ':' || coalesce(t.due_time::text, '') || ':' || t.priority as ref_key,
            'viec' as source,
-           case when t.due_date < me.today then 'qua_han'
+           case when t.due_date is not null and t.due_time is not null and k.due_at < now() then 'qua_han'
+                when t.due_date < me.today then 'qua_han'
                 when t.priority = 'urgent' then 'gap'
                 else 'sap_den_han' end as level,
            t.title,
-           g.name || coalesce(' · Hạn ' || to_char(t.due_date, 'DD/MM/YYYY'), '') as body,
+           g.name || coalesce(' · Hạn ' || to_char(t.due_time, 'HH24:MI ') || to_char(t.due_date, 'DD/MM/YYYY'),
+                              ' · Hạn ' || to_char(t.due_date, 'DD/MM/YYYY'), '') as body,
            '/nhom/' || t.group_id as link,
-           (t.due_date + 1)::timestamp at time zone 'Asia/Ho_Chi_Minh' as due_at
+           k.due_at
     from public.tasks t
-    join public.groups g on g.id = t.group_id, me
+    join public.groups g on g.id = t.group_id
+    cross join me
+    cross join lateral (
+      select case when t.due_time is null then (t.due_date + 1)::timestamp
+                  else t.due_date + t.due_time end at time zone 'Asia/Ho_Chi_Minh' as due_at
+    ) k
     where t.assignee_id = me.uid and t.status <> 'done'
-      and (t.priority = 'urgent' or t.due_date <= me.today + 1)
+      and (t.priority = 'urgent'
+           or (t.due_time is null and t.due_date <= me.today + 1)
+           or (t.due_time is not null and k.due_at <= now() + interval '24 hours'))
 
     union all
     -- 2. Mã Jira mình được giao, chưa xong: quá hạn, Highest, hoặc hạn hôm nay/ngày mai.

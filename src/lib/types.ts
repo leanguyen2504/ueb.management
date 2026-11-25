@@ -120,6 +120,8 @@ export type Task = {
   status: TaskStatus;
   priority: TaskPriority;
   due_date: string | null;
+  /** Giờ hạn (HH:MM:SS), không bắt buộc; chưa chạy SQL 20261125000001 thì không có. */
+  due_time?: string | null;
   start_date: string | null;
   progress: number | null;
   assignee_id: string | null;

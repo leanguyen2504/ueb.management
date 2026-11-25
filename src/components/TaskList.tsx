@@ -93,7 +93,7 @@ export function TaskList({
                 {(roles.lead || t.assignee_id) && <span>Bên phụ trách: {roles.lead || name(t.assignee_id)}</span>}
                 {roles.support && <span>Bên phối hợp: {roles.support}</span>}
                 {t.start_date && <span>Bắt đầu {fmtDate(t.start_date)}</span>}
-                {t.due_date && <span className={overdue ? 'font-semibold text-orange-600 dark:text-orange-400' : ''}>Hạn {fmtDate(t.due_date)}{overdue ? ' (quá hạn)' : ''}</span>}
+                {t.due_date && <span className={overdue ? 'font-semibold text-orange-600 dark:text-orange-400' : ''}>Hạn {t.due_time ? `${t.due_time.slice(0, 5)} ` : ''}{fmtDate(t.due_date)}{overdue ? ' (quá hạn)' : ''}</span>}
                 {t.priority !== 'normal' && <span className={`chip ${PRIORITY_CLASS[t.priority]}`}>{TASK_PRIORITY_LABEL[t.priority]}</span>}
               </div>
               {t.progress != null && t.status !== 'done' && (
