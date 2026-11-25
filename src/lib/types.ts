@@ -110,6 +110,7 @@ export type PermKey = (typeof PERMS)[number][0];
 export type TaskStatus = 'todo' | 'doing' | 'review' | 'done';
 export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type EventKind = 'meeting' | 'event' | 'deadline' | 'other';
+export type RepeatRule = 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly';
 export type BookingStatus = 'pending' | 'accepted' | 'declined' | 'cancelled';
 
 export type Task = {
@@ -131,6 +132,12 @@ export type Task = {
   /** Mã Jira gắn với việc (không có ở việc Cá nhân); có thể chưa có cột nếu chưa chạy SQL. */
   jira_key?: string | null;
   jira_url?: string | null;
+  /** Lặp lại (chưa chạy SQL 20261125100001 thì không có). Hoàn thành thì hệ thống tạo lần kế tiếp. */
+  repeat_rule?: RepeatRule | null;
+  repeat_every?: number | null;
+  /** Thứ trong tuần cho kiểu weekly: 1 = Thứ Hai … 7 = Chủ nhật. */
+  repeat_days?: number[] | null;
+  repeat_until?: string | null;
 };
 
 export type CalEvent = {
@@ -220,6 +227,28 @@ export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
   review: 'Chờ duyệt',
   done: 'Hoàn thành',
 };
+export const REPEAT_RULE_LABEL: Record<RepeatRule, string> = {
+  daily: 'Hằng ngày',
+  weekdays: 'Ngày làm việc (T2–T6)',
+  weekly: 'Hằng tuần',
+  monthly: 'Hằng tháng',
+  yearly: 'Hằng năm',
+};
+/** Đơn vị cho ô "Mỗi N …". */
+export const REPEAT_UNIT: Record<RepeatRule, string> = { daily: 'ngày', weekdays: '', weekly: 'tuần', monthly: 'tháng', yearly: 'năm' };
+export const WEEKDAY_SHORT: Record<number, string> = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6', 6: 'T7', 7: 'CN' };
+
+/** Mô tả ngắn: "Hằng tuần (T2, T5)", "Mỗi 2 tuần (T2)", "Hằng tháng · đến 31/12/2026". */
+export function repeatText(t: Pick<Task, 'repeat_rule' | 'repeat_every' | 'repeat_days' | 'repeat_until'>, fmt: (d: string) => string = (d) => d): string | null {
+  const r = t.repeat_rule;
+  if (!r) return null;
+  const n = t.repeat_every ?? 1;
+  let s = n > 1 && r !== 'weekdays' ? `Mỗi ${n} ${REPEAT_UNIT[r]}` : REPEAT_RULE_LABEL[r];
+  if (r === 'weekly' && t.repeat_days?.length) s += ` (${[...t.repeat_days].sort().map((d) => WEEKDAY_SHORT[d]).join(', ')})`;
+  if (t.repeat_until) s += ` · đến ${fmt(t.repeat_until)}`;
+  return s;
+}
+
 export const TASK_PRIORITY_LABEL: Record<TaskPriority, string> = {
   low: 'Thấp',
   normal: 'Bình thường',
