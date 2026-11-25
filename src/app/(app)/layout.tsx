@@ -20,8 +20,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const [{ data: gate }, { count: unreadNotes }, { data: alertRows }, { count: overdue }, avatars] = await Promise.all([
     supabase.rpc('enter_app'),
     supabase.from('notifications').select('id', { count: 'exact', head: true }).is('read_at', null),
-    // Nhắc việc gấp, cần làm, đến hạn trong 24 giờ (chưa chạy SQL 20261125000001 thì trả lỗi, coi như không có).
-    supabase.rpc('my_alerts').select('level'),
+    // Nhắc việc gấp, cần làm, đến hạn trong 24 giờ. sync_alerts còn chuyển mục đã xong xuống thông báo thường;
+    // chưa chạy SQL 20261125000003 thì dùng my_alerts, chưa chạy 20261125000001 thì coi như không có.
+    supabase.rpc('sync_alerts').select('level').then((r) => (r.error ? supabase.rpc('my_alerts').select('level') : r)),
     supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('assignee_id', profile.id).neq('status', 'done').lt('due_date', vnDay()),
     avatarUrls(supabase, [profile.avatar_path]),
   ]);
