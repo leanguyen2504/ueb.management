@@ -33,7 +33,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Năm mục chính (và Soạn thảo, Hành chính trên thanh bên). Trang đặt lịch nằm trong Lịch; Bảng tổng hợp, Mảng và đầu mối nằm trong Họp.
   const items: NavItem[] = [
     { href: '/', label: 'Hôm nay', icon: 'today' },
-    { href: '/viec', label: 'Việc', icon: 'tasks', badge: overdue ?? 0 },
+    // Bấm Việc mở thẳng chế độ Gantt; các tab danh sách vẫn ở trong trang.
+    { href: '/viec?xem=gantt', label: 'Việc', icon: 'tasks', badge: overdue ?? 0 },
     { href: '/lich', label: 'Lịch', icon: 'calendar', match: ['/dat-lich'] },
     { href: '/hop', label: 'Họp', icon: 'folder', match: ['/quan-tri/mang-cong-tac'] },
     { href: '/nhom', label: 'Nhóm và Dự án', icon: 'explore', match: ['/nguoi'] },
