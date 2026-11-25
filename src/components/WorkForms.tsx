@@ -45,6 +45,7 @@ export function TaskForm({ groupId, groups, people, self }: { groupId?: string; 
           </div>
         )}
         <div><label className="label" htmlFor="t-due">Hạn</label><input id="t-due" name="due_date" type="date" className="input" /></div>
+        <div><label className="label" htmlFor="t-due-time">Giờ hạn <span className="font-normal muted">(nếu có)</span></label><input id="t-due-time" name="due_time" type="time" className="input" /></div>
         <div>
           <label className="label" htmlFor="t-pri">Ưu tiên</label>
           <select id="t-pri" name="priority" defaultValue="normal" className="input">
@@ -152,6 +153,11 @@ export function TaskEditButton({ task, people, projects }: { task: Task; people?
             )}
             <div><label className="label" htmlFor={`${p}-start`}>Bắt đầu</label><input id={`${p}-start`} name="start_date" type="date" defaultValue={task.start_date ?? ''} className="input" /></div>
             <div><label className="label" htmlFor={`${p}-due`}>Hạn</label><input id={`${p}-due`} name="due_date" type="date" defaultValue={task.due_date ?? ''} className="input" /></div>
+            <div>
+              <label className="label" htmlFor={`${p}-due-time`}>Giờ hạn <span className="font-normal muted">(nếu có)</span></label>
+              <input id={`${p}-due-time`} name="due_time" type="time" defaultValue={task.due_time?.slice(0, 5) ?? ''} className="input" />
+              {task.due_time && <input type="hidden" name="had_due_time" value="1" />}
+            </div>
             <div>
               <label className="label" htmlFor={`${p}-pri`}>Ưu tiên</label>
               <select id={`${p}-pri`} name="priority" defaultValue={task.priority} className="input">

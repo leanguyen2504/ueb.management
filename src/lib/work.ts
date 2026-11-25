@@ -16,6 +16,13 @@ const EVENT_KINDS: EventKind[] = ['meeting', 'event', 'deadline', 'other'];
 const text = (f: FormData, k: string) => String(f.get(k) || '').trim();
 const uuidOrNull = (v: string) => (/^[0-9a-f-]{36}$/i.test(v) ? v : null);
 
+// Giờ hạn HH:MM (không bắt buộc). Trả về '' khi để trống, false khi sai dạng.
+function dueTime(form: FormData): string | false {
+  const v = text(form, 'due_time');
+  if (!v) return '';
+  return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(v) ? v.slice(0, 5) : false;
+}
+
 function refresh(groupId?: string) {
   revalidatePath('/', 'layout');
   if (groupId) revalidatePath(`/nhom/${groupId}`);
@@ -35,6 +42,9 @@ export async function createTask(_prev: FormState, form: FormData): Promise<Form
   const start = text(form, 'start_date');
   if (start && !/^\d{4}-\d{2}-\d{2}$/.test(start)) return { error: 'Ngày bắt đầu không hợp lệ.' };
   if (start && due && start > due) return { error: 'Ngày bắt đầu phải trước hạn.' };
+  const time = dueTime(form);
+  if (time === false) return { error: 'Giờ hạn không hợp lệ.' };
+  if (time && !due) return { error: 'Hãy chọn ngày hạn trước khi đặt giờ hạn.' };
   const supabase = await createClient();
   const { error } = await supabase.from('tasks').insert({
     group_id,
@@ -42,6 +52,8 @@ export async function createTask(_prev: FormState, form: FormData): Promise<Form
     description: text(form, 'description') || null,
     priority,
     due_date: due || null,
+    // Chỉ gửi cột giờ hạn khi có giờ, để web vẫn chạy nếu chưa chạy SQL thêm cột.
+    ...(time ? { due_time: time } : {}),
     start_date: start || null,
     assignee_id: uuidOrNull(text(form, 'assignee_id')),
   });
@@ -65,6 +77,9 @@ export async function updateTask(_prev: FormState, form: FormData): Promise<Form
   if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return { error: 'Hạn hoàn thành không hợp lệ.' };
   if (start && !/^\d{4}-\d{2}-\d{2}$/.test(start)) return { error: 'Ngày bắt đầu không hợp lệ.' };
   if (start && due && start > due) return { error: 'Ngày bắt đầu phải trước hạn.' };
+  const time = dueTime(form);
+  if (time === false) return { error: 'Giờ hạn không hợp lệ.' };
+  if (time && !due) return { error: 'Hãy chọn ngày hạn trước khi đặt giờ hạn.' };
   const patch: Record<string, string | null> = {
     title,
     description: text(form, 'description') || null,
@@ -72,6 +87,8 @@ export async function updateTask(_prev: FormState, form: FormData): Promise<Form
     due_date: due || null,
     start_date: start || null,
   };
+  // Có giờ mới, hoặc trước đó đã có giờ (để xóa giờ): mới gửi cột giờ hạn.
+  if (time || form.get('had_due_time')) patch.due_time = time || null;
   // Chuyển sang dự án cá nhân khác (chỉ có ô này với việc Cá nhân; trigger tasks_check kiểm tra).
   const group = uuidOrNull(text(form, 'group_id'));
   if (group) patch.group_id = group;
@@ -330,6 +347,24 @@ export async function openNotification(form: FormData) {
 export async function clearReadNotifications() {
   const supabase = await createClient();
   await supabase.from('notifications').delete().not('read_at', 'is', null);
+  refresh();
+}
+
+// Gỡ tay một nhắc việc ở quả chuông. Mục sẽ hiện lại nếu hạn hoặc độ ưu tiên đổi.
+export async function dismissAlert(form: FormData) {
+  const key = text(form, 'key').slice(0, 300);
+  if (!key) return;
+  const supabase = await createClient();
+  await supabase.from('alert_dismissals').upsert({ ref_key: key }, { onConflict: 'user_id,ref_key', ignoreDuplicates: true });
+  refresh();
+}
+
+// Gỡ tất cả nhắc việc đang hiện.
+export async function dismissAllAlerts(form: FormData) {
+  const keys = form.getAll('key').map((v) => String(v).slice(0, 300)).filter(Boolean).slice(0, 100);
+  if (!keys.length) return;
+  const supabase = await createClient();
+  await supabase.from('alert_dismissals').upsert(keys.map((ref_key) => ({ ref_key })), { onConflict: 'user_id,ref_key', ignoreDuplicates: true });
   refresh();
 }
 

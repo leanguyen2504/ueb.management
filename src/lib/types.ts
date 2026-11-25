@@ -120,6 +120,8 @@ export type Task = {
   status: TaskStatus;
   priority: TaskPriority;
   due_date: string | null;
+  /** Giờ hạn (HH:MM:SS), không bắt buộc; chưa chạy SQL 20261125000001 thì không có. */
+  due_time?: string | null;
   start_date: string | null;
   progress: number | null;
   assignee_id: string | null;
@@ -180,6 +182,24 @@ export type AppNotification = {
   link: string | null;
   read_at: string | null;
   created_at: string;
+};
+
+// Nhắc việc ở quả chuông (hàm my_alerts): tính trực tiếp từ dữ liệu, tự hết khi việc đã xử lý.
+export type AlertLevel = 'qua_han' | 'gap' | 'sap_den_han' | 'can_xu_ly';
+export type AppAlert = {
+  ref_key: string;
+  source: 'viec' | 'jira' | 'lich' | 'ca_nhan' | 'dat_lich' | 'nhom';
+  level: AlertLevel;
+  title: string;
+  body: string | null;
+  link: string | null;
+  due_at: string | null;
+};
+export const ALERT_LEVEL_LABEL: Record<AlertLevel, string> = {
+  qua_han: 'Quá hạn',
+  gap: 'Gấp',
+  sap_den_han: 'Trong 24 giờ',
+  can_xu_ly: 'Cần xử lý',
 };
 
 // Lịch từ nguồn ngoài (ví dụ Google Calendar chỉ đọc), trộn vào trang Lịch của tôi.

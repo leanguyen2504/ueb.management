@@ -17,14 +17,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { supabase, profile, ctx } = await requireSession();
   // Giới hạn số người dùng cùng lúc (mặc định 200). Người đang dùng dở và quản trị luôn được vào.
   // Kiểm tra chỗ trống chạy song song với các số đếm trên thanh điều hướng để trang mở nhanh hơn.
-  const [{ data: gate }, { count: unread }, { count: overdue }, avatars] = await Promise.all([
+  const [{ data: gate }, { count: unreadNotes }, { data: alertRows }, { count: overdue }, avatars] = await Promise.all([
     supabase.rpc('enter_app'),
     supabase.from('notifications').select('id', { count: 'exact', head: true }).is('read_at', null),
+    // Nhắc việc gấp, cần làm, đến hạn trong 24 giờ (chưa chạy SQL 20261125000001 thì trả lỗi, coi như không có).
+    supabase.rpc('my_alerts').select('level'),
     supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('assignee_id', profile.id).neq('status', 'done').lt('due_date', vnDay()),
     avatarUrls(supabase, [profile.avatar_path]),
   ]);
   const g = gate as { allowed: boolean; online: number; max: number } | null;
   if (g && !g.allowed) return <Busy online={g.online} max={g.max} />;
+  const alerts = (alertRows as { level: string }[] | null) ?? [];
+  const urgentAlert = alerts.some((a) => a.level === 'qua_han' || a.level === 'gap');
+  const unread = (unreadNotes ?? 0) + alerts.length;
   // Năm mục chính (và Soạn thảo, Hành chính trên thanh bên). Trang đặt lịch nằm trong Lịch; Bảng tổng hợp, Mảng và đầu mối nằm trong Họp.
   const items: NavItem[] = [
     { href: '/', label: 'Hôm nay', icon: 'today' },
@@ -81,9 +86,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <hr className="my-1 border-slate-200 dark:border-slate-700" />
             <Link role="menuitem" href="/moi" className="menu-item">Mời đồng nghiệp</Link>
           </TopMenu>
-          <Link href="/thong-bao" className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white hover:border-brand-600 dark:border-slate-700 dark:bg-slate-900" aria-label={`Thông báo${unread ? `, ${unread} chưa đọc` : ''}`}>
+          <Link href="/thong-bao" className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white hover:border-brand-600 dark:border-slate-700 dark:bg-slate-900" aria-label={`Thông báo${unread ? `, ${unread} chưa đọc hoặc cần xử lý` : ''}`}>
             <Icon name="bell" />
-            {Boolean(unread) && <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-orange-700 px-1 text-[10px] font-semibold text-white dark:border-slate-950">{unread! > 99 ? '99+' : unread}</span>}
+            {Boolean(unread) && <span className={`absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white ${urgentAlert ? 'bg-red-600' : 'bg-orange-700'} px-1 text-[10px] font-semibold text-white dark:border-slate-950`}>{unread > 99 ? '99+' : unread}</span>}
           </Link>
           <TopMenu label="Tài khoản" buttonClass="flex items-center gap-2.5 rounded-full border border-slate-200 bg-white py-1 pl-1 pr-1 sm:pr-3 dark:border-slate-700 dark:bg-slate-900"
             button={<>{me}<span className="hidden text-left leading-tight sm:block"><span className="block max-w-40 truncate text-[13px] font-semibold">{name}</span><span className="block text-[11px] muted">{roleText}</span></span></>}>
