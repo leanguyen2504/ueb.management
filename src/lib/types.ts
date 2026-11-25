@@ -129,6 +129,11 @@ export type Task = {
   /** Mã Jira gắn với việc (không có ở việc Cá nhân); có thể chưa có cột nếu chưa chạy SQL. */
   jira_key?: string | null;
   jira_url?: string | null;
+  /** Lặp lại: hoàn thành một kỳ thì việc tự chuyển sang kỳ sau (migration 20261125000001). */
+  repeat_rule?: TaskRepeat | null;
+  repeat_until?: string | null;
+  repeat_done_count?: number;
+  repeat_last_done_at?: string | null;
 };
 
 export type CalEvent = {
@@ -205,6 +210,12 @@ export const TASK_PRIORITY_LABEL: Record<TaskPriority, string> = {
   normal: 'Bình thường',
   high: 'Cao',
   urgent: 'Khẩn',
+};
+export type TaskRepeat = 'daily' | 'weekly' | 'monthly';
+export const TASK_REPEAT_LABEL: Record<TaskRepeat, string> = {
+  daily: 'Hằng ngày',
+  weekly: 'Hằng tuần',
+  monthly: 'Hằng tháng',
 };
 export const EVENT_KIND_LABEL: Record<EventKind, string> = {
   meeting: 'Cuộc họp',

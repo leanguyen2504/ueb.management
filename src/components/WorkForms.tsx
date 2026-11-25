@@ -5,7 +5,7 @@ import { createEvent, createPersonalProject, createTask, updateEvent, updateTask
 import { useCalDraft, vnLocalInput } from '@/components/calendar/draft';
 import { FormMessage } from '@/components/FormMessage';
 import { SubmitButton } from '@/components/SubmitButton';
-import { EVENT_KIND_LABEL, TASK_PRIORITY_LABEL, type CalEvent, type Task } from '@/lib/types';
+import { EVENT_KIND_LABEL, TASK_PRIORITY_LABEL, TASK_REPEAT_LABEL, type CalEvent, type Task } from '@/lib/types';
 
 export type Option = { id: string; label: string };
 
@@ -18,6 +18,29 @@ function GroupField({ groupId, groups, id }: { groupId?: string; groups?: Option
         <option value="" disabled>Chọn nhóm</option>
         {(groups ?? []).map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
       </select>
+    </div>
+  );
+}
+
+/** Lặp lại: hoàn thành một kỳ thì việc tự chuyển sang kỳ sau (hạn dời theo chu kỳ). */
+function RepeatFields({ id, rule, until }: { id: string; rule?: string | null; until?: string | null }) {
+  const [on, setOn] = useState(Boolean(rule));
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div>
+        <label className="label" htmlFor={`${id}-repeat`}>Lặp lại</label>
+        <select id={`${id}-repeat`} name="repeat_rule" className="input" defaultValue={rule ?? ''} onChange={(e) => setOn(Boolean(e.target.value))}>
+          <option value="">Không lặp</option>
+          {Object.entries(TASK_REPEAT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+      </div>
+      {on && (
+        <div>
+          <label className="label" htmlFor={`${id}-until`}>Lặp đến (hạn kỳ cuối)</label>
+          <input id={`${id}-until`} name="repeat_until" type="date" defaultValue={until ?? ''} className="input" />
+        </div>
+      )}
+      {on && <p className="text-xs muted sm:col-span-2">Bấm Hoàn thành thì việc tự quay về Cần làm với hạn kỳ sau. Việc lặp lại cần có Hạn; để trống Lặp đến là lặp mãi.</p>}
     </div>
   );
 }
@@ -52,6 +75,7 @@ export function TaskForm({ groupId, groups, people, self }: { groupId?: string; 
           </select>
         </div>
       </div>
+      <RepeatFields id="t" />
       <div><label className="label" htmlFor="t-desc">Mô tả</label><textarea id="t-desc" name="description" rows={2} className="input" /></div>
       <FormMessage state={state} />
       <SubmitButton pendingText="Đang tạo…">Tạo việc</SubmitButton>
@@ -159,6 +183,7 @@ export function TaskEditButton({ task, people, projects }: { task: Task; people?
               </select>
             </div>
           </div>
+          <RepeatFields id={p} rule={task.repeat_rule} until={task.repeat_until} />
           <div>
             <label className="label" htmlFor={`${p}-desc`}>Mô tả</label>
             <textarea id={`${p}-desc`} name="description" rows={3} defaultValue={task.description ?? ''} className="input" />

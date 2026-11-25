@@ -8,11 +8,12 @@ import { createClient } from '@/lib/supabase/server';
 import { errText, fromLocalInput } from '@/lib/format';
 import { parseJiraInput } from '@/lib/meeting-rules';
 import type { FormState } from '@/components/FormMessage';
-import type { BookingStatus, EventKind, TaskPriority, TaskStatus } from '@/lib/types';
+import type { BookingStatus, EventKind, TaskPriority, TaskRepeat, TaskStatus } from '@/lib/types';
 
 const STATUSES: TaskStatus[] = ['todo', 'doing', 'review', 'done'];
 const PRIORITIES: TaskPriority[] = ['low', 'normal', 'high', 'urgent'];
 const EVENT_KINDS: EventKind[] = ['meeting', 'event', 'deadline', 'other'];
+const REPEATS: TaskRepeat[] = ['daily', 'weekly', 'monthly'];
 const text = (f: FormData, k: string) => String(f.get(k) || '').trim();
 const uuidOrNull = (v: string) => (/^[0-9a-f-]{36}$/i.test(v) ? v : null);
 
@@ -22,6 +23,18 @@ function refresh(groupId?: string) {
 }
 
 // ---- Đầu việc ----
+
+// Ô Lặp lại và Lặp đến trên form việc. Việc lặp lại phải có hạn (kỳ sau tính từ hạn).
+function readRepeat(form: FormData, due: string): { repeat_rule: TaskRepeat | null; repeat_until: string | null } | { error: string } {
+  const rule = text(form, 'repeat_rule');
+  const until = text(form, 'repeat_until');
+  if (!rule) return { repeat_rule: null, repeat_until: null };
+  if (!REPEATS.includes(rule as TaskRepeat)) return { error: 'Kiểu lặp lại không hợp lệ.' };
+  if (!due) return { error: 'Việc lặp lại cần có hạn để tính kỳ sau.' };
+  if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) return { error: 'Ngày lặp đến không hợp lệ.' };
+  if (until && until < due) return { error: 'Ngày lặp đến phải sau hạn của kỳ đầu.' };
+  return { repeat_rule: rule as TaskRepeat, repeat_until: until || null };
+}
 
 export async function createTask(_prev: FormState, form: FormData): Promise<FormState> {
   const group_id = uuidOrNull(text(form, 'group_id'));
@@ -35,8 +48,11 @@ export async function createTask(_prev: FormState, form: FormData): Promise<Form
   const start = text(form, 'start_date');
   if (start && !/^\d{4}-\d{2}-\d{2}$/.test(start)) return { error: 'Ngày bắt đầu không hợp lệ.' };
   if (start && due && start > due) return { error: 'Ngày bắt đầu phải trước hạn.' };
+  const repeat = readRepeat(form, due);
+  if ('error' in repeat) return { error: repeat.error };
   const supabase = await createClient();
   const { error } = await supabase.from('tasks').insert({
+    ...(repeat.repeat_rule ? repeat : {}),
     group_id,
     title,
     description: text(form, 'description') || null,
@@ -65,6 +81,8 @@ export async function updateTask(_prev: FormState, form: FormData): Promise<Form
   if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return { error: 'Hạn hoàn thành không hợp lệ.' };
   if (start && !/^\d{4}-\d{2}-\d{2}$/.test(start)) return { error: 'Ngày bắt đầu không hợp lệ.' };
   if (start && due && start > due) return { error: 'Ngày bắt đầu phải trước hạn.' };
+  const repeat = readRepeat(form, due);
+  if ('error' in repeat) return { error: repeat.error };
   const patch: Record<string, string | null> = {
     title,
     description: text(form, 'description') || null,
@@ -77,6 +95,8 @@ export async function updateTask(_prev: FormState, form: FormData): Promise<Form
   if (group) patch.group_id = group;
   // Ô Người thực hiện chỉ có khi biết danh sách thành viên; không có thì giữ nguyên.
   if (form.has('assignee_id')) patch.assignee_id = uuidOrNull(text(form, 'assignee_id'));
+  // Ô Lặp lại chỉ có trên form Sửa của người có quyền Sửa; không có ô thì giữ nguyên.
+  if (form.has('repeat_rule')) Object.assign(patch, repeat);
   const supabase = await createClient();
   const { data, error } = await supabase.from('tasks').update(patch).eq('id', id).select('group_id').maybeSingle();
   if (error) return { error: errText(error) };

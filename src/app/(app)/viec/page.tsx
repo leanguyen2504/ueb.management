@@ -11,7 +11,7 @@ import { loadPeople } from '@/lib/people';
 import { loadJiraBriefs, type JiraBrief } from '@/lib/jira/brief';
 import { serverEnv } from '@/lib/env';
 import { addDays, fmtDate, vnDay } from '@/lib/format';
-import { KIND_LABEL, TASK_STATUS_LABEL, type Group, type GroupKind, type Task, type TaskStatus } from '@/lib/types';
+import { KIND_LABEL, TASK_REPEAT_LABEL, TASK_STATUS_LABEL, type Group, type GroupKind, type Task, type TaskStatus } from '@/lib/types';
 
 export const metadata: Metadata = { title: 'Việc của tôi' };
 
@@ -176,6 +176,7 @@ export default async function MyTasksPage({ searchParams }: { searchParams: Prom
         tasks: list.map((t): GanttTask => ({
           id: t.id, title: t.title, group_id: t.group_id, status: t.status, start_date: t.start_date, due_date: t.due_date,
           progress: t.progress, assignee_id: t.assignee_id, assignee: t.assignee_id ? name(t.assignee_id) : '', canEdit: canEditTask(t),
+          repeat: t.repeat_rule ? TASK_REPEAT_LABEL[t.repeat_rule] : null,
         })),
         groups: allGroups.map((g): GanttGroup => ({ id: g.id, name: g.owner_id && !g.parent_id ? 'Cá nhân' : g.name, parent_id: g.parent_id })),
       }

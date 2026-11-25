@@ -22,6 +22,8 @@ export type GanttTask = {
   assignee_id: string | null;
   assignee: string;
   canEdit: boolean;
+  /** Nhãn lặp lại (ví dụ "Hằng tuần") nếu là việc lặp lại. */
+  repeat?: string | null;
 };
 export type GanttGroup = { id: string; name: string; parent_id: string | null };
 
@@ -379,7 +381,8 @@ export function TaskGantt({
                     ) : (
                       <>
                         <i className={`inline-block h-2 w-2 shrink-0 rounded-full ${BAR[r.t.status]}`} />
-                        <Link href={`/nhom/${r.t.group_id}`} className={`min-w-0 truncate hover:underline ${r.t.status === 'done' ? 'text-slate-400 line-through' : ''}`} title={r.t.title}>{r.t.title}</Link>
+                        <Link href={`/nhom/${r.t.group_id}`} className={`min-w-0 truncate hover:underline ${r.t.status === 'done' ? 'text-slate-400 line-through' : ''}`} title={r.t.repeat ? `${r.t.title} (lặp lại ${r.t.repeat.toLowerCase()})` : r.t.title}>{r.t.title}</Link>
+                        {r.t.repeat && <span className="shrink-0 text-xs muted" title={`Lặp lại ${r.t.repeat.toLowerCase()}`}>↻</span>}
                         {r.s == null && <span className="ml-auto shrink-0 text-xs italic muted">chưa có ngày</span>}
                       </>
                     )}

@@ -8,7 +8,7 @@ import { deleteOrRequestTask, deleteTask, deleteTaskLink, nudgeTask, setTaskStat
 import { ConfirmButton } from '@/components/ConfirmButton';
 import { TaskEditButton, type Option } from '@/components/WorkForms';
 import { fmtDate, vnDay } from '@/lib/format';
-import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, type Task, type TaskLink } from '@/lib/types';
+import { TASK_PRIORITY_LABEL, TASK_REPEAT_LABEL, TASK_STATUS_LABEL, type Task, type TaskLink } from '@/lib/types';
 
 const PRIORITY_CLASS: Record<Task['priority'], string> = {
   low: '',
@@ -95,6 +95,11 @@ export function TaskList({
                 {t.start_date && <span>Bắt đầu {fmtDate(t.start_date)}</span>}
                 {t.due_date && <span className={overdue ? 'font-semibold text-orange-600 dark:text-orange-400' : ''}>Hạn {fmtDate(t.due_date)}{overdue ? ' (quá hạn)' : ''}</span>}
                 {t.priority !== 'normal' && <span className={`chip ${PRIORITY_CLASS[t.priority]}`}>{TASK_PRIORITY_LABEL[t.priority]}</span>}
+                {t.repeat_rule && (
+                  <span className="chip" title="Bấm Hoàn thành thì việc tự chuyển sang kỳ sau">
+                    ↻ {TASK_REPEAT_LABEL[t.repeat_rule]}{t.repeat_until ? ` đến ${fmtDate(t.repeat_until)}` : ''}{t.repeat_done_count ? ` · đã xong ${t.repeat_done_count} kỳ` : ''}
+                  </span>
+                )}
               </div>
               {t.progress != null && t.status !== 'done' && (
                 <div className="mt-1.5 flex items-center gap-2 text-xs muted">
