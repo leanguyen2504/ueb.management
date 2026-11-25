@@ -333,6 +333,24 @@ export async function clearReadNotifications() {
   refresh();
 }
 
+// Gỡ tay một nhắc việc ở quả chuông. Mục sẽ hiện lại nếu hạn hoặc độ ưu tiên đổi.
+export async function dismissAlert(form: FormData) {
+  const key = text(form, 'key').slice(0, 300);
+  if (!key) return;
+  const supabase = await createClient();
+  await supabase.from('alert_dismissals').upsert({ ref_key: key }, { onConflict: 'user_id,ref_key', ignoreDuplicates: true });
+  refresh();
+}
+
+// Gỡ tất cả nhắc việc đang hiện.
+export async function dismissAllAlerts(form: FormData) {
+  const keys = form.getAll('key').map((v) => String(v).slice(0, 300)).filter(Boolean).slice(0, 100);
+  if (!keys.length) return;
+  const supabase = await createClient();
+  await supabase.from('alert_dismissals').upsert(keys.map((ref_key) => ({ ref_key })), { onConflict: 'user_id,ref_key', ignoreDuplicates: true });
+  refresh();
+}
+
 // ---- Không gian con, đôn đốc, sản phẩm ----
 
 const back = (groupId: string | null | undefined, key: 'loi' | 'tb', msg: string) =>

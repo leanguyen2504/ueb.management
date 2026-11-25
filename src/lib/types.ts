@@ -182,6 +182,24 @@ export type AppNotification = {
   created_at: string;
 };
 
+// Nhắc việc ở quả chuông (hàm my_alerts): tính trực tiếp từ dữ liệu, tự hết khi việc đã xử lý.
+export type AlertLevel = 'qua_han' | 'gap' | 'sap_den_han' | 'can_xu_ly';
+export type AppAlert = {
+  ref_key: string;
+  source: 'viec' | 'jira' | 'lich' | 'ca_nhan' | 'dat_lich' | 'nhom';
+  level: AlertLevel;
+  title: string;
+  body: string | null;
+  link: string | null;
+  due_at: string | null;
+};
+export const ALERT_LEVEL_LABEL: Record<AlertLevel, string> = {
+  qua_han: 'Quá hạn',
+  gap: 'Gấp',
+  sap_den_han: 'Trong 24 giờ',
+  can_xu_ly: 'Cần xử lý',
+};
+
 // Lịch từ nguồn ngoài (ví dụ Google Calendar chỉ đọc), trộn vào trang Lịch của tôi.
 export type ExternalEvent = {
   id: string;
