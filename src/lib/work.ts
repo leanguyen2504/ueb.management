@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { errText, fromLocalInput } from '@/lib/format';
 import { parseJiraInput } from '@/lib/meeting-rules';
 import type { FormState } from '@/components/FormMessage';
-import type { BookingStatus, EventKind, TaskPriority, TaskStatus } from '@/lib/types';
+import type { BookingStatus, EventKind, RepeatRule, TaskPriority, TaskStatus } from '@/lib/types';
 
 const STATUSES: TaskStatus[] = ['todo', 'doing', 'review', 'done'];
 const PRIORITIES: TaskPriority[] = ['low', 'normal', 'high', 'urgent'];
@@ -21,6 +21,25 @@ function dueTime(form: FormData): string | false {
   const v = text(form, 'due_time');
   if (!v) return '';
   return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(v) ? v.slice(0, 5) : false;
+}
+
+const REPEAT_RULES: RepeatRule[] = ['daily', 'weekdays', 'weekly', 'monthly', 'yearly'];
+type RepeatPatch = { repeat_rule: RepeatRule | null; repeat_every: number; repeat_days: number[] | null; repeat_until: string | null };
+
+// Ô "Lặp lại" (không bắt buộc). Trả về chuỗi lỗi khi sai; null khi không lặp lại.
+function repeatFields(form: FormData, due: string): RepeatPatch | string {
+  const rule = text(form, 'repeat_rule') as RepeatRule | '';
+  if (!rule) return { repeat_rule: null, repeat_every: 1, repeat_days: null, repeat_until: null };
+  if (!REPEAT_RULES.includes(rule)) return 'Kiểu lặp lại không hợp lệ.';
+  const every = Math.round(Number(text(form, 'repeat_every') || 1));
+  if (!(every >= 1 && every <= 99)) return 'Số lần lặp phải từ 1 đến 99.';
+  const days = rule === 'weekly'
+    ? [...new Set(form.getAll('repeat_days').map((v) => Number(v)).filter((n) => Number.isInteger(n) && n >= 1 && n <= 7))].sort()
+    : [];
+  const until = text(form, 'repeat_until');
+  if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) return 'Ngày kết thúc lặp lại không hợp lệ.';
+  if (until && due && until < due) return 'Ngày kết thúc lặp lại phải sau hạn của việc.';
+  return { repeat_rule: rule, repeat_every: rule === 'weekdays' ? 1 : every, repeat_days: days.length ? days : null, repeat_until: until || null };
 }
 
 function refresh(groupId?: string) {
@@ -45,6 +64,8 @@ export async function createTask(_prev: FormState, form: FormData): Promise<Form
   const time = dueTime(form);
   if (time === false) return { error: 'Giờ hạn không hợp lệ.' };
   if (time && !due) return { error: 'Hãy chọn ngày hạn trước khi đặt giờ hạn.' };
+  const repeat = repeatFields(form, due);
+  if (typeof repeat === 'string') return { error: repeat };
   const supabase = await createClient();
   const { error } = await supabase.from('tasks').insert({
     group_id,
@@ -56,6 +77,8 @@ export async function createTask(_prev: FormState, form: FormData): Promise<Form
     ...(time ? { due_time: time } : {}),
     start_date: start || null,
     assignee_id: uuidOrNull(text(form, 'assignee_id')),
+    // Chỉ gửi các cột lặp lại khi có chọn (chưa có hạn thì cơ sở dữ liệu lấy hôm nay).
+    ...(repeat.repeat_rule ? repeat : {}),
   });
   if (error) return { error: errText(error) };
   refresh(group_id);
@@ -89,13 +112,19 @@ export async function updateTask(_prev: FormState, form: FormData): Promise<Form
   };
   // Có giờ mới, hoặc trước đó đã có giờ (để xóa giờ): mới gửi cột giờ hạn.
   if (time || form.get('had_due_time')) patch.due_time = time || null;
+  const repeat = repeatFields(form, due);
+  if (typeof repeat === 'string') return { error: repeat };
   // Chuyển sang dự án cá nhân khác (chỉ có ô này với việc Cá nhân; trigger tasks_check kiểm tra).
   const group = uuidOrNull(text(form, 'group_id'));
   if (group) patch.group_id = group;
   // Ô Người thực hiện chỉ có khi biết danh sách thành viên; không có thì giữ nguyên.
   if (form.has('assignee_id')) patch.assignee_id = uuidOrNull(text(form, 'assignee_id'));
   const supabase = await createClient();
-  const { data, error } = await supabase.from('tasks').update(patch).eq('id', id).select('group_id').maybeSingle();
+  const { data, error } = await supabase
+    .from('tasks')
+    // Có chọn lặp lại, hoặc trước đó đã lặp (để bỏ): mới gửi các cột lặp lại.
+    .update(repeat.repeat_rule || form.get('had_repeat') ? { ...patch, ...repeat } : patch)
+    .eq('id', id).select('group_id').maybeSingle();
   if (error) return { error: errText(error) };
   if (!data) return { error: 'Không sửa được: bạn không có quyền sửa việc này.' };
   refresh(data.group_id);

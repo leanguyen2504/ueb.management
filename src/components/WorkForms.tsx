@@ -5,7 +5,7 @@ import { createEvent, createPersonalProject, createTask, updateEvent, updateTask
 import { useCalDraft, vnLocalInput } from '@/components/calendar/draft';
 import { FormMessage } from '@/components/FormMessage';
 import { SubmitButton } from '@/components/SubmitButton';
-import { EVENT_KIND_LABEL, TASK_PRIORITY_LABEL, type CalEvent, type Task } from '@/lib/types';
+import { EVENT_KIND_LABEL, REPEAT_RULE_LABEL, REPEAT_UNIT, TASK_PRIORITY_LABEL, WEEKDAY_SHORT, type CalEvent, type RepeatRule, type Task } from '@/lib/types';
 
 export type Option = { id: string; label: string };
 
@@ -18,6 +18,55 @@ function GroupField({ groupId, groups, id }: { groupId?: string; groups?: Option
         <option value="" disabled>Chọn nhóm</option>
         {(groups ?? []).map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
       </select>
+    </div>
+  );
+}
+
+/**
+ * Ô "Lặp lại": kiểu lặp, mỗi N ngày/tuần/tháng/năm, chọn thứ (hằng tuần), ngày kết thúc.
+ * Khi việc lặp lại được đánh dấu Hoàn thành, hệ thống tự tạo lần kế tiếp với hạn mới.
+ */
+function RepeatFields({ id, task }: { id: string; task?: Task }) {
+  const [rule, setRule] = useState<RepeatRule | ''>(task?.repeat_rule ?? '');
+  return (
+    <div className="space-y-2 rounded-xl border border-dashed border-slate-200 p-3 dark:border-slate-700">
+      {task?.repeat_rule && <input type="hidden" name="had_repeat" value="1" />}
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="label" htmlFor={`${id}-rule`}>Lặp lại</label>
+          <select id={`${id}-rule`} name="repeat_rule" className="input w-auto" value={rule} onChange={(e) => setRule(e.target.value as RepeatRule | '')}>
+            <option value="">Không lặp lại</option>
+            {Object.entries(REPEAT_RULE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+        {rule && rule !== 'weekdays' && (
+          <div>
+            <label className="label" htmlFor={`${id}-every`}>Mỗi</label>
+            <div className="flex items-center gap-2">
+              <input id={`${id}-every`} name="repeat_every" type="number" min={1} max={99} defaultValue={task?.repeat_every ?? 1} className="input w-20" />
+              <span className="text-sm muted">{REPEAT_UNIT[rule]}</span>
+            </div>
+          </div>
+        )}
+        {rule && (
+          <div>
+            <label className="label" htmlFor={`${id}-until`}>Đến ngày <span className="font-normal muted">(nếu có)</span></label>
+            <input id={`${id}-until`} name="repeat_until" type="date" defaultValue={task?.repeat_until ?? ''} className="input" />
+          </div>
+        )}
+      </div>
+      {rule === 'weekly' && (
+        <fieldset className="flex flex-wrap items-center gap-2 text-sm">
+          <legend className="mb-1 text-xs muted">Vào các thứ (để trống: cùng thứ với hạn)</legend>
+          {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+            <label key={d} className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 dark:border-slate-700">
+              <input type="checkbox" name="repeat_days" value={d} defaultChecked={task?.repeat_days?.includes(d)} />
+              {WEEKDAY_SHORT[d]}
+            </label>
+          ))}
+        </fieldset>
+      )}
+      {rule && <p className="text-xs muted">Khi đánh dấu Hoàn thành, hệ thống tự tạo lần kế tiếp với hạn mới (giữ giờ hạn, người thực hiện). Chưa chọn hạn thì lấy hôm nay.</p>}
     </div>
   );
 }
@@ -53,6 +102,7 @@ export function TaskForm({ groupId, groups, people, self }: { groupId?: string; 
           </select>
         </div>
       </div>
+      <RepeatFields id="t-repeat" />
       <div><label className="label" htmlFor="t-desc">Mô tả</label><textarea id="t-desc" name="description" rows={2} className="input" /></div>
       <FormMessage state={state} />
       <SubmitButton pendingText="Đang tạo…">Tạo việc</SubmitButton>
@@ -165,6 +215,7 @@ export function TaskEditButton({ task, people, projects }: { task: Task; people?
               </select>
             </div>
           </div>
+          <RepeatFields id={`${p}-repeat`} task={task} />
           <div>
             <label className="label" htmlFor={`${p}-desc`}>Mô tả</label>
             <textarea id={`${p}-desc`} name="description" rows={3} defaultValue={task.description ?? ''} className="input" />
