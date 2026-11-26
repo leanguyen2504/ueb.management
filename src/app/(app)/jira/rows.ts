@@ -5,7 +5,7 @@ import { blockedBy, blocking, daysBetween, dueState, hours, numberOf, productLab
 import type { JiraIssueRow } from '@/lib/jira/types';
 import { WEEKDAY } from '@/components/calendar/time';
 
-export type RowCtx = { browse: (k: string) => string | null; today: string; byKey: Map<string, JiraIssueRow>; field: string | null };
+export type RowCtx = { browse: (k: string) => string | null; today: string; byKey: Map<string, JiraIssueRow>; field: string | null; handoff?: Set<string> };
 
 const CAT_LABEL: Record<string, string> = { new: 'Chưa làm', indeterminate: 'Đang làm', done: 'Xong' };
 const CAT_TONE: Record<string, Tone> = { new: 'muted', indeterminate: 'info', done: 'ok' };

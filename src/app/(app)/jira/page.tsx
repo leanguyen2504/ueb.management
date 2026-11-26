@@ -6,12 +6,12 @@ import { features, publicEnv, serverEnv } from '@/lib/env';
 import { fmtDate, fmtDateTime, vnDay } from '@/lib/format';
 import {
   blockedBy, blocking, byProductType, daysBetween, dueState, fmtHours, groupWorklogs, hours, inProgressNoLog,
-  missingProof, pickConvertedField, submittedByMonth, type MissingProof, todoList, waitingOnMe, waitingOnOthers, periodLabel, weekStart, type Worklog,
+  handoffList, HANDOFF_KEY, HANDOFF_OFF, missingProof, pickConvertedField, submittedByMonth, type MissingProof, todoList, waitingOnMe, waitingOnOthers, periodLabel, weekStart, type Worklog,
 } from '@/lib/jira/report';
 import type { JiraAccount, JiraIssueRow, JiraMentionRow } from '@/lib/jira/types';
 import { DataTable } from '@/components/table/DataTable';
 import { BookmarkletSetup, TokenForm } from './JiraConnect';
-import { disconnectJira } from './actions';
+import { disconnectJira, setHandoffAlert } from './actions';
 import { ISSUE_COLUMNS, PRODUCT_COLUMNS, WORKLOG_COLUMNS, issueRow, productRow, worklogRow, type RowCtx } from './rows';
 import { ReportTab } from './ReportTab';
 
@@ -25,11 +25,13 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
   const sp = await searchParams;
   const { supabase, userId } = await requireSession();
   // RLS: mỗi người chỉ đọc được dữ liệu Jira của chính mình.
-  const [{ data: acc }, { data: issueRows }, { data: wlRows }, { data: mentionRows }] = await Promise.all([
+  const [{ data: acc }, { data: issueRows }, { data: wlRows }, { data: mentionRows }, { data: dismissRows }] = await Promise.all([
     supabase.from('jira_accounts').select('*').maybeSingle<JiraAccount & { share_scope?: 'none' | 'leads' | 'members' }>(),
     supabase.from('jira_issues').select('*').order('updated_at_jira', { ascending: false, nullsFirst: false }).limit(3000),
     supabase.from('jira_worklogs').select('worklog_id, issue_key, started_at, seconds, comment').order('started_at', { ascending: false }).limit(20000),
     supabase.from('jira_mentions').select('*').order('created_at', { ascending: false }).limit(200),
+    // Mã đã bấm "Không cần chuyển" (và khóa tắt hẳn cảnh báo), dùng chung với quả chuông.
+    supabase.from('alert_dismissals').select('ref_key').like('ref_key', 'jira-chuyen:%').limit(3000),
   ]);
   const synced = Boolean(acc?.last_synced_at);
   const fallback: Tab = synced ? 'can-lam' : 'ket-noi';
@@ -46,6 +48,9 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
   const field = pickConvertedField(acc?.custom_field_names ?? [], process.env.JIRA_CONVERTED_HOURS_FIELD);
   const submitted = submittedByMonth(issues, field, 12);
   const proof = missingProof(issues);
+  const dismissed = new Set(((dismissRows ?? []) as { ref_key: string }[]).map((d) => d.ref_key));
+  const handoffOff = dismissed.has(HANDOFF_OFF);
+  const handoff = handoffOff ? [] : handoffList(issues, dismissed);
   const todo = todoList(issues);
   const noLog = inProgressNoLog(issues, worklogs);
   const onMe = waitingOnMe(issues, mentions);
@@ -70,7 +75,7 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
     if (o.kieu ?? sp.kieu) p.set('kieu', (o.kieu ?? sp.kieu)!);
     return `/jira?${p.toString()}`;
   };
-  const ctx: RowCtx = { browse, today, byKey, field };
+  const ctx: RowCtx = { browse, today, byKey, field, handoff: new Set(handoff.map((i) => i.issue_key)) };
   const staleDays = acc?.last_synced_at ? daysBetween(vnDay(acc.last_synced_at), today) : 0;
 
   return (
@@ -107,6 +112,15 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
           {proof.slice(0, 6).map((x, n) => <span key={x.issue.issue_key}>{n > 0 && ', '}<IssueLink k={x.issue.issue_key} href={browse(x.issue.issue_key)} title={x.issue.summary} /></span>)}
           {proof.length > 6 && '…'}{' '}
           <Link href={`${q({ muc: 'can-lam' })}#thieu-minh-chung`} className="font-semibold underline">Xem chi tiết</Link>
+        </p>
+      )}
+
+      {synced && handoff.length > 0 && (
+        <p role="alert" className="-mt-2 mb-4 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+          <b>{handoff.length} mã Jira vẫn đang giao cho bạn, cần chuyển cho lãnh đạo hoặc người khác trước khi đóng.</b>{' '}
+          {handoff.slice(0, 6).map((i, n) => <span key={i.issue_key}>{n > 0 && ', '}<IssueLink k={i.issue_key} href={browse(i.issue_key)} title={i.summary} /></span>)}
+          {handoff.length > 6 && '…'}{' '}
+          <Link href={`${q({ muc: 'can-lam' })}#chua-chuyen`} className="font-semibold underline">Xem chi tiết</Link>
         </p>
       )}
 
@@ -157,6 +171,20 @@ export default async function JiraPage({ searchParams }: { searchParams: Promise
               <Link href={q({ kieu: 'bang' })} aria-current={sp.kieu === 'bang' ? 'page' : undefined}>Dạng bảng</Link>
             </nav>
           </div>
+          {handoff.length > 0 && (
+            <div id="chua-chuyen" className="mb-4 scroll-mt-20">
+              <Panel title="Chưa chuyển người nhận" count={handoff.length}
+                note="Mã chưa đóng mà người được giao vẫn là bạn. Chuyển (assign) cho lãnh đạo hoặc người khác trên Jira rồi bấm Cập nhật dữ liệu; mã nào không cần chuyển thì bấm Không cần chuyển."
+                right={<HandoffToggle k={HANDOFF_OFF} label="Tắt cảnh báo này" />}>
+                <HandoffList items={handoff} ctx={ctx} />
+              </Panel>
+            </div>
+          )}
+          {handoffOff && (
+            <p className="mb-4 flex flex-wrap items-center gap-2 text-sm muted">
+              Cảnh báo mã chưa chuyển người nhận đang tắt. <HandoffToggle k={HANDOFF_OFF} on label="Bật lại" />
+            </p>
+          )}
           {proof.length > 0 && (
             <div id="thieu-minh-chung" className="mb-4 scroll-mt-20">
               <Panel title="Thiếu comment hoặc file sản phẩm" count={proof.length}
@@ -421,6 +449,32 @@ function ProofList({ items, ctx }: { items: MissingProof[]; ctx: RowCtx }) {
   );
 }
 
+function HandoffList({ items, ctx }: { items: JiraIssueRow[]; ctx: RowCtx }) {
+  return (
+    <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+      {items.map((i) => (
+        <li key={i.issue_key} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 text-sm">
+          <IssueLink k={i.issue_key} href={ctx.browse(i.issue_key)} />
+          <span className="min-w-0 flex-1 truncate font-medium" title={i.summary}>{i.summary}</span>
+          {i.due_date && <span className="text-xs tabular-nums muted">Hạn {fmtDate(i.due_date)}</span>}
+          <span className="chip bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{i.status ?? ''}</span>
+          <HandoffToggle k={HANDOFF_KEY(i.issue_key)} label="Không cần chuyển" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function HandoffToggle({ k, label, on }: { k: string; label: string; on?: boolean }) {
+  return (
+    <form action={setHandoffAlert}>
+      <input type="hidden" name="key" value={k} />
+      {on && <input type="hidden" name="bat" value="1" />}
+      <button className="rounded-lg px-2 py-1 text-xs font-medium text-brand-700 hover:bg-slate-100 dark:text-brand-300 dark:hover:bg-slate-800">{label}</button>
+    </form>
+  );
+}
+
 const TONE = {
   warn: 'border-l-orange-500',
   gold: 'border-l-gold-500',
@@ -474,6 +528,7 @@ function IssueList({ items, ctx, empty, showAssignee }: { items: JiraIssueRow[];
                 <span className="min-w-0 flex-1 truncate font-medium" title={i.summary}>{i.summary}</span>
                 {bBy.length > 0 && <span className="chip !bg-orange-100 !text-orange-800 dark:!bg-orange-950 dark:!text-orange-300">Chờ {bBy.length}</span>}
                 {bOut.length > 0 && <span className="chip !bg-gold-100 !text-gold-600 dark:!bg-gold-600/20 dark:!text-gold-500">Chặn {bOut.length}</span>}
+                {ctx.handoff?.has(i.issue_key) && <span className="chip !bg-red-100 !text-red-800 dark:!bg-red-950 dark:!text-red-200" title="Vẫn giao cho bạn, cần chuyển cho lãnh đạo hoặc người khác trước khi đóng">Chưa chuyển</span>}
                 {i.reopen_count > 0 && <span className="chip !bg-orange-100 !text-orange-700 dark:!bg-orange-950 dark:!text-orange-300">Trả lại {i.reopen_count}</span>}
                 {showAssignee && <span className="text-xs muted">{i.assignee_name ?? 'chưa giao'}</span>}
                 <span className="chip">{i.status}</span>
