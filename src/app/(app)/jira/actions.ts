@@ -70,3 +70,14 @@ export async function setJiraShare(form: FormData) {
   if (error) redirect(`/jira?muc=bao-cao&loi=${encodeURIComponent(error.message || 'Không lưu được lựa chọn chia sẻ.')}`);
   redirect('/jira?muc=bao-cao&ok=chia-se');
 }
+
+// Cảnh báo mã chưa chuyển người nhận: gỡ một mã ("không cần chuyển"), hoặc tắt / bật lại cả cảnh báo.
+// Dùng chung bảng gỡ nhắc với quả chuông, nên gỡ ở đây thì quả chuông cũng hết nhắc mã đó.
+export async function setHandoffAlert(form: FormData) {
+  const { supabase } = await requireSession();
+  const key = String(form.get('key') || '');
+  if (!/^jira-chuyen:(\*|[A-Za-z0-9_.-]{1,60})$/.test(key)) return;
+  if (form.get('bat') === '1') await supabase.from('alert_dismissals').delete().eq('ref_key', key);
+  else await supabase.from('alert_dismissals').upsert({ ref_key: key }, { onConflict: 'user_id,ref_key', ignoreDuplicates: true });
+  revalidatePath('/', 'layout');
+}

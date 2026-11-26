@@ -48,7 +48,7 @@ export default async function NotificationsPage() {
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
             <div>
               <h2 id="can-xu-ly" className="font-semibold">Cần xử lý ngay</h2>
-              <p className="text-xs muted">Việc gấp, quá hạn, đến hạn trong 24 giờ và yêu cầu chờ bạn. Mục tự mất khi đã xử lý xong, hoặc bấm Gỡ.</p>
+              <p className="text-xs muted">Việc gấp, quá hạn, đến hạn trong 24 giờ, yêu cầu chờ bạn và mã Jira chưa chuyển người nhận. Mục tự mất khi đã xử lý xong, hoặc bấm Gỡ.</p>
             </div>
             <form action={dismissAllAlerts}>
               {alerts.map((a) => <input key={a.ref_key} type="hidden" name="key" value={a.ref_key} />)}

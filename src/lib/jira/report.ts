@@ -168,6 +168,18 @@ export function todoList(issues: JiraIssueRow[]) {
     .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999') || (a.priority_rank ?? 99) - (b.priority_rank ?? 99));
 }
 
+// Mã cần chuyển người nhận: chưa đóng mà người được giao vẫn là mình (phải chuyển cho lãnh đạo hoặc người khác
+// trước khi đóng). Cùng quy tắc với hàm SQL jira_can_chuyen (nhắc ở quả chuông): đổi quy tắc thì sửa cả hai.
+export const needsHandoff = (i: JiraIssueRow) => i.is_assignee && notDone(i) && !i.resolved_at;
+export const HANDOFF_KEY = (key: string) => `jira-chuyen:${key}`;
+export const HANDOFF_OFF = 'jira-chuyen:*';
+
+export function handoffList(issues: JiraIssueRow[], dismissed: Set<string>) {
+  return issues
+    .filter((i) => needsHandoff(i) && !dismissed.has(HANDOFF_KEY(i.issue_key)))
+    .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999') || (b.updated_at_jira ?? '').localeCompare(a.updated_at_jira ?? ''));
+}
+
 // Đang làm nhưng tuần này chưa log work.
 export function inProgressNoLog(issues: JiraIssueRow[], worklogs: Worklog[], now = new Date()) {
   const wk = weekStart(vnDay(now));
